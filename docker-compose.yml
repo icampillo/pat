@@ -1,0 +1,59 @@
+name: patrimoine
+x-app-env: &app-env
+  DATABASE_URL: postgresql://${POSTGRES_USER:-patrimoine}:${POSTGRES_PASSWORD:?Configurez POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-patrimoine}
+  DATABASE_URL_TEST: postgresql://${POSTGRES_USER:-patrimoine}:${POSTGRES_PASSWORD:?Configurez POSTGRES_PASSWORD}@db:5432/patrimoine_test
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Configurez BETTER_AUTH_SECRET}
+  BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+  APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
+  NEXT_TELEMETRY_DISABLED: '1'
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-patrimoine}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configurez POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-patrimoine}
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-test.sql:/docker-entrypoint-initdb.d/10-test.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+  migrate:
+    build:
+      context: .
+      target: tools
+    environment: *app-env
+    command: ['pnpm', 'db:deploy']
+    depends_on:
+      db:
+        condition: service_healthy
+  app:
+    build:
+      context: .
+      target: runner
+    environment: *app-env
+    ports:
+      - '127.0.0.1:3000:3000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  tools:
+    profiles: ['tools']
+    build:
+      context: .
+      target: tools
+    environment: *app-env
+    volumes:
+      - ./.local:/app/.local
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  postgres_data:

@@ -1,0 +1,304 @@
+generator client {
+  provider = "prisma-client"
+  output = "../src/generated/prisma"
+}
+datasource db {
+  provider = "postgresql"
+}
+model User {
+  id String @id
+  name String
+  email String @unique
+  emailVerified Boolean @default(false)
+  image String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sessions Session[]
+  accounts Account[]
+  portfolios Portfolio[]
+}
+model Session {
+  id String @id
+  expiresAt DateTime
+  token String @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+model Account {
+  id String @id
+  accountId String
+  providerId String
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken String?
+  refreshToken String?
+  idToken String?
+  accessTokenExpiresAt DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope String?
+  password String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+model Verification {
+  id String @id
+  identifier String
+  value String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([identifier])
+}
+model RateLimit {
+  id String @id
+  key String @unique
+  count Int
+  lastRequest BigInt
+}
+model Currency {
+  code String @id @db.VarChar(3)
+  name String
+  symbol String
+  assets Asset[]
+}
+model Portfolio {
+  id String @id @default(uuid()) @db.Uuid
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  name String @default("Mon patrimoine")
+  baseCurrency String @default("EUR")
+  displayCurrency String @default("EUR")
+  timezone String @default("Europe/Paris")
+  isDemo Boolean @default(false)
+  version Int @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  assets Asset[]
+  categories AssetCategory[]
+  platforms Platform[]
+  transactions Transaction[]
+  snapshots PortfolioSnapshot[]
+  rates FxRate[]
+  audits AuditLog[]
+  requests IdempotencyRecord[]
+  imports ImportBatch[]
+  wallets WalletConnection[]
+  debank DeBankConfig?
+  @@index([ownerId])
+}
+model AssetCategory {
+  id String @id @default(uuid()) @db.Uuid
+  portfolioId String @db.Uuid
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Restrict)
+  key String
+  label String
+  color String
+  assets Asset[]
+  @@unique([portfolioId, key])
+  @@unique([id, portfolioId])
+}
+model Platform {
+  id String @id @default(uuid()) @db.Uuid
+  portfolioId String @db.Uuid
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Restrict)
+  name String
+  @@unique([portfolioId, name])
+  @@unique([id, portfolioId])
+}
+model Asset {
+  id String @id @default(uuid()) @db.Uuid
+  portfolioId String @db.Uuid
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Restrict)
+  categoryId String @db.Uuid
+  category AssetCategory @relation(fields: [categoryId, portfolioId], references: [id, portfolioId], onDelete: Restrict)
+  name String @db.VarChar(120)
+  symbol String @db.VarChar(100)
+  subcategory String?
+  currency String @db.VarChar(3)
+  currencyRef Currency @relation(fields: [currency], references: [code], onDelete: Restrict)
+  platform String @default("Non précisé")
+  externalId String?
+  notes String @default("")
+  metadata Json @default("{}")
+  status String @default("ACTIVE")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+  transactions Transaction[]
+  prices PriceHistory[]
+  image AssetImage?
+  @@unique([id, portfolioId])
+  @@index([portfolioId, categoryId, status])
+  @@index([portfolioId, name])
+}
+model AssetImage {
+  assetId String @id @db.Uuid
+  portfolioId String @db.Uuid
+  asset Asset @relation(fields: [assetId, portfolioId], references: [id, portfolioId], onDelete: Restrict)
+  content Bytes
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  @@unique([assetId, portfolioId])
+  @@index([portfolioId])
+}
+model Transaction {
+  id String @id @default(uuid()) @db.Uuid
+  portfolioId String @db.Uuid
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Restrict)
+  assetId String? @db.Uuid
+  asset Asset? @relation(fields: [assetId, portfolioId], references: [id, portfolioId], onDelete: Restrict)
+  type String
+  quantity Decimal @db.Decimal(38,18)
+  unitPrice Decimal @db.Decimal(38,18)
+  fees Decimal @db.Decimal(38,18)
+  amount Decimal @db.Decimal(38,18)
+  currency String
+  fxToEur Decimal @db.Decimal(38,18)
+  fxToUsd Decimal? @db.Decimal(38,18)
+  platform String
+  destination String?
+  settlement String @default("EXTERNAL")
+  comment String @default("")
+  externalReference String?
+  occurredAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  sequence Int @default(autoincrement())
+  version Int @default(1)
+  voided Boolean @default(false)
+  revisions TransactionRevision[]
+  @@unique([portfolioId, externalReference])
+  @@index([portfolioId, occurredAt, sequence])
+  @@index([assetId, occurredAt])
+}
+model TransactionRevision {
+  id String @id @default(uuid()) @db.Uuid
+  transactionId String @db.Uuid
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  version Int
+  payload Json
+  actorId String
+  reason String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([transactionId, version])
+}
+model PriceHistory {
+  id String @id @default(uuid()) @db.Uuid
+  portfolioId String @db.Uuid
+  assetId String @db.Uuid
+  asset Asset @relation(fields: [assetId, portfolioId], references: [id, portfolioId], onDelete: Restrict)
+  price Decimal @db.Decimal(38,18)
+  currency String
+  source String @default("manual")
+  observedAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([assetId, observedAt(sort: Desc), createdAt(sort: Desc)])
+}
+model FxRate {
+  id String @id @default(uuid()) @db.Uuid
+  portfolioId String @db.Uuid
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Restrict)
+  eurUsd Decimal @db.Decimal(38,18)
+  observedAt DateTime @db.Timestamptz(3)
+  source String @default("manual")
+  @@index([portfolioId, observedAt(sort: Desc)])
+}
+model PortfolioSnapshot {
+  id String @id @default(uuid()) @db.Uuid
+  portfolioId String @db.Uuid
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Restrict)
+  capturedAt DateTime @default(now()) @db.Timestamptz(3)
+  kind String @default("MANUAL")
+  dailyKey String?
+  ledgerVersion Int
+  totalEur Decimal? @db.Decimal(38,18)
+  totalUsd Decimal? @db.Decimal(38,18)
+  investedEur Decimal? @db.Decimal(38,18)
+  netFlowsEur Decimal @db.Decimal(38,18)
+  data Json
+  @@unique([portfolioId, dailyKey])
+  @@index([portfolioId, capturedAt(sort: Desc)])
+}
+model IdempotencyRecord {
+  id String @id @default(uuid()) @db.Uuid
+  portfolioId String @db.Uuid
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Restrict)
+  key String
+  hash String
+  result Json
+  createdAt DateTime @default(now())
+  @@unique([portfolioId, key])
+}
+model AuditLog {
+  id String @id @default(uuid()) @db.Uuid
+  portfolioId String @db.Uuid
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Restrict)
+  actorId String
+  action String
+  entityId String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([portfolioId, createdAt(sort: Desc)])
+}
+model ImportBatch {
+  id String @id @default(uuid()) @db.Uuid
+  portfolioId String @db.Uuid
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Restrict)
+  hash String
+  ledgerVersion Int
+  payload Json
+  errors Json
+  status String @default("PREVIEW")
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([portfolioId, hash])
+}
+
+model DeBankConfig {
+  portfolioId String @id @db.Uuid
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Restrict)
+  encryptedKey String?
+  mode String @default("PUBLIC")
+  enabled Boolean @default(true)
+  intervalMinutes Int @default(60)
+  revision Int @default(1)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+model WalletConnection {
+  id String @id @default(uuid()) @db.Uuid
+  portfolioId String @db.Uuid
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Restrict)
+  address String @db.VarChar(42)
+  label String @db.VarChar(80)
+  referenceUsd Decimal? @db.Decimal(38,18)
+  referenceAt DateTime? @db.Timestamptz(3)
+  enabled Boolean @default(true)
+  included Boolean @default(true)
+  status String @default("PENDING")
+  errorCode String?
+  failureCount Int @default(0)
+  lastAttemptAt DateTime? @db.Timestamptz(3)
+  lastSuccessAt DateTime? @db.Timestamptz(3)
+  nextSyncAt DateTime @default(now()) @db.Timestamptz(3)
+  leaseToken String?
+  leaseUntil DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+  observations WalletObservation[]
+  @@unique([portfolioId, address])
+  @@index([enabled, nextSyncAt])
+}
+model WalletObservation {
+  id String @id @default(uuid()) @db.Uuid
+  walletId String @db.Uuid
+  wallet WalletConnection @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  fetchedAt DateTime @default(now()) @db.Timestamptz(3)
+  totalUsd Decimal @db.Decimal(38,18)
+  data Json
+  invalidatedAt DateTime? @db.Timestamptz(3)
+  invalidReason String?
+  @@index([walletId, fetchedAt(sort: Desc)])
+}

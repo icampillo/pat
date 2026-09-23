@@ -1,0 +1,2 @@
+asset_symbol,type,quantity,unit_price,amount,fees,currency,occurred_at,platform,destination,settlement,comment,external_reference
+BTC,BUY,0.01,50000,0,2,EUR,2025-01-01T12:00:00Z,Personnel,,EXTERNAL,Achat de démonstration à adapter,exemple-btc-001

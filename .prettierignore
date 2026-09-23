@@ -1,0 +1,9 @@
+node_modules
+.next
+.next-e2e
+.local
+src/generated
+pnpm-lock.yaml
+test-results
+playwright-report
+backups

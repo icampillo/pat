@@ -1,0 +1,212 @@
+'use client';
+import { useState } from 'react';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
+import {
+  calculateCategoryWeight,
+  calculatePerformance,
+  filterCategoryHistory,
+} from '@/domain/categories';
+import type { AssetCategoryDetails } from '@/shared/types';
+import { AllocationChart, EvolutionChart } from './charts';
+import {
+  categoryMoney,
+  categoryPercent,
+  Performance30d,
+  signedMoney,
+  trendClass,
+} from './asset-category-card';
+
+const colors = ['#6556dc', '#218a89', '#b7791f', '#bb5695', '#507da8', '#849267'];
+export function CategoryPage({
+  details,
+  currency,
+  asOf,
+}: {
+  details: AssetCategoryDetails;
+  currency: 'EUR' | 'USD';
+  asOf: string;
+}) {
+  const [period, setPeriod] = useState('30d');
+  const { category, assets } = details;
+  const points = filterCategoryHistory(details.history, period, asOf);
+  const slices = assets
+    .map((asset, index) => ({
+      name: asset.name,
+      value: asset.value!,
+      color: colors[index % colors.length],
+    }))
+    .filter((slice) => slice.value !== null && slice.value > 0);
+  const incomplete = category.totalValue === null;
+  const negativeValues = assets.some((asset) => asset.value !== null && asset.value < 0);
+  return (
+    <>
+      <Link className="text-link category-back" href="/dashboard">
+        <ArrowLeft size={16} /> Tableau de bord
+      </Link>
+      <div className="metrics category-metrics">
+        <section className="metric">
+          <div className="metric-top">Valeur totale</div>
+          <strong>{categoryMoney(category.totalValue, currency)}</strong>
+          <p>
+            {category.assetCount} position{category.assetCount > 1 ? 's' : ''}
+            {incomplete ? ' · valorisation incomplète' : ''}
+          </p>
+        </section>
+        <section className="metric">
+          <div className="metric-top">Performance 30 jours</div>
+          <Performance30d category={category} currency={currency} />
+          <p>
+            {category.baselineDate
+              ? `Snapshot du ${new Date(category.baselineDate).toLocaleDateString('fr-FR')}`
+              : 'Historique indisponible'}
+          </p>
+        </section>
+        <section className="metric">
+          <div className="metric-top">Capital investi</div>
+          <strong>{categoryMoney(details.investedCapital, currency)}</strong>
+          <p>
+            {details.investedCapital === null
+              ? 'Données d’acquisition incomplètes'
+              : 'Coût des positions encore détenues'}
+          </p>
+        </section>
+        <section className="metric">
+          <div className="metric-top">Plus-value latente</div>
+          <strong className={trendClass(details.unrealizedPnL)}>
+            {signedMoney(details.unrealizedPnL, currency)}
+          </strong>
+          <p>{categoryPercent(details.unrealizedPnLPercent, true)}</p>
+        </section>
+      </div>
+      <div className="charts-grid">
+        <section className="panel evolution">
+          <div className="section-title">
+            <div>
+              <h2>Évolution · {category.name}</h2>
+              <p>Valeur observée, apports et ventes compris</p>
+            </div>
+            <div className="periods" aria-label="Période du graphique">
+              {[
+                ['7d', '7j'],
+                ['30d', '30j'],
+                ['90d', '90j'],
+                ['1y', '1 an'],
+                ['all', 'Tout'],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  aria-pressed={period === value}
+                  className={period === value ? 'selected' : ''}
+                  onClick={() => setPeriod(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <EvolutionChart points={points} currency={currency} label={category.name} />
+          <p className="chart-foot">Snapshots conservés et valeur actuelle · {currency}</p>
+        </section>
+        <section className="panel allocation">
+          <div className="section-title">
+            <div>
+              <h2>Répartition interne</h2>
+              <p>Poids des positions dans la catégorie</p>
+            </div>
+          </div>
+          {!incomplete && !negativeValues && slices.length > 0 && (
+            <AllocationChart slices={slices} unit="positions" />
+          )}
+          {incomplete && (
+            <p className="empty-inline">Répartition incomplète : prix ou taux manquant.</p>
+          )}
+          {negativeValues && (
+            <p className="empty-inline">Valeurs nettes incluant les dettes et ajustements.</p>
+          )}
+          <div className="legend category-legend">
+            {assets.map((asset, index) => (
+              <div key={asset.id}>
+                <span className="dot" style={{ background: colors[index % colors.length] }} />
+                <span>{asset.name}</span>
+                <strong>
+                  {categoryPercent(calculateCategoryWeight(asset.value, category.totalValue))}
+                </strong>
+              </div>
+            ))}
+          </div>
+          {!assets.length && <p className="empty-inline">Aucune position détenue.</p>}
+        </section>
+      </div>
+      <section className="panel">
+        <div className="section-title">
+          <div>
+            <h2>Actifs de la catégorie</h2>
+            <p>
+              Performance 30j : variation du prix de l’actif, selon les observations disponibles
+            </p>
+          </div>
+        </div>
+        <div
+          className="table-scroll"
+          tabIndex={0}
+          role="region"
+          aria-label="Actifs de la catégorie"
+        >
+          <table>
+            <thead>
+              <tr>
+                <th>Actif</th>
+                <th className="num">Quantité</th>
+                <th className="num">Prix actuel</th>
+                <th className="num">Valeur ({currency})</th>
+                <th className="num">Performance 30j</th>
+                <th className="num">Plus-value latente</th>
+              </tr>
+            </thead>
+            <tbody>
+              {assets.map((asset) => {
+                const gain = calculatePerformance(asset.value, asset.cost).absolute;
+                return (
+                  <tr key={asset.id}>
+                    <td>
+                      <Link className="asset-cell strong" href={asset.href}>
+                        {asset.name}
+                      </Link>
+                    </td>
+                    <td className="num">
+                      {asset.quantity === null
+                        ? '—'
+                        : new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 8 }).format(
+                            Number(asset.quantity),
+                          )}
+                    </td>
+                    <td className="num">
+                      {categoryMoney(
+                        asset.price === null ? null : Number(asset.price),
+                        asset.priceCurrency,
+                      )}
+                    </td>
+                    <td className="num strong">{categoryMoney(asset.value, currency)}</td>
+                    <td className={`num ${trendClass(asset.change30dPercent)}`}>
+                      {categoryPercent(asset.change30dPercent, true)}
+                    </td>
+                    <td className={`num ${trendClass(gain)}`}>{signedMoney(gain, currency)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {!assets.length && (
+          <div className="empty">
+            <h3>Aucun actif détenu dans cette catégorie</h3>
+            <Link className="btn primary" href="/assets/new">
+              Ajouter un actif
+            </Link>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
