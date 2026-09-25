@@ -99,6 +99,12 @@ export async function previewSecurities(
             );
           const existing = matches[0];
           if (existing) {
+            if (existing.status === 'ARCHIVED')
+              throw new AppError(
+                'ASSET_ARCHIVED',
+                'Ce produit est archivé sur ce compte. Réactivez sa fiche avant de l’importer.',
+                409,
+              );
             if (
               existing.currency !== quote.currency ||
               (existing.metadata.ticker && existing.metadata.ticker !== quote.symbol)

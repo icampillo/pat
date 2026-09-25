@@ -4,7 +4,9 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { db } from '../../src/server/db';
 import { createUser } from '../../src/server/provision';
-import { getState, command } from '../../src/server/portfolio';
+import { getState, command, runSnapshot } from '../../src/server/portfolio';
+import { buildCategoryDetails } from '../../src/domain/categories';
+import type { AppState } from '../../src/shared/types';
 import { walletCommand, syncWallet } from '../../src/server/wallets';
 import { normalizeDeBank, DeBankError } from '../../src/server/debank';
 import { exportData } from '../../src/server/exports';
@@ -31,7 +33,7 @@ afterAll(async () => {
   });
   await db().$disconnect();
 });
-async function setup() {
+async function setup(included = true) {
   const email = `wallet-${randomUUID()}@example.test`,
     password = randomUUID() + randomUUID();
   const owner = await createUser('Wallet test', email, password);
@@ -42,6 +44,7 @@ async function setup() {
     address,
     label: 'Wallet fixture',
     referenceUsd: '1000',
+    included,
   })) as { id: string };
   const configure = () =>
     call('PATCH', 'debank/config', {
@@ -93,7 +96,7 @@ describe('Synchronisation DeBank persistante et isolée', () => {
       expect(payload).not.toContain('leaseToken');
     }
   });
-  it('additionne une seule fois le net officiel, convertit au taux courant, capture sans faux achats', async () => {
+  it('actualise les totaux sans snapshot de synchronisation ni faux achats', async () => {
     const s = await setup();
     await s.configure();
     await command(
@@ -113,11 +116,177 @@ describe('Synchronisation DeBank persistante et isolée', () => {
       unrealizedEur: null,
     });
     expect(state.transactions).toHaveLength(0);
-    expect(state.snapshots.at(-1)).toMatchObject({ kind: 'WALLET', totalUsd: '905' });
+    expect(state.snapshots).toHaveLength(1);
+    // The only capture records inclusion, before any observation: its value stays unknown.
+    expect(state.snapshots[0]).toMatchObject({ kind: 'WALLET', totalUsd: null });
     expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(1);
     const provider = vi.fn();
     expect(await syncWallet(s.id, provider)).toBe(false);
     expect(provider).not.toHaveBeenCalled();
+  });
+  it.each([15, 60, 240])(
+    'sépare les observations à %i min des captures manuelles et quotidiennes immuables',
+    async (intervalMinutes) => {
+      const s = await setup();
+      await s.call('PATCH', 'debank/config', {
+        mode: 'API',
+        accessKey: 'test-key-not-real',
+        enabled: true,
+        intervalMinutes,
+      });
+      await command(
+        s.userId,
+        'POST',
+        ['fx-rates'],
+        {
+          eurUsd: '1.25',
+          observedAt: new Date(Date.now() - 1000).toISOString(),
+        },
+        randomUUID(),
+        null,
+      );
+      expect(await syncWallet(s.id, async () => sample)).toBe(true);
+      const manual = await runSnapshot(s.portfolioId);
+      expect(String(manual!.totalUsd)).toBe('905');
+      const before = await getState(s.userId);
+      await s.due();
+      expect(await syncWallet(s.id, async () => ({ ...sample, totalUsd: '1000' }))).toBe(true);
+      const dailyAt = new Date();
+      const [daily, concurrent] = await Promise.all([
+        runSnapshot(s.portfolioId, true, dailyAt),
+        runSnapshot(s.portfolioId, true, dailyAt),
+      ]);
+      expect(concurrent!.id).toBe(daily!.id);
+      expect(String(daily!.totalUsd)).toBe('1000');
+      await s.due();
+      expect(await syncWallet(s.id, async () => ({ ...sample, totalUsd: '1100' }))).toBe(true);
+      expect(await runSnapshot(s.portfolioId, true, dailyAt)).toEqual(daily);
+      const state: AppState = await getState(s.userId);
+      expect(state.totals).toMatchObject({ valueUsd: '1100', valueEur: '880', netFlowsEur: '0' });
+      expect(state.portfolio.version).toBeGreaterThan(before.portfolio.version);
+      expect(state.transactions).toHaveLength(0);
+      expect(state.snapshots).toHaveLength(3); // inclusion + manual + daily, not three syncs
+      expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(3);
+      expect(await db().portfolioSnapshot.findUnique({ where: { id: manual!.id } })).toEqual(
+        manual,
+      );
+      const crypto = state.categories.find((c) => c.key === 'CRYPTO')!;
+      const details = buildCategoryDetails(state, crypto, 'USD');
+      expect(details.category.totalValue).toBe(1100);
+      expect(
+        state.snapshots.find((snap) => snap.id === manual!.id)?.categoryValues?.[crypto.id],
+      ).toEqual({ valueEur: '724', valueUsd: '905' });
+      expect(details.history.map((point) => point.value)).toEqual([null, 905, 1000, 1100]);
+      expect(details.unrealizedPnL).toBeNull();
+      const nextDay = await runSnapshot(
+        s.portfolioId,
+        true,
+        new Date(dailyAt.getTime() + 86400000),
+      );
+      expect(nextDay!.id).not.toBe(daily!.id);
+      expect(String(nextDay!.totalUsd)).toBe('1100');
+      expect(await db().portfolioSnapshot.count({ where: { portfolioId: s.portfolioId } })).toBe(4);
+    },
+  );
+  it('pause, reprise, renommage et configuration ne changent ni périmètre ni captures', async () => {
+    const s = await setup();
+    await syncWallet(s.id, async () => sample);
+    const saved = await runSnapshot(s.portfolioId);
+    for (const input of [
+      { enabled: false },
+      { enabled: true },
+      { label: 'Nouveau nom' },
+      { included: true },
+    ]) {
+      await s.call('PATCH', `wallets/${s.id}`, input);
+      const state = await getState(s.userId);
+      expect(state.totals.valueUsd).toBe('905');
+      expect(state.snapshots).toHaveLength(2);
+    }
+    await s.call('DELETE', 'debank/config', {});
+    expect(await syncWallet(s.id, async () => sample)).toBe(false);
+    expect((await getState(s.userId)).totals.valueUsd).toBe('905');
+    expect(await db().portfolioSnapshot.count({ where: { portfolioId: s.portfolioId } })).toBe(2);
+    expect(await db().portfolioSnapshot.findUnique({ where: { id: saved!.id } })).toEqual(saved);
+  });
+  it('fige les dernières observations valides de chaque wallet à la date de capture', async () => {
+    const s = await setup();
+    const second = (await s.call('POST', 'wallets', {
+      address: `0x${'c'.repeat(40)}`,
+    })) as { id: string };
+    await syncWallet(s.id, async () => sample);
+    await syncWallet(second.id, async () => ({ ...sample, totalUsd: '95' }));
+    const at = new Date();
+    // A known invalid read and a future read must never replace the observations at this instant.
+    await db().walletObservation.createMany({
+      data: [
+        {
+          walletId: s.id,
+          fetchedAt: at,
+          totalUsd: '9999',
+          data: { ...sample, totalUsd: '9999' },
+          invalidatedAt: at,
+          invalidReason: 'Fixture invalide',
+        },
+        {
+          walletId: second.id,
+          fetchedAt: new Date(at.getTime() + 3600000),
+          totalUsd: '8888',
+          data: { ...sample, totalUsd: '8888' },
+        },
+      ],
+    });
+    const snapshot = await runSnapshot(s.portfolioId, false, at);
+    expect(String(snapshot!.totalUsd)).toBe('1000');
+    expect(snapshot!.data).toMatchObject({
+      onchain: {
+        includedCount: 2,
+        missing: 0,
+        valueUsd: '1000',
+        wallets: expect.arrayContaining([
+          expect.objectContaining({ id: s.id, data: expect.objectContaining({ totalUsd: '905' }) }),
+          expect.objectContaining({
+            id: second.id,
+            data: expect.objectContaining({ totalUsd: '95' }),
+          }),
+        ]),
+      },
+    });
+    expect(
+      await db().walletObservation.count({ where: { walletId: { in: [s.id, second.id] } } }),
+    ).toBe(4);
+    expect(await db().portfolioSnapshot.count({ where: { portfolioId: s.portfolioId } })).toBe(3);
+  });
+  it('capture seulement les changements réels de périmètre, y compris retrait et restauration', async () => {
+    const s = await setup(false);
+    await syncWallet(s.id, async () => sample);
+    expect((await getState(s.userId)).snapshots).toHaveLength(0);
+    expect((await getState(s.userId)).totals.valueUsd).toBe('0');
+    const key = randomUUID();
+    await s.call('PATCH', `wallets/${s.id}`, { included: true }, key);
+    await s.call('PATCH', `wallets/${s.id}`, { included: true }, key);
+    await s.call('PATCH', `wallets/${s.id}`, { included: true });
+    const included = (await getState(s.userId)).snapshots;
+    expect(included).toHaveLength(1);
+    expect(included[0]).toMatchObject({ kind: 'WALLET', totalUsd: '905' });
+    await s.call('DELETE', `wallets/${s.id}`, {});
+    const removed = await getState(s.userId);
+    expect(removed.onchain.wallets).toHaveLength(0);
+    expect(removed.totals.valueUsd).toBe('0');
+    expect(removed.snapshots).toHaveLength(2);
+    expect(removed.snapshots.at(-1)).toMatchObject({ kind: 'WALLET', totalUsd: '0' });
+    // Keep the structural marker used to suppress Dietz even after the wallet disappears.
+    expect(removed.snapshots.some((snap: { kind: string }) => snap.kind === 'WALLET')).toBe(true);
+    const restoreKey = randomUUID();
+    const restored = await s.call('POST', 'wallets', { address }, restoreKey);
+    expect(restored).toEqual({ id: s.id });
+    expect(await s.call('POST', 'wallets', { address }, restoreKey)).toEqual(restored);
+    const state = await getState(s.userId);
+    expect(state.snapshots).toHaveLength(3);
+    expect(state.snapshots[0]).toEqual(included[0]);
+    expect(state.snapshots.at(-1)).toMatchObject({ kind: 'WALLET', totalUsd: '905' });
+    expect(state.onchain.wallets[0].data.totalUsd).toBe('905');
+    expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(1);
   });
   it('un seul appel fournisseur pour deux workers concurrents', async () => {
     const s = await setup();
@@ -130,6 +299,7 @@ describe('Synchronisation DeBank persistante et isolée', () => {
     expect(results.filter(Boolean)).toHaveLength(1);
     expect(provider).toHaveBeenCalledTimes(1);
     expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(1);
+    expect((await getState(s.userId)).snapshots).toHaveLength(1);
   });
   it('conserve la réussite précédente et sa date sur erreur puis programme une reprise', async () => {
     const s = await setup();
@@ -148,6 +318,7 @@ describe('Synchronisation DeBank persistante et isolée', () => {
     expect(after.errorCode).toBe('RATE_LIMIT');
     expect(Date.parse(after.nextSyncAt)).toBeGreaterThan(Date.now());
     expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(1);
+    expect((await getState(s.userId)).snapshots).toHaveLength(1);
   });
   it('une pause ou une suppression pendant un appel empêche la publication tardive', async () => {
     const s = await setup();
@@ -159,6 +330,7 @@ describe('Synchronisation DeBank persistante et isolée', () => {
       }),
     ).toBe(false);
     expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(0);
+    expect((await getState(s.userId)).snapshots).toHaveLength(1);
     await s.call('PATCH', `wallets/${s.id}`, { enabled: true });
     await s.due();
     expect(
@@ -168,6 +340,7 @@ describe('Synchronisation DeBank persistante et isolée', () => {
       }),
     ).toBe(false);
     expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(0);
+    expect((await getState(s.userId)).snapshots).toHaveLength(1);
   });
   it('isole les propriétaires et les clés idempotentes', async () => {
     const a = await setup(),
@@ -186,10 +359,15 @@ describe('Synchronisation DeBank persistante et isolée', () => {
     const s = await setup();
     await s.configure();
     await syncWallet(s.id, async () => sample);
+    const saved = await runSnapshot(s.portfolioId);
     await s.call('PATCH', `wallets/${s.id}`, { included: false });
     expect((await getState(s.userId)).totals.valueUsd).toBe('0');
+    const captures = (await getState(s.userId)).snapshots;
+    expect(captures.at(-1)).toMatchObject({ kind: 'WALLET', totalUsd: '0' });
     await s.call('DELETE', `wallets/${s.id}`, {});
     expect((await getState(s.userId)).onchain.wallets).toHaveLength(0);
+    expect((await getState(s.userId)).snapshots).toEqual(captures);
+    expect(await db().portfolioSnapshot.findUnique({ where: { id: saved!.id } })).toEqual(saved);
     expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(1);
     expect(
       await db().portfolioSnapshot.count({ where: { portfolioId: s.portfolioId, totalUsd: 905 } }),

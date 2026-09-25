@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      WALLET_WORKER_DISABLED: '1'
+      MARKET_WORKER_DISABLED: '1'
+      BETTER_AUTH_URL: http://localhost:3000
+      APP_ORIGIN: http://localhost:3000
+
+    services:
+      postgres:
+        # Même version majeure et variante que docker-compose.yml, sans volume persistant.
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_USER: patrimoine_ci
+          POSTGRES_DB: patrimoine_ci_test
+          # Identifiant de démarrage jetable, remplacé par un secret aléatoire avant les tests.
+          POSTGRES_PASSWORD: ci-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U patrimoine_ci -d patrimoine_ci_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Node.js depuis package.json
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+
+      - name: pnpm depuis package.json et cache du store
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          run_install: false
+          cache: true
+          cache_dependency_path: pnpm-lock.yaml
+
+      - name: Générer les secrets de test
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          ci_database_password="$(openssl rand -hex 32)"
+          ci_auth_secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$ci_database_password"
+          echo "::add-mask::$ci_auth_secret"
+          docker exec -i "$POSTGRES_CONTAINER" psql -U patrimoine_ci -d patrimoine_ci_test \
+            -v ON_ERROR_STOP=1 -v new_password="$ci_database_password" <<'SQL'
+          ALTER ROLE patrimoine_ci PASSWORD :'new_password';
+          SQL
+          ci_database_url="postgresql://patrimoine_ci:${ci_database_password}@127.0.0.1:5432/patrimoine_ci_test"
+          echo "::add-mask::$ci_database_url"
+          printf 'DATABASE_URL=%s\nDATABASE_URL_TEST=%s\nBETTER_AUTH_SECRET=%s\n' \
+            "$ci_database_url" "$ci_database_url" "$ci_auth_secret" >> "$GITHUB_ENV"
+
+      - name: Vérifier l’isolation de la base de test
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const url = new URL(process.env.DATABASE_URL_TEST);
+          assert.equal(url.protocol, 'postgresql:');
+          assert.equal(url.hostname, '127.0.0.1');
+          assert.equal(url.port, '5432');
+          assert.equal(url.username, 'patrimoine_ci');
+          assert.equal(url.pathname, '/patrimoine_ci_test');
+          assert.equal(process.env.DATABASE_URL, process.env.DATABASE_URL_TEST);
+          assert.ok(process.env.BETTER_AUTH_SECRET?.length >= 32);
+          NODE
+
+      - name: Installer les dépendances verrouillées
+        run: pnpm install --frozen-lockfile
+
+      - name: Générer Prisma
+        run: pnpm db:generate
+
+      - name: Générer les types Next.js sur le checkout neuf
+        run: pnpm exec next typegen
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Tests unitaires
+        run: pnpm test:unit
+
+      - name: Tests PostgreSQL
+        # Le setup existant vérifie *_test puis applique les migrations avec migrate deploy.
+        run: pnpm test:integration
+
+      - name: Build de production
+        run: pnpm build
+
+      - name: Installer Chromium et ses bibliothèques système
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Parcours Playwright
+        run: pnpm test:e2e

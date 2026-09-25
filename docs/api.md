@@ -64,14 +64,14 @@ Un prix ancien autorise une estimation accompagnée de sa date. Un prix absent p
 | POST | `/assets` | Fiche, spécialisation et transaction initiale facultative atomiques |
 | GET | `/assets/{id}` | Fiche, projection de position, dernier prix et statut de fraîcheur |
 | PATCH | `/assets/{id}` | Métadonnées et archivage ; quantité/PMA interdits |
-| DELETE | `/assets/{id}` | Confirmation explicite ; suppression définitive de la fiche et de ses données liées |
+| DELETE | `/assets/{id}` | Confirmation explicite ; archivage réversible de la fiche soldée, sans effacement |
 | GET | `/assets/{id}/prices` | Historique paginé, dates de prix et de saisie |
 | POST | `/assets/{id}/prices` | Prix manuel ou correction append-only avec source et date |
 | POST | `/assets/{id}/images` | Upload multipart validé, taille maximale 5 Mio, formats autorisés |
 | GET | `/assets/{id}/images/{imageId}` | Lecture privée après vérification du propriétaire |
 | DELETE | `/assets/{id}/images/{imageId}` | Suppression explicite de la pièce jointe |
 
-La suppression fonctionne même si la quantité détenue est non nulle. Dans une transaction SQL, elle efface les opérations et leurs révisions, les prix, l'image et les captures historiques contenant l'actif, puis la fiche. Elle ne crée pas de vente fictive. Si les opérations restantes deviennent incohérentes, la suppression est annulée intégralement.
+L’archivage refuse une quantité non nulle ou une opération future en attente. La fiche, les opérations, révisions, prix, image, snapshots et audits sont conservés. Aucune vente fictive ni purge définitive n’est créée. Une réactivation explicite est requise avant toute mutation du journal d’un actif archivé. Voir le [contrat de compatibilité DELETE actuel](implementation.md#cycle-de-vie-des-actifs).
 
 Exemple de prix manuel :
 

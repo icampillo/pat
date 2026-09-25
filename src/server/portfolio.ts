@@ -9,6 +9,7 @@ import {
 } from '@/modules/prices/providers';
 import { AppError } from './errors';
 import { createHash } from 'node:crypto';
+import { z } from 'zod';
 import { walletState } from './wallet-state';
 import { snapshotCategoryValues, performance30d, numeric } from '@/domain/categories';
 import {
@@ -99,6 +100,55 @@ export function checkVersion(version: number, expected: string | null) {
   if (String(version) !== expected.replaceAll('"', ''))
     throw new AppError('STALE_VERSION', 'La ressource a changé. Rechargez la page.', 412);
 }
+async function requireActiveAsset(tx: TxDb, portfolioId: string, assetId: string) {
+  const asset = await tx.asset.findFirst({
+    where: { id: assetId, portfolioId, deletedAt: null },
+  });
+  if (!asset) throw new AppError('NOT_FOUND', 'Actif introuvable.', 404);
+  if (asset.status !== 'ACTIVE')
+    throw new AppError(
+      'ASSET_ARCHIVED',
+      'Cet actif est archivé. Réactivez-le avant d’ajouter, corriger ou annuler une opération.',
+      409,
+    );
+}
+
+async function assertArchivable(tx: TxDb, portfolioId: string, assetId: string) {
+  const rows = await tx.transaction.findMany({ where: { portfolioId, voided: false } });
+  const now = new Date();
+  // Même borne temporelle que la valorisation, sans utiliser une projection mutable.
+  const ledger = replay(rows.filter((row) => row.occurredAt <= now).map(toLedger));
+  if (!d(ledger.assets[assetId]?.quantity || '0').isZero())
+    throw new AppError(
+      'ASSET_POSITION_OPEN',
+      'Soldez ou corrigez d’abord la position avant d’archiver cet actif.',
+      409,
+    );
+  // La validation des dates tolère un léger décalage d’horloge : ne pas ignorer ces écritures.
+  if (rows.some((row) => row.assetId === assetId && row.occurredAt > now))
+    throw new AppError(
+      'ASSET_PENDING_TRANSACTION',
+      'Une opération de cet actif est datée dans le futur. Attendez sa date ou corrigez-la avant l’archivage.',
+      409,
+    );
+}
+
+async function auditAssetStatus(
+  tx: TxDb,
+  portfolioId: string,
+  actorId: string,
+  entityId: string,
+  status: string,
+) {
+  await tx.auditLog.create({
+    data: {
+      portfolioId,
+      actorId,
+      entityId,
+      action: status === 'ARCHIVED' ? 'ASSET_ARCHIVED' : 'ASSET_REACTIVATED',
+    },
+  });
+}
 export async function prepareTransaction(
   tx: TxDb,
   portfolioId: string,
@@ -106,11 +156,7 @@ export async function prepareTransaction(
   previous?: Transaction,
 ) {
   const data = transactionSchema.parse(input);
-  if (
-    data.assetId &&
-    !(await tx.asset.findFirst({ where: { id: data.assetId, portfolioId, deletedAt: null } }))
-  )
-    throw new AppError('NOT_FOUND', 'Actif introuvable.', 404);
+  if (data.assetId) await requireActiveAsset(tx, portfolioId, data.assetId);
   const rate = await tx.fxRate.findFirst({
     where: { portfolioId, observedAt: { lte: new Date(data.occurredAt) } },
     orderBy: { observedAt: 'desc' },
@@ -304,6 +350,8 @@ export async function command(
         checkVersion(asset.version, version);
         if (method === 'PATCH') {
           const data = assetUpdateSchema.parse(input);
+          if (data.status === 'ARCHIVED') await assertArchivable(tx, p.id, asset.id);
+          if (data.acquisitionCost) await requireActiveAsset(tx, p.id, asset.id);
           const category = await tx.assetCategory.findFirst({
             where: { id: data.categoryId, portfolioId: p.id },
           });
@@ -363,7 +411,7 @@ export async function command(
             });
             await validateLedger(tx, p.id);
           }
-          return tx.asset.update({
+          const updated = await tx.asset.update({
             where: { id },
             data: {
               ...assetData,
@@ -375,33 +423,33 @@ export async function command(
               version: { increment: 1 },
             },
           });
+          if (asset.status !== updated.status)
+            await auditAssetStatus(tx, p.id, userId, asset.id, updated.status);
+          return updated;
         }
         if (method === 'DELETE') {
-          if (!(input as { confirmed?: boolean }).confirmed)
-            throw new AppError('CONFIRMATION_REQUIRED', 'Confirmez la suppression.');
-          const snapshots = await tx.portfolioSnapshot.findMany({
-            where: { portfolioId: p.id },
-            select: { id: true, data: true },
-          });
-          const snapshotIds = snapshots
-            .filter((snapshot) => {
-              const rows = (snapshot.data as { rows?: Array<{ id?: string }> })?.rows;
-              return Array.isArray(rows) && rows.some((row) => row.id === id);
-            })
-            .map((snapshot) => snapshot.id);
-          await tx.transactionRevision.deleteMany({
-            where: { transaction: { portfolioId: p.id, assetId: id } },
-          });
-          await tx.transaction.deleteMany({ where: { portfolioId: p.id, assetId: id } });
-          await tx.priceHistory.deleteMany({ where: { portfolioId: p.id, assetId: id } });
-          await tx.assetImage.deleteMany({ where: { portfolioId: p.id, assetId: id } });
-          if (snapshotIds.length)
-            await tx.portfolioSnapshot.deleteMany({
-              where: { portfolioId: p.id, id: { in: snapshotIds } },
-            });
-          await validateLedger(tx, p.id);
-          await tx.asset.delete({ where: { id } });
-          return { id, deleted: true, snapshotsDeleted: snapshotIds.length };
+          z.object({ confirmed: z.literal(true) })
+            .strict()
+            .parse(input);
+          await assertArchivable(tx, p.id, asset.id);
+          const updated =
+            asset.status === 'ARCHIVED'
+              ? asset
+              : await tx.asset.update({
+                  where: { id: asset.id },
+                  data: { status: 'ARCHIVED', version: { increment: 1 } },
+                });
+          if (asset.status !== updated.status)
+            await auditAssetStatus(tx, p.id, userId, asset.id, updated.status);
+          // Compatibilité de route uniquement : DELETE ne détruit plus aucune donnée.
+          return {
+            id: asset.id,
+            status: updated.status,
+            version: updated.version,
+            archived: true,
+            deleted: false,
+            snapshotsDeleted: 0,
+          };
         }
       }
       if (resource === 'transactions') {
@@ -415,6 +463,7 @@ export async function command(
         });
         if (!row) throw new AppError('NOT_FOUND', 'Transaction introuvable.', 404);
         checkVersion(row.version, version);
+        if (row.assetId) await requireActiveAsset(tx, p.id, row.assetId);
         if (method === 'PATCH') {
           const { transaction, reason } = transactionEditSchema.parse(input);
           const data = await prepareTransaction(tx, p.id, transaction, row);

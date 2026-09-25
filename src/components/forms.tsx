@@ -291,7 +291,7 @@ export function TransactionForm({
     [assetId, setAssetId] = useState(
       transaction
         ? transaction.assetId || ''
-        : initialAsset || state.rows.find((a) => !a.deletedAt)?.id || '',
+        : initialAsset || state.rows.find((a) => !a.deletedAt && a.status === 'ACTIVE')?.id || '',
     );
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
@@ -352,6 +352,18 @@ export function TransactionForm({
   } catch {
     /* saisie en cours */
   }
+  const archived = state.rows.find(
+    (row) => row.id === (transaction?.assetId || initialAsset) && row.status === 'ARCHIVED',
+  );
+  if (archived)
+    return (
+      <div className="panel form-panel">
+        <p>Cet actif est archivé. Réactivez-le avant d’ajouter ou corriger une opération.</p>
+        <Link className="btn" href={`/assets/${archived.id}`}>
+          Consulter l’actif archivé
+        </Link>
+      </div>
+    );
   return (
     <div className="form-wrap">
       <Link className="back" href="/transactions">
@@ -389,7 +401,7 @@ export function TransactionForm({
             >
               <option value="">Liquidités</option>
               {state.rows
-                .filter((a) => !a.deletedAt)
+                .filter((a) => !a.deletedAt && a.status === 'ACTIVE')
                 .map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name} · {a.symbol}

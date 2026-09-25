@@ -721,27 +721,13 @@ export function Workspace({
                       <Archive size={15} />
                       {asset.status === 'ARCHIVED' ? 'Réactiver' : 'Archiver'}
                     </button>
-                    <Confirm
-                      title={`Supprimer définitivement ${asset.name} ?`}
-                      description="La fiche, ses opérations, ses prix et son image seront effacés, même si vous détenez encore cet actif. Les captures historiques qui le contiennent seront également supprimées. Cette action est irréversible."
-                      onConfirm={() =>
-                        run(async () => {
-                          await save(
-                            `assets/${asset.id}`,
-                            'DELETE',
-                            { confirmed: true },
-                            asset.version,
-                          );
-                          router.push('/assets');
-                        })
-                      }
-                    >
-                      <button className="btn icon-btn" aria-label="Supprimer cet actif">
-                        <Trash2 size={17} />
-                      </button>
-                    </Confirm>
                   </div>
                 </div>
+                <p className="muted">
+                  {asset.status === 'ARCHIVED'
+                    ? 'Actif archivé : historique conservé. Réactivez-le avant d’ajouter, corriger ou annuler une opération.'
+                    : 'L’archivage conserve tout l’historique et nécessite de solder ou corriger la position au préalable.'}
+                </p>
                 <div className="metrics">
                   <Metric
                     title="Valeur actuelle"
@@ -904,10 +890,12 @@ export function Workspace({
                         <p>{asset.notes}</p>
                       </div>
                     )}
-                    <Link className="btn" href={`/transactions/new?asset=${asset.id}`}>
-                      <Plus size={16} />
-                      Ajouter une transaction
-                    </Link>
+                    {asset.status === 'ACTIVE' && (
+                      <Link className="btn" href={`/transactions/new?asset=${asset.id}`}>
+                        <Plus size={16} />
+                        Ajouter une transaction
+                      </Link>
+                    )}
                   </section>
                 </div>
                 <section className="panel">
@@ -993,41 +981,6 @@ export function Workspace({
               <section className="panel">
                 {filters}
                 {assetTable(shown)}
-              </section>
-              <section className="panel">
-                <div className="section-title">
-                  <h2>Liquidités disponibles</h2>
-                </div>
-                <div className="table-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Plateforme</th>
-                        <th>Devise</th>
-                        <th className="num">Solde</th>
-                        <th className="num">Valeur {currency}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {state.cash.map((c, i) => (
-                        <tr key={i}>
-                          <td>{c.platform}</td>
-                          <td>{c.currency}</td>
-                          <td className="num">{money(c.balance, c.currency)}</td>
-                          <td className="num">
-                            {money(currency === 'EUR' ? c.valueEur : c.valueUsd, currency)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {!state.cash.length && (
-                    <p className="empty-inline">
-                      Aucune liquidité enregistrée. Les achats financés depuis l’extérieur
-                      n’entament pas un solde interne.
-                    </p>
-                  )}
-                </div>
               </section>
             </>
           )}
@@ -1161,34 +1114,42 @@ function TransactionTable({
               <td className="num muted">{money(t.fees, t.currency)}</td>
               <td>{t.platform}</td>
               <td>
-                <Link
-                  className="icon-btn"
-                  href={`/transactions/${t.id}`}
-                  aria-label={`Modifier ${typeLabels[t.type]} ${t.assetName}`}
-                >
-                  <Pencil size={16} />
-                </Link>
-                <Confirm
-                  title="Annuler cette transaction ?"
-                  description="Les positions seront recalculées. L’annulation sera refusée si elle rend une autre opération impossible. Une trace sera conservée."
-                  onConfirm={() =>
-                    run(() =>
-                      save(
-                        `transactions/${t.id}`,
-                        'DELETE',
-                        { confirmed: true, reason: 'Annulation confirmée depuis le journal' },
-                        t.version,
-                      ),
-                    )
-                  }
-                >
-                  <button
-                    className="icon-btn"
-                    aria-label={`Annuler ${typeLabels[t.type]} ${t.assetName}`}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </Confirm>
+                {state.rows.find((a) => a.id === t.assetId)?.status === 'ARCHIVED' ? (
+                  <Link className="text-link" href={`/assets/${t.assetId}`}>
+                    Actif archivé
+                  </Link>
+                ) : (
+                  <>
+                    <Link
+                      className="icon-btn"
+                      href={`/transactions/${t.id}`}
+                      aria-label={`Modifier ${typeLabels[t.type]} ${t.assetName}`}
+                    >
+                      <Pencil size={16} />
+                    </Link>
+                    <Confirm
+                      title="Annuler cette transaction ?"
+                      description="Les positions seront recalculées. L’annulation sera refusée si elle rend une autre opération impossible. Une trace sera conservée."
+                      onConfirm={() =>
+                        run(() =>
+                          save(
+                            `transactions/${t.id}`,
+                            'DELETE',
+                            { confirmed: true, reason: 'Annulation confirmée depuis le journal' },
+                            t.version,
+                          ),
+                        )
+                      }
+                    >
+                      <button
+                        className="icon-btn"
+                        aria-label={`Annuler ${typeLabels[t.type]} ${t.assetName}`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </Confirm>
+                  </>
+                )}
               </td>
             </tr>
           ))}

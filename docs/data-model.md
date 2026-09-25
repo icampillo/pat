@@ -11,7 +11,7 @@ Ce document conserve le modèle cible de la conception initiale. Une base Postgr
 - Toutes les tables financières portent `portfolioId`. Les relations sensibles utilisent des clés composites pour empêcher de référencer un actif, une plateforme ou un compte d'un autre portefeuille.
 - `version` entier pour concurrence optimiste sur les ressources modifiables ; `ledgerVersion` entier sur le portefeuille pour le journal.
 - Champs texte bornés : nom 120, référence 100, notes 5 000 caractères. URLs HTTPS limitées à 2 048 caractères.
-- `deletedAt` reste présent pour les anciennes suppressions logiques. Une nouvelle suppression de fiche efface explicitement ses écritures, prix, image et captures qui la contiennent avant de supprimer l'actif ; les clés étrangères restent restrictives.
+- `deletedAt` reste présent pour les anciennes suppressions logiques. Les nouvelles demandes archivent la fiche via `status` sans renseigner `deletedAt` ni effacer de données. Les clés étrangères restent restrictives ; aucune purge définitive n’est exposée.
 
 ## Relations principales
 
@@ -61,7 +61,7 @@ Catégories seed : crypto, métaux, actions/ETF, Pokémon, One Piece, autres. Le
 
 Champs : `id`, `portfolioId`, `categoryId`, `name`, `symbolOrReference`, `subcategory?`, `quoteCurrency`, `defaultPlatformId?`, `externalIdentifier?`, `notes?`, `status`, `version`, `createdAt`, `updatedAt`, `deletedAt?`.
 
-- `status` : ACTIVE, SOLD ou ARCHIVED. SOLD est cohérent uniquement avec une quantité totale nulle ; une entrée de quantité réactive le statut. ARCHIVED masque une fiche de la liste courante, pas des calculs.
+- `status` effectif : ACTIVE ou ARCHIVED. ACTIVE autorise les opérations, y compris pour une fiche sans position. ARCHIVED exige une position soldée et aucune opération future en attente lors de la transition ; la fiche demeure consultable mais n’est plus proposée pour les opérations ordinaires. Une réactivation explicite est nécessaire avant toute mutation du journal. Le statut ne filtre jamais la valorisation ; il n’existe pas de statut SOLD persisté.
 - `quoteCurrency` est aussi la devise de coût de l'actif au MVP ; sa modification est interdite après des transactions. Une transaction dans une autre monnaie conserve les conversions vers cette devise et vers EUR.
 - `quantity`, `averageCost`, `currentPrice`, `purchaseDate` et `currentValue` sont des **champs de lecture dérivés**, pas des entrées modifiables directement. Le formulaire de création peut émettre une transaction initiale atomique.
 - Index : `(portfolioId, categoryId, status)`, `(portfolioId, name)`, `(portfolioId, symbolOrReference)` ; la référence n'est pas globalement unique (variantes de cartes/pièces).
@@ -143,6 +143,8 @@ Le cache du prix courant est optionnel et reconstruisible. Il ne remplace jamais
 ## Snapshots
 
 ### `PortfolioSnapshot`
+
+Dans le modèle effectif, les détails sont stockés en JSON immuable (voir [implementation.md](implementation.md)). Les `WalletObservation` sont conservées indépendamment à chaque synchronisation ; elles ne déclenchent pas de snapshot complet. Le type existant `WALLET` désigne désormais une capture après changement d’inclusion, ajout/restauration inclus ou retrait inclus. Les anciennes captures de synchronisation gardent leur type et leur contenu. Aucun changement de schéma n’est requis.
 
 `id`, `portfolioId`, `kind MANUAL/DAILY/SEED`, `capturedAt`, `localDate`, `timezone`, `ledgerVersion`, `calculationVersion`, `baseCurrency`, `totalBase?`, `totalUsd?`, `knownSubtotalBase`, `knownSubtotalUsd`, `remainingCostBase`, `remainingCostUsd?`, `realizedGainBase`, `realizedGainUsd?`, `incomeBase`, `incomeUsd?`, `cumulativeNetFlowsBase`, `cumulativeNetFlowsUsd?`, `quality COMPLETE/PARTIAL`, `metricAvailability`, `missingAssetCount`, `missingFxCount`, `createdAt`.
 

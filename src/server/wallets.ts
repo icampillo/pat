@@ -112,6 +112,8 @@ export async function walletCommand(
       const row = previous
         ? await tx.walletConnection.update({ where: { id: previous.id }, data: fields })
         : await tx.walletConnection.create({ data: { ...fields, portfolioId: p.id } });
+      // Inclusion is a structural change, even before the first observation (unknown value).
+      if (row.included) await capture(tx, p.id, p.version + 1, 'WALLET');
       return { id: row.id };
     }
     if (!path[1] || !z.uuid().safeParse(path[1]).success)
@@ -165,7 +167,7 @@ export async function walletCommand(
           leaseUntil: null,
         },
       });
-      await capture(tx, p.id, p.version + 1, 'WALLET');
+      if (wallet.included) await capture(tx, p.id, p.version + 1, 'WALLET');
       return { id: wallet.id };
     }
     throw new AppError('NOT_FOUND', 'Action introuvable.', 404);
@@ -242,7 +244,8 @@ export async function syncWallet(id: string, provider?: typeof fetchDeBank) {
             nextSyncAt: new Date(fetchedAt.getTime() + config.intervalMinutes * 60_000),
           },
         });
-        await capture(tx, p.id, p.version, 'WALLET', fetchedAt);
+        // High-frequency observations feed live valuation. Portfolio captures are scheduled
+        // separately (daily/manual) or triggered by a change in the included wallet perimeter.
         return true;
       },
       { timeout: 30_000 },

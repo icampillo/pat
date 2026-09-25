@@ -126,9 +126,11 @@ model Asset {
   externalId String?
   notes String @default("")
   metadata Json @default("{}")
+  /// ACTIVE : opérations autorisées. ARCHIVED : position soldée, historique conservé.
   status String @default("ACTIVE")
   version Int @default(1)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
+  /// Champ historique conservé pour compatibilité ; l’archivage ne le renseigne pas.
   deletedAt DateTime? @db.Timestamptz(3)
   transactions Transaction[]
   prices PriceHistory[]
@@ -208,6 +210,7 @@ model FxRate {
   @@index([portfolioId, observedAt(sort: Desc)])
 }
 model PortfolioSnapshot {
+  // Low-frequency immutable valuation: manual, daily or structural perimeter change.
   id String @id @default(uuid()) @db.Uuid
   portfolioId String @db.Uuid
   portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Restrict)
@@ -292,6 +295,7 @@ model WalletConnection {
   @@index([enabled, nextSyncAt])
 }
 model WalletObservation {
+  // High-frequency successful wallet read; independent from portfolio snapshots.
   id String @id @default(uuid()) @db.Uuid
   walletId String @db.Uuid
   wallet WalletConnection @relation(fields: [walletId], references: [id], onDelete: Restrict)

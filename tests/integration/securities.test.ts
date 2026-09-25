@@ -58,6 +58,50 @@ function mockQuotes(price = 12, seconds = Math.floor(Date.now() / 1000) - 60, cu
   return fetcher;
 }
 
+it('refuse un import Bourse correspondant à une fiche archivée sans en créer un doublon', async () => {
+  const user = await owner();
+  mockQuotes();
+  const category = await db().assetCategory.findFirstOrThrow({
+    where: { portfolioId: user.portfolioId, key: 'SECURITIES' },
+  });
+  const asset = await command(
+    user.userId,
+    'POST',
+    ['assets'],
+    {
+      name: 'Ancienne position',
+      symbol: 'TEST.PA',
+      categoryId: category.id,
+      currency: 'EUR',
+      platform: 'BoursoBank PEA',
+      metadata: { isin: 'FR0011871128', ticker: 'TEST.PA' },
+    },
+    randomUUID(),
+    null,
+  );
+  await command(
+    user.userId,
+    'DELETE',
+    ['assets', asset.id],
+    { confirmed: true },
+    randomUUID(),
+    '1',
+  );
+  const preview = await previewSecurities(
+    user.userId,
+    { csv, platform: 'BoursoBank PEA' },
+    randomUUID(),
+  );
+  expect(preview.errors).toEqual([
+    expect.objectContaining({ message: expect.stringContaining('archivé') }),
+  ]);
+  await expect(
+    confirmSecurities(user.userId, preview.id, { confirmed: true }, randomUUID()),
+  ).rejects.toMatchObject({ code: 'IMPORT_INVALID' });
+  expect(await db().asset.count({ where: { portfolioId: user.portfolioId } })).toBe(1);
+  expect(await db().transaction.count({ where: { portfolioId: user.portfolioId } })).toBe(0);
+});
+
 it('imports Bourso atomically with precise cost, live quote, snapshot and no duplicate on retry', async () => {
   const user = await owner();
   mockQuotes();

@@ -103,7 +103,7 @@ docker-compose.yml
 3. **Prix append-only.** Modifier un prix crée une ligne `PriceHistory`. Une correction conserve la ligne originale et sa filiation ; les snapshots déjà pris restent identiques.
 4. **Snapshots immuables et complets.** En-tête, lignes par position, catégories, liquidités, prix et taux de change sont écrits atomiquement.
 5. **Révisions traçables.** Une modification de transaction conserve l'ancienne révision. Supprimer une transaction signifie l'annuler dans les calculs, après validation de tout l'historique dépendant.
-6. **Suppression d'actif explicite.** Après confirmation, ses opérations, révisions, prix, image et captures historiques associées sont supprimés atomiquement, puis la fiche. Les autres opérations doivent encore former un journal valide. Archiver conserve l'actif et sa valeur dans les totaux.
+6. **Archivage d’actif réversible.** Une fiche ne peut être archivée qu’avec une quantité nulle reconstruite depuis le journal et aucune opération future en attente. Ses opérations, révisions, prix, image, snapshots et audits restent conservés. Aucune purge définitive n’est exposée. Les calculs incluent tous les statuts et les opérations nécessitent une réactivation explicite.
 7. **Concurrence.** Chaque mutation financière verrouille le portefeuille concerné, applique une transaction SQL sérialisable et utilise un nombre limité de reprises sur conflit. Aucune requête réseau n'est effectuée dans ce verrou.
 
 Le [type PostgreSQL `numeric`](https://www.postgresql.org/docs/17/datatype-numeric.html) convient aux montants exacts. Les valeurs financières sont des décimaux en base et des chaînes dans les contrats JSON ; la conversion vers `number` est réservée aux coordonnées de graphique, jamais aux calculs enregistrés.
@@ -117,7 +117,7 @@ Direction : outil de suivi dense mais lisible, fond clair neutre, navigation ble
 | `/login` | Connexion personnelle, erreurs génériques, déconnexion disponible partout |
 | `/dashboard` | Total, apports nets, capital encore investi, gains réalisés/latents, variation et rendement ; courbe et répartitions ; meilleurs/moins bons actifs |
 | `/portfolio` | Vue agrégée des positions et liquidités, catégories, devises et plateformes |
-| `/assets` | Recherche, filtres catégorie/statut/plateforme, tri, archivage, suppression confirmée, export |
+| `/assets` | Recherche, filtres catégorie/statut/plateforme, tri, archivage réversible, export |
 | `/assets/new` | Informations communes puis champs métier ; position initiale facultative |
 | `/assets/[id]` | Métadonnées, positions, transactions, prix et historique ; édition et actualisation manuelle |
 | `/transactions` | Journal paginé, filtres type/date/actif/plateforme, édition et annulation confirmées |
@@ -167,6 +167,8 @@ Ordre de résolution : fournisseur sélectionné → dernier prix connu valide d
 Le prix d'un métal est calculé par unité, à partir du poids fin ; quantité × valeur unitaire donne la valeur de la position. Le mode de prime est explicite, montant ou pourcentage. Cartes gradées distinctes et variantes différentes possèdent des fiches séparées.
 
 ## 7. Historique et snapshots
+
+Implémentation wallets : `WalletObservation` porte les lectures fréquentes ; `PortfolioSnapshot` porte les captures manuelles, quotidiennes et les changements structurels d’inclusion. Le worker DeBank ne déclenche plus de capture complète. Les anciens snapshots restent inchangés. Voir [le contrat effectif](implementation.md#fréquences-et-changements-de-périmètre).
 
 - Commande métier unique appelée par l'UI, un script et, plus tard, un cron HTTP protégé.
 - Un snapshot manuel capture l'état présent ; il ne permet pas de prétendre observer une date passée.

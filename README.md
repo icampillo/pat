@@ -8,7 +8,7 @@ Application privée de suivi des investissements : cryptomonnaies, métaux, acti
 
 - Connexion privée, sessions PostgreSQL, inscription publique désactivée et création des utilisateurs par commande locale.
 - Wallets par adresse EVM : lecture gratuite du profil public DeBank, tokens, staking, prêts, dettes, récompenses et synchronisation automatique.
-- Création, modification, archivage et suppression définitive confirmée des actifs ; champs propres aux catégories et images privées.
+- Création, modification et archivage réversible des actifs soldés ; historique financier et images privées conservés, sans purge définitive.
 - Neuf types d’opération, correction avec motif, annulation confirmée, historique des révisions et contrôle des soldes par plateforme.
 - Quantités, coût moyen pondéré, capital détenu, gains réalisés/latents, revenus, liquidités et apports nets.
 - Tableau de bord, répartition par catégorie/devise, EUR/USD et courbes sur plusieurs périodes.
@@ -115,6 +115,8 @@ pnpm wallet:check 0xVotreAdresse
 
 ## Tests et compilation
 
+Le workflow GitHub **CI / Quality** vérifie les pushes sur `main` et les pull requests vers `main` : installation verrouillée, génération Prisma et types Next.js, typecheck, lint, tests unitaires/PostgreSQL, build et Playwright. Il utilise un PostgreSQL 17 éphémère dédié et des secrets de test générés, sans secret de production. Voir [le fonctionnement de la CI et le contrôle requis pour les merges](docs/ci.md).
+
 ```powershell
 pnpm typecheck
 pnpm lint
@@ -140,6 +142,8 @@ pnpm snapshot --portfolio <uuid-du-portefeuille> --daily
 ```
 
 La même journée du fuseau du portefeuille ne produit qu’un snapshot quotidien. Planifier cette commande dans le Planificateur de tâches Windows ou un cron du serveur ; aucun planificateur système n’est installé automatiquement. Garder PostgreSQL démarré. Les captures anciennes restent inchangées après une correction rétroactive, et l’estimation de performance après flux est alors désactivée.
+
+Les synchronisations DeBank (15 min, 1 h ou 4 h) conservent leurs observations et actualisent les valeurs courantes sans créer de snapshot complet. Les captures supplémentaires concernent les demandes manuelles et les changements d’inclusion des wallets. Mettre la synchronisation en pause conserve la dernière valeur dans le patrimoine. Voir [les règles de fréquence et de périmètre](docs/implementation.md#fréquences-et-changements-de-périmètre).
 
 L’import se trouve dans Paramètres. Télécharger le modèle, remplacer les exemples, créer préalablement les actifs et utiliser leurs symboles ou asset_id. CSV UTF-8 avec virgules, décimaux avec point, dates ISO 8601 et décalage horaire, types BUY/SELL/DEPOSIT/WITHDRAWAL/TRANSFER/FEE/DIVIDEND/REWARD/ADJUSTMENT. Une external_reference unique est obligatoire par ligne. Limites : 200 Ko, 500 lignes, aperçu valable 30 minutes. Toute modification du portefeuille impose un nouvel aperçu. Voir [l’API actuelle](docs/implementation.md).
 

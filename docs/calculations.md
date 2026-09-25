@@ -140,6 +140,8 @@ Le tri des meilleures/moins bonnes positions utilise le gain latent relatif au c
 
 Le rendement Dietz du MVP porte sur le portefeuille complet, liquidités comprises. Le filtre catégorie présente valeur, variation et gains réalisés/latents de la catégorie ; il n'affiche pas un rendement Dietz utilisant les seuls flux externes globaux. Un futur rendement par catégorie devra aussi comptabiliser les achats/ventes et changements de catégorie comme flux à la frontière de cette catégorie.
 
+Les observations DeBank fréquentes actualisent la valorisation courante sans créer de flux ni de snapshot complet. Les captures manuelles, quotidiennes ou de changement d’inclusion figent les observations disponibles et leur conversion. Sans flux wallet fiables, Dietz reste masqué lorsqu’un wallet est inclus ou qu’une capture WALLET figure dans l’historique chargé, même après son retrait. Une pause de synchronisation conserve sa valeur ; une exclusion change le périmètre, pas le résultat d’investissement.
+
 ## 7. Tests minimaux de référence
 
 | Cas | Résultat attendu |

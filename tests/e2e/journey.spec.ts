@@ -88,23 +88,72 @@ test('parcours complet : connexion, actif, achat, prix, vente, snapshot et expor
   ).toBeVisible();
   expect((await (await page.request.get('/api/v1/state')).json()).data.totals.valueEur).toBe('337');
 });
-test('supprime depuis la fiche un actif encore détenu', async ({ page }) => {
+test('refuse l’archivage détenu, conserve l’historique soldé et permet la réactivation', async ({
+  page,
+}) => {
   await login(page);
   await page.getByRole('link', { name: 'Ajouter un actif' }).first().click();
-  await page.getByLabel('Nom de l’actif').fill('Actif à supprimer');
+  await page.getByLabel('Nom de l’actif').fill('Actif à archiver');
   await page.getByLabel('Quantité détenue').fill('2');
+  await page.getByLabel('Coût d’acquisition total (€)').fill('200');
   await page.getByRole('button', { name: 'Enregistrer l’actif' }).click();
-  await expect(page.getByRole('heading', { name: 'Actif à supprimer', exact: true })).toBeVisible();
-  const id = new URL(page.url()).pathname.split('/').at(-1);
-  await page.getByRole('button', { name: 'Supprimer cet actif' }).click();
-  await expect(page.getByRole('alertdialog')).toContainText('Cette action est irréversible');
-  await page.getByRole('button', { name: 'Confirmer la suppression' }).click();
-  await expect(page).toHaveURL(/assets$/);
-  const state = await (await page.request.get('/api/v1/state')).json();
-  expect(state.data.rows.some((row: { id: string }) => row.id === id)).toBe(false);
+  await expect(page.getByRole('heading', { name: 'Actif à archiver', exact: true })).toBeVisible();
+  const assetUrl = new URL(page.url()).pathname;
+  const id = assetUrl.split('/').at(-1)!;
+  await expect(page.getByRole('button', { name: 'Supprimer cet actif' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Archiver', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Soldez ou corrigez');
   expect(
-    state.data.transactions.some((row: { assetId: string | null }) => row.assetId === id),
-  ).toBe(false);
+    (await (await page.request.get('/api/v1/state')).json()).data.rows.find(
+      (row: { id: string }) => row.id === id,
+    ).quantity,
+  ).toBe('2');
+  await page.getByRole('link', { name: 'Tableau de bord', exact: true }).click();
+  await page.getByRole('button', { name: 'Enregistrer un snapshot' }).click();
+  await expect(page.getByRole('status')).toContainText('Enregistrement effectué');
+  const before = (await (await page.request.get('/api/v1/state')).json()).data;
+  const snapshotId = before.snapshots.at(-1).id;
+  const snapshot = await (await page.request.get(`/api/v1/snapshots/${snapshotId}`)).json();
+  await page.goto(`/transactions/new?asset=${id}`);
+  await page.getByLabel('Type d’opération').selectOption('SELL');
+  await page.getByLabel('Quantité', { exact: true }).fill('2');
+  await page.getByLabel('Prix unitaire', { exact: true }).fill('120');
+  await page.getByRole('button', { name: 'Enregistrer la transaction' }).click();
+  await expect(page).toHaveURL(/transactions$/);
+  const sold = (await (await page.request.get('/api/v1/state')).json()).data;
+  await page.goto(assetUrl);
+  await page.getByRole('button', { name: 'Archiver', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Réactiver', exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Actif archivé : historique conservé.', { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Ajouter une transaction', exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: 'Vente', exact: true })).toBeVisible();
+  const state = await (await page.request.get('/api/v1/state')).json();
+  expect(state.data.rows.find((row: { id: string }) => row.id === id)).toMatchObject({
+    status: 'ARCHIVED',
+    quantity: '0',
+  });
+  expect(
+    state.data.transactions.filter((row: { assetId: string | null }) => row.assetId === id),
+  ).toHaveLength(2);
+  expect(state.data.totals).toEqual(sold.totals);
+  expect(await (await page.request.get(`/api/v1/snapshots/${snapshotId}`)).json()).toEqual(
+    snapshot,
+  );
+  await page.goto('/transactions/new');
+  await expect(page.getByLabel('Actif concerné').locator(`option[value="${id}"]`)).toHaveCount(0);
+  await page.goto(`/transactions/new?asset=${id}`);
+  await expect(page.getByRole('link', { name: 'Consulter l’actif archivé' })).toBeVisible();
+  await page.getByRole('link', { name: 'Consulter l’actif archivé' }).click();
+  await page.getByRole('button', { name: 'Réactiver', exact: true }).click();
+  await expect(
+    page.getByRole('link', { name: 'Ajouter une transaction', exact: true }),
+  ).toBeVisible();
+  await page.goto('/transactions/new');
+  await expect(page.getByLabel('Actif concerné').locator(`option[value="${id}"]`)).toHaveCount(1);
 });
 test('navigation mobile sans débordement de page', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
@@ -229,6 +278,9 @@ test('wallet synchronisé : tokens, dettes, DeFi et affichage mobile', async ({ 
   const state = await (await page.request.get('/api/v1/state')).json();
   expect(state.data.onchain.valueUsd).toBe('905');
   expect(state.data.totals.unrealizedEur).toBeNull();
+  // The current wallet value is available even though synchronization made no full capture.
+  expect(state.data.snapshots).toHaveLength(1);
+  expect(state.data.snapshots[0]).toMatchObject({ kind: 'WALLET', totalUsd: null });
   mkdirSync('.local/screenshots', { recursive: true });
   await page.screenshot({ path: '.local/screenshots/wallets-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 375, height: 812 });
@@ -246,4 +298,33 @@ test('wallet synchronisé : tokens, dettes, DeFi et affichage mobile', async ({ 
   await smallValues.check();
   await expect(page.getByRole('cell', { name: /UNKNOWN/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Protocol fixture', exact: true })).toHaveCount(0);
+  await page.goto('/dashboard');
+  await expect(page.getByText('après flux · estimé')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Enregistrer un snapshot' }).click();
+  await expect
+    .poll(async () => {
+      const response = await (await page.request.get('/api/v1/state')).json();
+      return response.data.snapshots.length;
+    })
+    .toBe(2);
+  const savedState = await (await page.request.get('/api/v1/state')).json();
+  const saved = savedState.data.snapshots.at(-1);
+  expect(saved).toMatchObject({ kind: 'MANUAL', totalUsd: '905', totalEur: '724' });
+  const walletId = savedState.data.onchain.wallets[0].id;
+  const excluded = await page.request.patch(`/api/v1/wallets/${walletId}`, {
+    headers: { origin: 'http://localhost:3001', 'idempotency-key': crypto.randomUUID() },
+    data: { included: false },
+  });
+  expect(excluded.ok()).toBe(true);
+  await page.reload();
+  await expect(page.getByText('après flux · estimé')).toHaveCount(0);
+  const excludedState = await (await page.request.get('/api/v1/state')).json();
+  expect(excludedState.data.totals.valueUsd).toBe('0');
+  expect(excludedState.data.snapshots).toHaveLength(3);
+  expect(excludedState.data.snapshots.find((snap: { id: string }) => snap.id === saved.id)).toEqual(
+    saved,
+  );
+  await page.goto('/history');
+  await expect(page.getByText('3 captures affichées', { exact: false })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Manuel' })).toContainText('724,00');
 });

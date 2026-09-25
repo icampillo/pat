@@ -26,25 +26,6 @@ export function PortfolioBreakdown({
       : d(state.totals.valueEur).sub(state.totals.netFlowsEur).toFixed(2);
   return (
     <>
-      <section className="panel">
-        <div className="section-title">
-          <div>
-            <h2>Résultat global</h2>
-            <p>
-              {state.onchain.includedCount || state.totals.incompleteCostBasis
-                ? 'Indisponible : certains coûts d’achat ou apports ne sont pas renseignés.'
-                : 'Patrimoine actuel moins apports nets · inclut les revenus, frais et cessions'}
-            </p>
-          </div>
-          <strong className={overall !== null && d(overall).lt(0) ? 'negative' : 'positive'}>
-            {money(overall, 'EUR')}
-          </strong>
-        </div>
-        <div className="section-title">
-          <span className="muted">Achats saisis cumulés, frais inclus</span>
-          <strong>{money(state.totals.purchasesEur, 'EUR')}</strong>
-        </div>
-      </section>
       <div className="detail-grid">
         <section className="panel">
           <div className="section-title">

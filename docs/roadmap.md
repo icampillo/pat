@@ -14,7 +14,7 @@ Mis à jour le 23 septembre 2026. **Version locale 0.1.0 fonctionnelle, avec wal
 | Wallets & DeFi | server/debank-public.ts, debank.ts, wallets.ts, wallet-worker.ts, components/wallets.tsx | Adresse seule, lecture gratuite automatique, staking/prêts/récompenses, reprise sur erreur ; wallet réel vérifié ; API officielle facultative |
 | 5 — Historique | PortfolioSnapshot, components/history-view.tsx, scripts/snapshot.ts | Captures immuables, groupes jour/mois/année, Dietz EUR et deux jobs quotidiens concurrents testés ; planification système à installer sur la cible choisie |
 | 6 — Fichiers | server/imports.ts, exports.ts, components/import-panel.tsx, public/import-transactions.csv | Aperçu et confirmation atomique testés ; import de fiches d’actifs différé |
-| 7 — Démonstration et QA | prisma/seed.ts, tests/unit, tests/integration, tests/e2e | Jeu fictif utilisé pour les tests puis retiré de la base personnelle ; tests locaux réussis ; CI distante et audit manuel complet d’accessibilité à venir |
+| 7 — Démonstration et QA | prisma/seed.ts, tests/unit, tests/integration, tests/e2e, .github/workflows/ci.yml | Tests locaux réussis ; workflow CI livré, première exécution GitHub à confirmer ; audit manuel complet d’accessibilité à venir |
 | 8 — Exploitation | README.md, docs/implementation.md, scripts/backup.ts | Sauvegarde restaurée dans une base neuve et comptages vérifiés ; hébergement distant non exécuté |
 
 **Commandes exécutées :** pnpm install, db:generate, db:deploy, db:seed:demo, typecheck, lint, test:unit, test:integration, test:e2e, build, db:backup et db:restore. La procédure locale actuelle se trouve dans [README](../README.md).
@@ -27,11 +27,25 @@ Mis à jour le 23 septembre 2026. **Version locale 0.1.0 fonctionnelle, avec wal
 
 ## Prochaines étapes ciblées
 
+**Lot 3 — Observations wallets et snapshots, 25 septembre 2026 :** une synchronisation DeBank réussie publie seulement son observation et son état courant. Les captures complètes restent manuelles, quotidiennes ou liées à un changement effectif de périmètre wallet (ajout/restauration inclus, inclusion/exclusion, retrait inclus). Pause et reprise conservent la valorisation. Anciens snapshots, observations, versioning, verrous et garde-fous Dietz préservés. Aucun changement de schéma ni migration. Le job quotidien reste à planifier séparément.
+
+**Validation du lot 3 :** typecheck, lint (avertissement préexistant `overall`), 62 tests unitaires, 57 tests d’intégration PostgreSQL, build et 8 parcours Playwright réussis. Couverture des trois intervalles de synchronisation, dernières observations valides multi-wallets, instant de capture, totaux et catégories, immuabilité, quotidien concurrent/idempotent, pause, retrait/restauration et historique UI. Base PostgreSQL temporaire dédiée ; aucun accès aux données utilisateur. Avertissement de dépréciation pg inchangé.
+
+**Lot 2 — CI GitHub, 25 septembre 2026 :** workflow séquentiel `CI / Quality` ajouté pour pushes et pull requests vers `main`. Versions Node/pnpm lues dans package.json, dépendances verrouillées, PostgreSQL 17 dédié avec healthcheck, secrets de test aléatoires, cache du store pnpm, génération des types Next.js, vérifications et Playwright. Aucun changement métier ni migration dans ce lot.
+
+**Validation locale du lot 2 :** installation frozen et générations Prisma/Next.js réussies ; typecheck, 62 tests unitaires, 51 tests PostgreSQL, build et 8 parcours Playwright réussis. Les tests PostgreSQL et navigateur ont été exécutés sur un cluster temporaire neuf `patrimoine_ci_test` sur le port 55433, arrêté ensuite ; le premier essai sur la configuration locale avait échoué car PostgreSQL était arrêté. Lint réussi avec un avertissement de variable inutilisée dans une modification extérieure au lot ; avertissement pg connu. Workflow validé par actionlint 1.7.12, syntaxe Bash vérifiée et huit cas de contrôle de l’isolation testés. Exécution GitHub/Linux et protection de branche encore à confirmer après commit/push.
+
+**Lot archivage sûr — 23 septembre 2026 :** suppression destructive retirée. ACTIVE autorise les opérations ; ARCHIVED conserve toute l’histoire et requiert une position soldée sans opération future en attente. Réactivation explicite avant mutation du journal ; anciens actifs archivés toujours inclus dans la valorisation. DELETE est conservé comme alias d’archivage confirmé. Aucune purge, migration, suppression de données ou réécriture de snapshot. Contrat détaillé dans [implementation.md](implementation.md#cycle-de-vie-des-actifs).
+
+**Validation de ce lot :** `pnpm typecheck`, `pnpm lint`, 62 tests unitaires, 51 tests PostgreSQL et 8 parcours Playwright réussis ; `pnpm build` réussi. Les scénarios vérifient aussi versions, idempotence, concurrence achat/archivage, isolation, opérations annulées et révisions, exports, imports CSV/Bourse, quantité décimale minimale, date légèrement future et réactivation. Vitest et Playwright ont nécessité l’autorisation de lancer leurs sous-processus Windows hors sandbox. Avertissement pg de dépréciation déjà connu, sans échec. Les données détruites avant ce lot ne sont pas restaurées.
+
 - [ ] Valider Docker sur une machine équipée, depuis une base vide puis après redémarrage du volume.
 - [ ] Configurer le déploiement et le job quotidien sur la cible effectivement choisie.
 - [ ] Ajouter pagination serveur, sélection de portefeuille et administration des catégories/plateformes.
 - [ ] Étendre l’import aux fiches d’actifs et le rendement ajusté à l’USD.
-- [ ] Ajouter une CI PostgreSQL et un audit manuel avec lecteur d’écran.
+- [x] Définir la CI GitHub avec PostgreSQL dédié, secrets générés, contrôles qualité, build et Playwright ; voir [ci.md](ci.md).
+- [ ] Confirmer la première exécution GitHub et rendre le statut Quality obligatoire pour les merges sur main.
+- [ ] Réaliser un audit manuel avec lecteur d’écran.
 - [ ] Définir la rétention des imports, clés d’idempotence, traces de test et sauvegardes.
 - [ ] Brancher les fournisseurs de marché et les connecteurs uniquement au moment de leur activation explicite.
 
