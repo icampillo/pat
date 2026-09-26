@@ -2,6 +2,7 @@ import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { readFileSync, mkdirSync } from 'node:fs';
 import sharp from 'sharp';
+import { randomUUID } from 'node:crypto';
 // Reuse authenticated cookies within this worker instead of exhausting the login rate limit.
 const sessions = new Map<string, Awaited<ReturnType<BrowserContext['cookies']>>>();
 async function login(page: Page, file = '.local/e2e-access.json') {
@@ -327,4 +328,61 @@ test('wallet synchronisé : tokens, dettes, DeFi et affichage mobile', async ({ 
   await page.goto('/history');
   await expect(page.getByText('3 captures affichées', { exact: false })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'Manuel' })).toContainText('724,00');
+});
+
+test('routes explicites : layout partagé, liens profonds, retour et session expirée', async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto('/');
+  await expect(page).toHaveURL(/dashboard$/);
+  const state = (await (await page.request.get('/api/v1/state')).json()).data;
+  const created = await page.request.post('/api/v1/assets', {
+    headers: { 'Idempotency-Key': randomUUID(), Origin: 'http://localhost:3001' },
+    data: {
+      name: 'Actif navigation',
+      symbol: 'NAV',
+      categoryId: state.categories[0].id,
+      currency: 'EUR',
+      platform: 'Personnel',
+      metadata: {},
+    },
+  });
+  expect(created.ok()).toBeTruthy();
+  const asset = (await created.json()).data;
+  const currency = page.getByRole('combobox', { name: 'Devise d’affichage', exact: true });
+  await currency.selectOption('USD');
+  await page.getByRole('link', { name: 'Mes actifs', exact: false }).first().click();
+  await expect(page.locator('h1')).toHaveText('Mes actifs');
+  await expect(currency).toHaveValue('USD');
+  await page.getByLabel('Rechercher un actif').fill('aucun-actif-correspondant');
+  await page.getByRole('link', { name: 'Transactions', exact: true }).click();
+  await expect(page.getByLabel('Rechercher une transaction')).toHaveValue('');
+  await page.goBack();
+  await expect(page.locator('h1')).toHaveText('Mes actifs');
+  await expect(page.locator('.sidebar')).toHaveCount(1);
+  await expect(page.locator('main')).toHaveCount(1);
+  await page.goto('/assets/' + asset.id);
+  await expect(page.locator('h1')).toHaveText(asset.name);
+  await page.getByRole('link', { name: 'Ajouter une transaction', exact: true }).click();
+  await expect(page).toHaveURL(
+    (url) => url.pathname === '/transactions/new' && url.searchParams.get('asset') === asset.id,
+  );
+  await expect(page.getByLabel('Actif concerné')).toHaveValue(asset.id);
+  for (const url of [
+    '/assets/inconnu',
+    '/transactions/inconnue',
+    '/categories/inconnue',
+    '/dashboard/inconnue',
+    '/assets/new/inconnue',
+  ]) {
+    await page.goto(url);
+    await expect(page.getByRole('heading', { name: 'Page introuvable' })).toBeVisible();
+  }
+  await page.goto('/dashboard');
+  await page.context().clearCookies();
+  // A cached layout must not authorize a freshly requested child page.
+  await page.getByRole('link', { name: 'Transactions', exact: true }).click();
+  await expect(page).toHaveURL(/login/);
+  await expect(page.getByLabel('Adresse e-mail')).toBeVisible();
 });
