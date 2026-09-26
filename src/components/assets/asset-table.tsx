@@ -53,7 +53,10 @@ export function AssetTable({ rows, currency }: { rows: AssetView[]; currency: 'E
                 {money(a.price, a.currency)}
                 {a.stale && a.price && <small className="muted">Prix ancien</small>}
               </td>
-              <td className="num strong">{money(val(a), currency)}</td>
+              <td className="num strong">
+                {money(val(a), currency)}
+                {a.category.key === 'REAL_ESTATE' && <small className="muted">Valeur nette</small>}
+              </td>
               <td className="num">
                 <Signed value={gain(a)} currency={currency} />
               </td>

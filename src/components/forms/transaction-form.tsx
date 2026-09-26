@@ -24,7 +24,11 @@ export function TransactionForm({
     [assetId, setAssetId] = useState(
       transaction
         ? transaction.assetId || ''
-        : initialAsset || state.rows.find((a) => !a.deletedAt && a.status === 'ACTIVE')?.id || '',
+        : initialAsset ||
+            state.rows.find(
+              (a) => !a.deletedAt && a.status === 'ACTIVE' && a.category.key !== 'REAL_ESTATE',
+            )?.id ||
+            '',
     );
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
@@ -134,7 +138,9 @@ export function TransactionForm({
             >
               <option value="">Liquidités</option>
               {state.rows
-                .filter((a) => !a.deletedAt && a.status === 'ACTIVE')
+                .filter(
+                  (a) => !a.deletedAt && a.status === 'ACTIVE' && a.category.key !== 'REAL_ESTATE',
+                )
                 .map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name} · {a.symbol}

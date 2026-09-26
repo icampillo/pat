@@ -364,7 +364,8 @@ test('routes explicites : layout partagé, liens profonds, retour et session exp
   await expect(page.locator('main')).toHaveCount(1);
   await page.goto('/assets/' + asset.id);
   await expect(page.locator('h1')).toHaveText(asset.name);
-  await page.getByRole('link', { name: 'Ajouter une transaction', exact: true }).click();
+  // The empty ledger also offers a generic action; exercise the asset-specific deep link.
+  await page.locator(`a[href="/transactions/new?asset=${asset.id}"]`).click();
   await expect(page).toHaveURL(
     (url) => url.pathname === '/transactions/new' && url.searchParams.get('asset') === asset.id,
   );

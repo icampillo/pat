@@ -11,6 +11,8 @@ import { AppError } from './errors';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { walletState } from './wallet-state';
+import { realEstateAt } from '@/domain/real-estate';
+import type { RealEstate } from '@/shared/real-estate';
 import { snapshotCategoryValues, performance30d, numeric } from '@/domain/categories';
 import {
   assetCreationSchema,
@@ -103,8 +105,14 @@ export function checkVersion(version: number, expected: string | null) {
 async function requireActiveAsset(tx: TxDb, portfolioId: string, assetId: string) {
   const asset = await tx.asset.findFirst({
     where: { id: assetId, portfolioId, deletedAt: null },
+    include: { category: true },
   });
   if (!asset) throw new AppError('NOT_FOUND', 'Actif introuvable.', 404);
+  if (asset.category.key === 'REAL_ESTATE')
+    throw new AppError(
+      'REAL_ESTATE_LEDGER',
+      'Gérez ce bien et son crédit depuis sa fiche, sans transaction générique.',
+    );
   if (asset.status !== 'ACTIVE')
     throw new AppError(
       'ASSET_ARCHIVED',
@@ -204,6 +212,57 @@ export async function validateLedger(tx: TxDb, portfolioId: string) {
   const rows = await tx.transaction.findMany({ where: { portfolioId, voided: false } });
   return replay(rows.map(toLedger));
 }
+function validateProperty(
+  category: string,
+  property: RealEstate | undefined,
+  quantity?: string,
+  cost?: string,
+) {
+  if ((category === 'REAL_ESTATE') !== !!property)
+    throw new AppError(
+      'REAL_ESTATE_METADATA',
+      'Les informations immobilières sont obligatoires et réservées à la catégorie Immobilier.',
+    );
+  if (property && (quantity !== undefined || cost !== undefined))
+    throw new AppError(
+      'REAL_ESTATE_LEDGER',
+      'Le bien est une fiche unique ; renseignez son prix d’acquisition dans la section Immobilier.',
+    );
+}
+async function savePropertyEstimate(
+  tx: TxDb,
+  portfolioId: string,
+  assetId: string,
+  currency: string,
+  property: RealEstate,
+  previous?: RealEstate,
+) {
+  if (property.currentValue === null || !property.valuationDate) return;
+  if (
+    previous?.currentValue === property.currentValue &&
+    previous.valuationDate === property.valuationDate
+  )
+    return;
+  const latest = await tx.priceHistory.findFirst({
+    where: { portfolioId, assetId },
+    orderBy: { observedAt: 'desc' },
+  });
+  if (latest && latest.observedAt.toISOString().slice(0, 10) > property.valuationDate)
+    throw new AppError(
+      'ESTIMATE_DATE',
+      'La nouvelle estimation doit être datée au moins du dernier relevé enregistré.',
+    );
+  await tx.priceHistory.create({
+    data: {
+      portfolioId,
+      assetId,
+      currency,
+      price: property.currentValue,
+      source: 'manual-real-estate',
+      observedAt: new Date(`${property.valuationDate}T00:00:00Z`),
+    },
+  });
+}
 export async function command(
   userId: string,
   method: string,
@@ -226,6 +285,12 @@ export async function command(
             where: { id: data.categoryId, portfolioId: p.id },
           });
           if (!category) throw new AppError('NOT_FOUND', 'Catégorie introuvable.', 404);
+          validateProperty(
+            category.key,
+            data.metadata.realEstate,
+            data.quantity,
+            data.acquisitionCost,
+          );
           const { quantity, acquisitionCost, ...assetData } = data;
           if (
             category.key === 'METALS' &&
@@ -248,6 +313,14 @@ export async function command(
               },
             },
           });
+          if (data.metadata.realEstate)
+            await savePropertyEstimate(
+              tx,
+              p.id,
+              asset.id,
+              asset.currency,
+              data.metadata.realEstate,
+            );
           if (quantity) {
             await insertTransaction(tx, p.id, userId, {
               assetId: asset.id,
@@ -272,6 +345,11 @@ export async function command(
         });
         if (!asset) throw new AppError('NOT_FOUND', 'Actif introuvable.', 404);
         if (method === 'POST' && child === 'prices') {
+          if (asset.category.key === 'REAL_ESTATE')
+            throw new AppError(
+              'REAL_ESTATE_ESTIMATE',
+              'Modifiez la valeur et la date d’estimation depuis la fiche du bien.',
+            );
           if (
             (asset.category.key === 'METALS' &&
               (asset.metadata as Record<string, unknown>).pricingMode === 'METAL_MARKET') ||
@@ -356,6 +434,13 @@ export async function command(
             where: { id: data.categoryId, portfolioId: p.id },
           });
           if (!category) throw new AppError('NOT_FOUND', 'Catégorie introuvable.', 404);
+          validateProperty(category.key, data.metadata.realEstate, undefined, data.acquisitionCost);
+          if ((category.key === 'REAL_ESTATE') !== (asset.category.key === 'REAL_ESTATE'))
+            throw new AppError(
+              'CATEGORY_LOCKED',
+              'Créez une nouvelle fiche pour passer entre immobilier et actifs du journal.',
+              409,
+            );
           if (
             data.currency !== asset.currency &&
             ((await tx.transaction.count({ where: { assetId: id } })) ||
@@ -411,6 +496,15 @@ export async function command(
             });
             await validateLedger(tx, p.id);
           }
+          if (data.metadata.realEstate)
+            await savePropertyEstimate(
+              tx,
+              p.id,
+              asset.id,
+              data.currency,
+              data.metadata.realEstate,
+              metadataSchema.parse(asset.metadata).realEstate,
+            );
           const updated = await tx.asset.update({
             where: { id },
             data: {
@@ -553,6 +647,58 @@ export async function valuation(tx: TxDb, portfolioId: string, at = new Date()) 
     incompleteCostBasis = false,
     unknownCostUsd = false;
   const rows = assets.map((asset) => {
+    if (asset.category.key === 'REAL_ESTATE') {
+      const property = metadataSchema.parse(asset.metadata).realEstate;
+      if (!property) throw new AppError('REAL_ESTATE_METADATA', 'Fiche immobilière invalide.');
+      const held =
+        !asset.deletedAt &&
+        asset.status === 'ACTIVE' &&
+        property.purchaseDate <= at.toISOString().slice(0, 10);
+      const price = asset.prices[0];
+      // A missing current estimate remains unknown; historical quotes are dated.
+      const nativePrice =
+        property.currentValue === null ? null : price ? String(price.price) : null;
+      const result = realEstateAt(property, at, nativePrice);
+      const convert = (amount: string | null, target: string) =>
+        amount === null
+          ? null
+          : asset.currency === target || d(amount).isZero()
+            ? precise(amount)
+            : fx
+              ? precise(target === 'EUR' ? d(amount).div(fx) : d(amount).mul(fx))
+              : null;
+      const eur = held ? convert(result.equity, 'EUR') : '0';
+      const usd = held ? convert(result.equity, 'USD') : '0';
+      if (eur === null) missingEur++;
+      else subtotalEur = subtotalEur.add(eur);
+      if (usd === null) missingUsd++;
+      else subtotalUsd = subtotalUsd.add(usd);
+      // Generic invested capital and P&L rely on ledger cash flows, unavailable here.
+      if (held) {
+        unknownCostEur = true;
+        unknownCostUsd = true;
+      }
+      return {
+        ...json(asset),
+        realEstate: result,
+        quantity: held ? '1' : '0',
+        costEur: held ? null : '0',
+        costUsd: held ? null : '0',
+        averageEur: null,
+        realizedEur: null,
+        realizedUsd: null,
+        incomeEur: '0',
+        places: {},
+        price: nativePrice,
+        priceDate: price?.observedAt.toISOString() ?? null,
+        stale: false,
+        valueEur: eur,
+        valueUsd: usd,
+        gainEur: null,
+        gainUsd: null,
+        averagePrice: null,
+      };
+    }
     const unknownBasis =
       (asset.metadata as Record<string, unknown>).costBasis === 'UNKNOWN' &&
       !!ledger.assets[asset.id];

@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import { decimal } from '@/domain/money';
+import { realEstateSchema } from './real-estate';
 export const categories = [
   { key: 'CRYPTO', label: 'Cryptomonnaies', color: '#6366f1' },
   { key: 'METALS', label: 'Métaux précieux', color: '#c68b2c' },
   { key: 'SECURITIES', label: 'Bourse', color: '#0d9488' },
   { key: 'POKEMON', label: 'Cartes Pokémon', color: '#e55784' },
   { key: 'ONE_PIECE', label: 'Cartes One Piece', color: '#368fe0' },
+  { key: 'REAL_ESTATE', label: 'Immobilier', color: '#b7791f' },
   { key: 'OTHER', label: 'Autres actifs', color: '#8190a6' },
 ] as const;
 export const typeLabels: Record<string, string> = {
@@ -37,6 +39,7 @@ export const dateSchema = z.iso
 const text = z.string().trim().max(120);
 export const metadataSchema = z
   .object({
+    realEstate: realEstateSchema.optional(),
     costBasis: z.enum(['KNOWN', 'UNKNOWN']).optional(),
     network: text.optional(),
     contractAddress: z.string().max(200).optional(),

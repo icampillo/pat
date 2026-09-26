@@ -30,6 +30,7 @@ export default defineConfig({
       NEXT_E2E: '1',
       WALLET_WORKER_DISABLED: '1',
       MARKET_WORKER_DISABLED: '1',
+      SNAPSHOT_WORKER_DISABLED: '1',
     },
   },
 });

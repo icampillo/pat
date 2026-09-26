@@ -18,13 +18,20 @@ export function AssetsPage({ state }: { state: AppState }) {
     </>
   );
 }
-export function NewAssetPage({ state }: { state: AppState }) {
+export function NewAssetPage({
+  state,
+  initialCategory,
+}: {
+  state: AppState;
+  initialCategory?: string;
+}) {
   const { save } = useWorkspace();
   const router = useRouter();
   return (
     <>
       <PageHeading view="assets" title="Ajouter un actif" detail />
       <AssetForm
+        initialCategory={initialCategory}
         state={state}
         save={save}
         done={(id) => {

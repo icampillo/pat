@@ -5,28 +5,44 @@ import { ArrowLeft, Save } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Field, type SaveAction } from './shared';
+import { RealEstateForm } from './real-estate-form';
 export function AssetForm({
   state,
   asset,
   save,
   done,
+  initialCategory,
 }: {
   state: AppState;
   asset?: AssetView;
   save: SaveAction;
   done: (id: string) => void;
+  initialCategory?: string;
 }) {
-  const [category, setCategory] = useState(asset?.categoryId || state.categories[0]?.id || '');
+  const [category, setCategory] = useState(
+    asset?.categoryId || initialCategory || state.categories[0]?.id || '',
+  );
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   const kind = state.categories.find((c) => c.id === category)?.key;
   const meta = asset?.metadata || {};
+  if (kind === 'REAL_ESTATE')
+    return (
+      <RealEstateForm
+        state={state}
+        asset={asset}
+        categoryId={category}
+        onCategory={setCategory}
+        save={save}
+        done={done}
+      />
+    );
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
     setError('');
     const fd = new FormData(e.currentTarget);
-    const metadata: Record<string, string> = { ...meta };
+    const metadata: Record<string, unknown> = { ...meta };
     for (const [key, value] of fd.entries())
       if (key.startsWith('meta.') && String(value).trim())
         metadata[key.slice(5)] = String(value).trim();
@@ -93,7 +109,7 @@ export function AssetForm({
               onChange={(e) => setCategory(e.target.value)}
             >
               {state.categories.map((c) => (
-                <option key={c.id} value={c.id}>
+                <option key={c.id} value={c.id} disabled={!!asset && c.key === 'REAL_ESTATE'}>
                   {c.label}
                 </option>
               ))}
@@ -194,7 +210,12 @@ export function AssetForm({
                 ['year', 'Année'],
                 ['referenceUrl', 'Lien de référence HTTPS'],
               ].map(([key, label]) => (
-                <Field key={key} name={`meta.${key}`} label={label} value={meta[key]} />
+                <Field
+                  key={key}
+                  name={`meta.${key}`}
+                  label={label}
+                  value={String(meta[key as keyof typeof meta] ?? '')}
+                />
               ))}
             </>
           )}

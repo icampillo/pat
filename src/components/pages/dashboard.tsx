@@ -52,6 +52,7 @@ export function DashboardPage({ state }: { state: AppState }) {
     slices.push({ name: 'Liquidités', color: '#a0adbd', value: Number(cashTotal) });
   const first = visibleSnapshots[0];
   const adjusted =
+    !state.rows.some((asset) => asset.category.key === 'REAL_ESTATE') &&
     !state.totals.incompleteCostBasis &&
     !state.onchain.includedCount &&
     !state.snapshots.some((s) => s.kind === 'WALLET') &&
@@ -113,6 +114,12 @@ export function DashboardPage({ state }: { state: AppState }) {
                 Voir l’historique <ArrowUpRight size={14} />
               </Link>
             </div>
+            {state.rows.some((asset) => asset.category.key === 'REAL_ESTATE') && (
+              <p className="small muted">
+                L’évolution inclut le remboursement du capital immobilier. Le rendement global après
+                flux est indisponible tant que ces flux ne sont pas suivis.
+              </p>
+            )}
           </section>
           <section className="panel allocation">
             <div className="section-title">

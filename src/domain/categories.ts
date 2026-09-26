@@ -1,4 +1,5 @@
 import { decimal as d } from './money';
+import { propertyTypes, propertyUsages } from '@/shared/real-estate';
 import type {
   AppState,
   AssetCategoryDetails,
@@ -8,6 +9,7 @@ import type {
 } from '@/shared/types';
 
 const slugs: Record<string, string> = {
+  REAL_ESTATE: 'real-estate',
   CRYPTO: 'crypto',
   METALS: 'precious-metals',
   SECURITIES: 'stocks',
@@ -117,6 +119,14 @@ function positions(
   category: Category,
   currency: 'EUR' | 'USD',
 ): CategoryPosition[] {
+  const convert = (value: string | null, source: string): number | null => {
+    if (value === null) return null;
+    if (source === currency || d(value).isZero()) return Number(value);
+    if (!state.fxRate) return null;
+    return Number(
+      currency === 'EUR' ? d(value).div(state.fxRate.eurUsd) : d(value).mul(state.fxRate.eurUsd),
+    );
+  };
   const assets: CategoryPosition[] = state.rows
     .filter(
       (asset) =>
@@ -135,9 +145,19 @@ function positions(
           ? null
           : numeric(currency === 'EUR' ? asset.costEur : asset.costUsd),
       change30dPercent: asset.change30dPercent ?? null,
+      ...(asset.realEstate && asset.metadata.realEstate
+        ? {
+            realEstate: {
+              grossValue: convert(asset.realEstate.ownedValue, asset.currency),
+              debt: convert(asset.realEstate.remainingPrincipal, asset.currency),
+              ownershipPercent: asset.metadata.realEstate.ownershipPercent,
+              description: `${propertyTypes[asset.metadata.realEstate.propertyType]} · ${propertyUsages[asset.metadata.realEstate.usage]}`,
+            },
+          }
+        : {}),
     }));
   if (category.key !== 'CRYPTO') return assets;
-  const convert = (value: string | null) => {
+  const convertWallet = (value: string | null) => {
     if (numeric(value) === null) return null;
     if (currency === 'USD' || d(value!).isZero()) return Number(value);
     return state.fxRate && d(state.fxRate.eurUsd).gt(0)
@@ -166,7 +186,7 @@ function positions(
           name: `${token.symbol} · ${wallet.label}`,
           quantity: token.amount,
           price: token.priceUsd,
-          value: convert(token.valueUsd),
+          value: convertWallet(token.valueUsd),
         })),
       ...wallet.data.positions.map((position) => ({
         ...base,
@@ -174,7 +194,7 @@ function positions(
         name: `${position.protocol} · ${position.kind} · ${wallet.label}`,
         quantity: null,
         price: null,
-        value: convert(position.netUsd),
+        value: convertWallet(position.netUsd),
       })),
     ];
     // Public DeBank totals can differ from the visible detail; expose the residual, never silently lose it.
@@ -185,11 +205,11 @@ function positions(
         name: `${wallet.label} · wallet et DeFi`,
         quantity: null,
         price: null,
-        value: convert(wallet.data.totalUsd),
+        value: convertWallet(wallet.data.totalUsd),
       });
     } else {
       assets.push(...walletRows);
-      const total = convert(wallet.data.totalUsd);
+      const total = convertWallet(wallet.data.totalUsd);
       const residual =
         total === null
           ? null
@@ -230,6 +250,16 @@ export function buildCategoryDetails(
   currentHistory.push({ date: state.asOf, value: totalValue });
   return {
     category: {
+      ...(category.key === 'REAL_ESTATE'
+        ? {
+            realEstate: {
+              grossValue: calculateCategoryValue(
+                assets.map((asset) => asset.realEstate?.grossValue),
+              ),
+              debt: calculateCategoryValue(assets.map((asset) => asset.realEstate?.debt)),
+            },
+          }
+        : {}),
       id: category.id,
       slug: categorySlug(category.key),
       name: category.label,

@@ -6,6 +6,7 @@ x-app-env: &app-env
   BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
   APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
   NEXT_TELEMETRY_DISABLED: '1'
+  SNAPSHOT_WORKER_DISABLED: ${SNAPSHOT_WORKER_DISABLED:-0}
 services:
   db:
     image: postgres:17-bookworm

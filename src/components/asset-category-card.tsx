@@ -38,6 +38,9 @@ export function Performance30d({
         {categoryPercent(category.change30dPercent, true)} <span className="muted">sur 30j</span>
       </span>
       <small>{signedMoney(category.change30dAbsolute, currency)}</small>
+      {category.realEstate && (
+        <small>Évolution de la valeur nette · capital remboursé inclus</small>
+      )}
     </div>
   );
 }
@@ -58,11 +61,18 @@ export function AssetCategoryCard({
         <ArrowUpRight size={18} aria-hidden="true" />
       </div>
       <strong className="category-value">{categoryMoney(category.totalValue, currency)}</strong>
+      {category.realEstate && (
+        <p className="small muted">
+          Valeur nette · {categoryMoney(category.realEstate.grossValue, currency)} brut détenu ·{' '}
+          {categoryMoney(category.realEstate.debt, currency)} de dette
+        </p>
+      )}
       <Performance30d category={category} currency={currency} />
       <div className="category-card-foot">
         <span>{categoryPercent(category.portfolioWeight)} du patrimoine</span>
         <span>
-          {category.assetCount} position{category.assetCount > 1 ? 's' : ''}
+          {category.assetCount} {category.realEstate ? 'bien' : 'position'}
+          {category.assetCount > 1 ? 's' : ''}
         </span>
       </div>
     </Link>

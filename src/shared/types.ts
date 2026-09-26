@@ -12,7 +12,8 @@ export type AssetView = {
   externalId: string | null;
   notes: string;
   status: string;
-  metadata: Record<string, string>;
+  metadata: import('zod').z.infer<typeof import('./schemas').metadataSchema>;
+  realEstate?: import('@/domain/real-estate').RealEstateValuation;
   version: number;
   deletedAt: string | null;
   quantity: string;
@@ -59,6 +60,7 @@ export type SnapshotView = {
 };
 export type CategoryHistoryPoint = { date: string; value: number | null };
 export type AssetCategorySummary = {
+  realEstate?: { grossValue: number | null; debt: number | null };
   id: string;
   slug: string;
   name: string;
@@ -71,6 +73,12 @@ export type AssetCategorySummary = {
   baselineDate: string | null;
 };
 export type CategoryPosition = {
+  realEstate?: {
+    grossValue: number | null;
+    debt: number | null;
+    ownershipPercent: string;
+    description: string;
+  };
   id: string;
   name: string;
   href: string;
