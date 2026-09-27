@@ -4,7 +4,6 @@ import type { AppState } from '@/shared/types';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   ArrowLeftRight,
-  ChevronDown,
   ChevronRight,
   CircleHelp,
   Coins,
@@ -77,7 +76,6 @@ export function WorkspaceShell({
           <strong>{state.portfolio.name}</strong>
           <span>{state.portfolio.isDemo ? 'Démonstration' : 'Espace privé'}</span>
         </div>
-        <ChevronDown size={14} />
       </div>
       <p className="nav-label">VOTRE ESPACE</p>
       <nav aria-label="Navigation principale">
@@ -88,6 +86,7 @@ export function WorkspaceShell({
             onClick={() => {
               setMobile(false);
             }}
+            aria-current={view === n.href.slice(1) ? 'page' : undefined}
             className={`nav-item ${view === n.href.slice(1) ? 'active' : ''}`}
           >
             <n.icon size={19} />
@@ -102,6 +101,7 @@ export function WorkspaceShell({
         <Link
           href="/settings"
           onClick={() => setMobile(false)}
+          aria-current={view === 'settings' ? 'page' : undefined}
           className={`nav-item ${view === 'settings' ? 'active' : ''}`}
         >
           <Settings size={19} />

@@ -20,9 +20,12 @@ export function DashboardPage({ state }: { state: AppState }) {
   const categoryDetails = state.categories.map((item) =>
     buildCategoryDetails(state, item, currency),
   );
-  const days = ({ '24h': 1, '7d': 7, '30d': 30, '1y': 365, all: 10000 } as Record<string, number>)[
-    period
-  ];
+  const days = (
+    { '24h': 1, '7d': 7, '30d': 30, '90d': 90, '180d': 180, '1y': 365, all: 10000 } as Record<
+      string,
+      number
+    >
+  )[period];
   const startTime = Date.parse(state.asOf) - days * 86400000;
   const baseline = [...state.snapshots]
     .reverse()
@@ -67,7 +70,7 @@ export function DashboardPage({ state }: { state: AppState }) {
       <PageHeading view="dashboard" title="Vue d’ensemble" />
       <>
         <div className="charts-grid">
-          <section className="panel evolution">
+          <section className="panel evolution wealth-panel">
             <div className="section-title">
               <div>
                 <h2>Évolution du patrimoine</h2>
@@ -77,11 +80,13 @@ export function DashboardPage({ state }: { state: AppState }) {
                     : 'Vos prochaines captures apparaîtront ici'}
                 </p>
               </div>
-              <div className="periods">
+              <div className="periods" role="group" aria-label="Période du graphique">
                 {[
                   ['24h', '24 h'],
                   ['7d', '7 j'],
-                  ['30d', '30 j'],
+                  ['30d', '1 mois'],
+                  ['90d', '3 mois'],
+                  ['180d', '6 mois'],
                   ['1y', '1 an'],
                   ['all', 'Tout'],
                 ].map(([v, l]) => (
@@ -96,7 +101,10 @@ export function DashboardPage({ state }: { state: AppState }) {
                 ))}
               </div>
             </div>
-            <div className="chart-summary">
+            <div className="wealth-label">
+              Patrimoine total <span>Actifs et liquidités · {currency}</span>
+            </div>
+            <div className="chart-summary wealth-summary">
               <strong>{money(total, currency)}</strong>
               {adjusted !== null && (
                 <span
@@ -107,6 +115,12 @@ export function DashboardPage({ state }: { state: AppState }) {
                 </span>
               )}
             </div>
+            <p className="wealth-meta">
+              {total === null
+                ? 'Valorisation incomplète · certains prix sont indisponibles'
+                : `Situation au ${date(state.asOf)}`}
+              {adjusted === null && ' · Performance ajustée indisponible'}
+            </p>
             <EvolutionChart points={points} currency={currency} />
             <div className="chart-foot">
               <span className="dot purple" /> Valeur totale du portefeuille
@@ -154,6 +168,15 @@ export function DashboardPage({ state }: { state: AppState }) {
               <p className="chart-empty">Votre répartition apparaîtra après un premier achat.</p>
             )}
           </section>
+        </div>
+        <div className="holdings-heading">
+          <div>
+            <p className="eyebrow">VOTRE ALLOCATION</p>
+            <h2>Vos investissements</h2>
+          </div>
+          <Link className="text-link" href="/portfolio">
+            Voir le portefeuille <ArrowUpRight size={16} />
+          </Link>
         </div>
         <section aria-label="Catégories détenues" className="category-grid">
           {categoryDetails

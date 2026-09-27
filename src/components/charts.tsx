@@ -1,4 +1,6 @@
 'use client';
+import { useId } from 'react';
+import { ChartNoAxesCombined } from 'lucide-react';
 import {
   AreaChart,
   Area,
@@ -20,19 +22,27 @@ export function EvolutionChart({
   currency: string;
   label?: string;
 }) {
+  const fillId = useId();
   if (points.filter((point) => point.value !== null).length < 2)
-    return <div className="chart-empty">Créez vos premiers snapshots pour suivre l’évolution.</div>;
+    return (
+      <div className="chart-empty">
+        <ChartNoAxesCombined size={28} aria-hidden="true" />
+        <strong>Votre historique se construit ici</strong>
+        <span>Deux captures valorisées sont nécessaires sur cette période.</span>
+        <span className="small">Élargissez la période ou enregistrez un snapshot.</span>
+      </div>
+    );
   return (
     <div className="chart" role="img" aria-label={`Évolution de la valeur : ${label}`}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={points} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
           <defs>
-            <linearGradient id="valueFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#6556dc" stopOpacity={0.2} />
-              <stop offset="100%" stopColor="#6556dc" stopOpacity={0.01} />
+            <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.14} />
+              <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.01} />
             </linearGradient>
           </defs>
-          <CartesianGrid vertical={false} stroke="#edf0f5" />
+          <CartesianGrid vertical={false} stroke="var(--line)" strokeDasharray="3 5" />
           <XAxis
             dataKey="date"
             tickFormatter={(v) =>
@@ -41,7 +51,7 @@ export function EvolutionChart({
             minTickGap={50}
             tickLine={false}
             axisLine={false}
-            tick={{ fill: '#8791a3', fontSize: 12 }}
+            tick={{ fill: 'var(--muted)', fontSize: 12 }}
           />
           <YAxis
             tickFormatter={(v) =>
@@ -52,8 +62,8 @@ export function EvolutionChart({
             }
             tickLine={false}
             axisLine={false}
-            tick={{ fill: '#8791a3', fontSize: 12 }}
-            width={45}
+            tick={{ fill: 'var(--muted)', fontSize: 12 }}
+            width={58}
             domain={['auto', 'auto']}
           />
           <Tooltip
@@ -62,14 +72,25 @@ export function EvolutionChart({
               new Intl.NumberFormat('fr-FR', { style: 'currency', currency }).format(Number(v)),
               label,
             ]}
-            contentStyle={{ borderRadius: 12, border: '1px solid #e8ebf2', fontSize: 14 }}
+            cursor={{ stroke: 'var(--accent)', strokeDasharray: '3 4' }}
+            contentStyle={{
+              borderRadius: 12,
+              border: '1px solid var(--line)',
+              background: 'var(--surface)',
+              color: 'var(--ink)',
+              boxShadow: 'var(--shadow-float)',
+              fontSize: 13,
+            }}
+            labelStyle={{ color: 'var(--muted)', marginBottom: 8 }}
+            itemStyle={{ color: 'var(--ink)', fontVariantNumeric: 'tabular-nums' }}
           />
           <Area
             type="monotone"
             dataKey="value"
-            stroke="#6556dc"
+            stroke="var(--accent)"
             strokeWidth={2.5}
-            fill="url(#valueFill)"
+            fill={`url(#${fillId})`}
+            activeDot={{ r: 5, stroke: 'var(--surface)', strokeWidth: 3 }}
             connectNulls={false}
             isAnimationActive={false}
           />

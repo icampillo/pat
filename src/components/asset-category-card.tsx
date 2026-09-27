@@ -1,6 +1,14 @@
 import Link from 'next/link';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, Bitcoin, ChartNoAxesCombined, Gem, House, Layers3 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { AssetCategorySummary } from '@/shared/types';
+
+const categoryIcons: Record<string, LucideIcon> = {
+  crypto: Bitcoin,
+  stocks: ChartNoAxesCombined,
+  'precious-metals': Gem,
+  'real-estate': House,
+};
 
 export const categoryMoney = (value: number | null, currency: string) =>
   value === null
@@ -51,11 +59,14 @@ export function AssetCategoryCard({
   category: AssetCategorySummary;
   currency: string;
 }) {
+  const Icon = categoryIcons[category.slug] ?? Layers3;
   return (
     <Link className="panel category-card" href={`/categories/${category.slug}`}>
       <div className="category-card-title">
         <h3>
-          <span className="dot" style={{ background: category.color }} />
+          <span className="category-icon">
+            <Icon size={20} aria-hidden="true" />
+          </span>
           {category.name}
         </h3>
         <ArrowUpRight size={18} aria-hidden="true" />
@@ -68,6 +79,16 @@ export function AssetCategoryCard({
         </p>
       )}
       <Performance30d category={category} currency={currency} />
+      {category.portfolioWeight !== null && (
+        <div className="category-weight" aria-hidden="true">
+          <span
+            style={{
+              width: `${Math.max(0, Math.min(100, category.portfolioWeight))}%`,
+              background: category.color,
+            }}
+          />
+        </div>
+      )}
       <div className="category-card-foot">
         <span>{categoryPercent(category.portfolioWeight)} du patrimoine</span>
         <span>
