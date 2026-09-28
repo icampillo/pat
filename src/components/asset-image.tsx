@@ -1,4 +1,5 @@
 'use client';
+import { errorMessage } from '@/shared/errors';
 import { useState } from 'react';
 import Image from 'next/image';
 import type { SaveAction } from './forms';
@@ -50,7 +51,7 @@ export function AssetImage({
               });
               await save(`assets/${id}/image`, 'POST', { base64 });
             } catch (e) {
-              setError((e as Error).message);
+              setError(errorMessage(e));
             } finally {
               setBusy(false);
             }

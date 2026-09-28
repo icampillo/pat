@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import { categorySlug } from '@/domain/categories';
 import { decimal as d } from '@/domain/money';
 import type { AppState, AssetView } from '@/shared/types';
 const money = (v: string | null, currency: string) =>
@@ -18,12 +20,6 @@ export function PortfolioBreakdown({
     rows.some((a) => field(a) === null)
       ? null
       : rows.reduce((sum, a) => sum.add(field(a)!), d(0)).toFixed(2);
-  const overall =
-    state.onchain.includedCount > 0 ||
-    state.totals.incompleteCostBasis ||
-    state.totals.valueEur === null
-      ? null
-      : d(state.totals.valueEur).sub(state.totals.netFlowsEur).toFixed(2);
   return (
     <>
       <div className="detail-grid">
@@ -55,7 +51,11 @@ export function PortfolioBreakdown({
                   const g = crypto ? null : sum(rows, gain);
                   return (
                     <tr key={c.id}>
-                      <td>{c.label}</td>
+                      <td>
+                        <Link className="text-link" href={`/categories/${categorySlug(c.key)}`}>
+                          {c.label}
+                        </Link>
+                      </td>
                       <td className="num">{money(combined, currency)}</td>
                       <td className={`num ${g !== null && d(g).lt(0) ? 'negative' : 'positive'}`}>
                         {money(g, currency)}

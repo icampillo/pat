@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { db } from '../src/server/db';
-import { runSnapshot } from '../src/server/portfolio';
+import { runSnapshot } from '../src/server/portfolio-query';
 const args = process.argv.slice(2),
   index = args.indexOf('--portfolio');
 const portfolioId = index >= 0 ? args[index + 1] : undefined;

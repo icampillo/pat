@@ -1,6 +1,7 @@
 import { stringify } from 'csv-stringify/sync';
 import { db } from './db';
-import { owned, valuation, json } from './portfolio';
+import { owned, json } from './portfolio-store';
+import { valuation } from './portfolio-query';
 import { AppError } from './errors';
 export function safeCsv(rows: Record<string, unknown>[]) {
   return (

@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({ findMany: vi.fn(), runSnapshot: vi.fn() }));
 vi.mock('../../src/server/db', () => ({
   db: () => ({ portfolio: { findMany: mocks.findMany } }),
 }));
-vi.mock('../../src/server/portfolio', () => ({ runSnapshot: mocks.runSnapshot }));
+vi.mock('../../src/server/portfolio-query', () => ({ runSnapshot: mocks.runSnapshot }));
 import { startSnapshotWorker } from '../../src/server/snapshot-worker';
 
 const worker = globalThis as unknown as {

@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { db } from '../src/server/db';
-import { getState } from '../src/server/portfolio';
+import { getState } from '../src/server/portfolio-query';
 
 const rate = await db().fxRate.findFirst({ orderBy: { observedAt: 'desc' } });
 const quote = await db().priceHistory.findFirst({

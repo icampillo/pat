@@ -3,7 +3,7 @@ import { LedgerError } from '@/domain/ledger';
 import { AppError } from './errors';
 export const response = (data: unknown, status = 200) =>
   Response.json({ data }, { status, headers: { 'Cache-Control': 'private, no-store' } });
-export async function body(request: Request, limit = 256_000) {
+export async function body(request: Request, limit = 256_000): Promise<unknown> {
   if (!request.headers.get('content-type')?.includes('application/json'))
     throw new AppError('CONTENT_TYPE', 'Corps JSON requis.', 400);
   const reader = request.body?.getReader();

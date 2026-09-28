@@ -1,4 +1,5 @@
 'use client';
+import { errorMessage } from '@/shared/errors';
 import { useState } from 'react';
 import Link from 'next/link';
 import { assetCreationSchema, assetUpdateSchema } from '@/shared/schemas';
@@ -128,7 +129,7 @@ export function RealEstateForm({
       );
       done(result.id!);
     } catch (err) {
-      setError((err as Error).message);
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }

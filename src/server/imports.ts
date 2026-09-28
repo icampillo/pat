@@ -1,14 +1,8 @@
 import { parse } from 'csv-parse/sync';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import {
-  mutate,
-  prepareTransaction,
-  insertTransaction,
-  validateLedger,
-  json,
-  toLedger,
-} from './portfolio';
+import { mutate, json, toLedger } from './portfolio-store';
+import { prepareTransaction, insertTransaction, validateLedger } from './portfolio';
 import { replay, type LedgerTransaction } from '@/domain/ledger';
 import { transactionSchema } from '@/shared/schemas';
 import { AppError } from './errors';
@@ -100,6 +94,7 @@ export async function importCommand(
         where: { portfolioId: portfolio.id, deletedAt: null },
       });
       const existing = await tx.transaction.findMany({ where: { portfolioId: portfolio.id } });
+      const lastSequence = existing.reduce((max, row) => Math.max(max, row.sequence), 0);
       const references = new Set(existing.map((t) => t.externalReference).filter(Boolean));
       const errors: ImportPreview['errors'] = [],
         display: ImportPreview['rows'] = [];
@@ -142,7 +137,7 @@ export async function importCommand(
             fxToEur: String(ready.fxToEur),
             fxToUsd: ready.fxToUsd === null ? null : String(ready.fxToUsd),
             occurredAt: ready.occurredAt.toISOString(),
-            sequence: Math.max(0, ...existing.map((t) => t.sequence)) + index + 1,
+            sequence: lastSequence + index + 1,
           });
           payload.push(data);
           display.push({
@@ -196,21 +191,19 @@ export async function importCommand(
       if (!batch) throw new AppError('NOT_FOUND', 'Aperçu introuvable.', 404);
       if (!Array.isArray(batch.payload))
         throw new AppError('IMPORT_KIND', 'Cet aperçu ne concerne pas des transactions.', 422);
-      if (batch.status === 'COMMITTED')
-        return { id: batch.id, count: (batch.payload as unknown[]).length };
+      if (batch.status === 'COMMITTED') return { id: batch.id, count: batch.payload.length };
       if (batch.expiresAt < new Date() || batch.ledgerVersion !== portfolio.version)
         throw new AppError(
           'PREVIEW_STALE',
           'Le portefeuille a changé ou l’aperçu a expiré. Recréez l’aperçu.',
           409,
         );
-      if ((batch.errors as unknown[]).length)
+      if (!Array.isArray(batch.errors) || batch.errors.length)
         throw new AppError('IMPORT_INVALID', 'Corrigez toutes les erreurs avant d’importer.', 422);
-      for (const row of batch.payload as unknown[])
-        await insertTransaction(tx, portfolio.id, userId, row);
+      for (const row of batch.payload) await insertTransaction(tx, portfolio.id, userId, row);
       await validateLedger(tx, portfolio.id);
       await tx.importBatch.update({ where: { id: batch.id }, data: { status: 'COMMITTED' } });
-      return { id: batch.id, count: (batch.payload as unknown[]).length };
+      return { id: batch.id, count: batch.payload.length };
     }
     throw new AppError('NOT_FOUND', 'Action d’import introuvable.', 404);
   });

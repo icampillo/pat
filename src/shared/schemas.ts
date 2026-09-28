@@ -164,6 +164,15 @@ export const transactionEditSchema = z
     reason: z.string().trim().min(3, 'Expliquez la correction.').max(500),
   })
   .strict();
+export const transactionVoidSchema = z
+  .object({
+    confirmed: z.literal(true),
+    reason: z
+      .string()
+      .max(500)
+      .refine((value) => value.trim().length > 0, 'Motif requis.'),
+  })
+  .strict();
 export const fxSchema = z.object({ eurUsd: positive, observedAt: dateSchema }).strict();
 export const settingsSchema = z
   .object({

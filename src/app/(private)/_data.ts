@@ -1,5 +1,5 @@
 import { auth } from '@/server/auth';
-import { getState } from '@/server/portfolio';
+import { getState } from '@/server/portfolio-query';
 import type { AppState } from '@/shared/types';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';

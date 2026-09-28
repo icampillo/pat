@@ -1,7 +1,7 @@
 import { db } from './db';
 import { metadataSchema } from '@/shared/schemas';
 import { fetchSecurityQuote, type SecurityQuote } from '@/modules/prices/securities';
-import type { TxDb } from './portfolio';
+import type { TxDb } from './portfolio-store';
 
 export async function saveSecurityQuote(
   tx: TxDb,

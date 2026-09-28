@@ -1,3 +1,4 @@
-import { HistoryPage } from '@/components/pages/history';
-import { getPrivateData } from '../_data';
-export default async function Page(){const {state}=await getPrivateData();return <HistoryPage state={state}/>;}
+import { redirect } from 'next/navigation';
+export default function Page() {
+  redirect('/activity?view=history');
+}

@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { db } from './db';
-import { capture, getState, insertTransaction, json, mutate, validateLedger } from './portfolio';
+import { capture, getState } from './portfolio-query';
+import { insertTransaction, validateLedger } from './portfolio';
+import { json, mutate } from './portfolio-store';
 import { fetchEcbRate } from './market';
 import { saveSecurityQuote } from './securities-market';
 import { parseSecuritiesCsv, securityCsvRowSchema } from '@/domain/securities-csv';
@@ -233,7 +235,7 @@ export async function confirmSecurities(
           'Le portefeuille a changé ou l’aperçu a expiré. Relancez l’aperçu.',
           409,
         );
-      if ((batch.errors as unknown[]).length)
+      if (!Array.isArray(batch.errors) || batch.errors.length)
         throw new AppError('IMPORT_INVALID', 'Corrigez les erreurs avant d’importer.', 422);
       const category = await tx.assetCategory.findUniqueOrThrow({
         where: { portfolioId_key: { portfolioId: portfolio.id, key: 'SECURITIES' } },

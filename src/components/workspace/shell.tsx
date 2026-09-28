@@ -7,13 +7,11 @@ import {
   ChevronRight,
   CircleHelp,
   Coins,
-  History,
   Layers3,
   LayoutDashboard,
   LogOut,
   Menu,
   Settings,
-  Shapes,
   Wallet,
   X,
 } from 'lucide-react';
@@ -26,20 +24,19 @@ import { usePathname } from 'next/navigation';
 import { useWorkspace } from './context';
 const nav = [
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
-  { href: '/portfolio', label: 'Mon portefeuille', icon: Wallet },
-  { href: '/assets', label: 'Mes actifs', icon: Shapes },
-  { href: '/wallets', label: 'Wallets & DeFi', icon: Coins },
-  { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
-  { href: '/history', label: 'Historique', icon: History },
+  { href: '/portfolio', label: 'Portefeuille', icon: Wallet },
+  { href: '/wallets', label: 'Wallets DeFi', icon: Coins },
+  { href: '/activity', label: 'Activité', icon: ArrowLeftRight },
 ];
 const titles: Record<string, string> = {
   dashboard: 'Vue d’ensemble',
-  portfolio: 'Mon portefeuille',
+  portfolio: 'Portefeuille',
   assets: 'Mes actifs',
   transactions: 'Transactions',
   history: 'Historique',
+  activity: 'Activité',
   settings: 'Paramètres',
-  wallets: 'Wallets & DeFi',
+  wallets: 'Wallets DeFi',
 };
 
 export function WorkspaceShell({
@@ -54,6 +51,12 @@ export function WorkspaceShell({
   const router = useRouter();
   const pathname = usePathname();
   const [view, slug] = pathname.split('/').filter(Boolean);
+  const activeView =
+    view === 'assets' || view === 'categories'
+      ? 'portfolio'
+      : view === 'transactions' || view === 'history'
+        ? 'activity'
+        : view;
   const [mobile, setMobile] = useState(false);
   const { currency, setCurrency } = useWorkspace();
   const pageTitle =
@@ -86,12 +89,12 @@ export function WorkspaceShell({
             onClick={() => {
               setMobile(false);
             }}
-            aria-current={view === n.href.slice(1) ? 'page' : undefined}
-            className={`nav-item ${view === n.href.slice(1) ? 'active' : ''}`}
+            aria-current={activeView === n.href.slice(1) ? 'page' : undefined}
+            className={`nav-item ${activeView === n.href.slice(1) ? 'active' : ''}`}
           >
             <n.icon size={19} />
             {n.label}
-            {n.href === '/assets' && (
+            {n.href === '/portfolio' && (
               <span className="count">{state.rows.filter((a) => !a.deletedAt).length}</span>
             )}
           </Link>

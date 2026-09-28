@@ -1,4 +1,5 @@
 'use client';
+import { errorMessage } from '@/shared/errors';
 import { assetCreationSchema, assetUpdateSchema } from '@/shared/schemas';
 import type { AppState, AssetView } from '@/shared/types';
 import { ArrowLeft, Save } from 'lucide-react';
@@ -81,14 +82,14 @@ export function AssetForm({
       );
       done(result.id!);
     } catch (err) {
-      setError((err as Error).message);
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
   }
   return (
     <div className="form-wrap">
-      <Link className="back" href="/assets">
+      <Link className="back" href="/portfolio">
         <ArrowLeft size={16} /> Tous les actifs
       </Link>
       <form className="panel form-panel" onSubmit={submit}>

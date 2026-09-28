@@ -32,16 +32,11 @@
     "market:sync": "tsx scripts/sync-market.ts"
   },
   "dependencies": {
-    "@hookform/resolvers": "5.9.1",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
     "@radix-ui/react-alert-dialog": "1.1.23",
     "@radix-ui/react-dialog": "1.1.23",
-    "@radix-ui/react-select": "2.3.7",
-    "@radix-ui/react-slot": "1.3.3",
     "better-auth": "1.7.5",
-    "class-variance-authority": "0.7.1",
-    "clsx": "2.1.1",
     "csv-parse": "7.0.2",
     "csv-stringify": "6.8.3",
     "decimal.js": "10.6.0",
@@ -53,10 +48,8 @@
     "playwright-core": "1.63.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "react-hook-form": "7.88.0",
     "recharts": "3.10.1",
     "sharp": "0.35.4",
-    "tailwind-merge": "3.7.0",
     "zod": "4.6.5"
   },
   "devDependencies": {

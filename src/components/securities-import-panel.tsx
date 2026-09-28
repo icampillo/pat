@@ -1,4 +1,5 @@
 'use client';
+import { errorMessage } from '@/shared/errors';
 import { useState } from 'react';
 import { RefreshCw, Upload } from 'lucide-react';
 import type { SaveAction } from './forms';
@@ -25,7 +26,7 @@ export function SecuritiesImportPanel({ save }: { save: SaveAction }) {
     try {
       await action();
     } catch (error) {
-      setError((error as Error).message);
+      setError(errorMessage(error));
     } finally {
       setBusy(false);
     }

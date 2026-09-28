@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import { z } from 'zod';
-import { mutate, owned } from './portfolio';
+import { mutate, owned } from './portfolio-store';
 import { db } from './db';
 import { AppError } from './errors';
 const imageSchema = z

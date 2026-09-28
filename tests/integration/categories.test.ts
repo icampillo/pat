@@ -4,7 +4,8 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { db } from '../../src/server/db';
 import { createUser } from '../../src/server/provision';
-import { command, getState, runSnapshot } from '../../src/server/portfolio';
+import { command } from '../../src/server/portfolio';
+import { getState, runSnapshot } from '../../src/server/portfolio-query';
 import { buildCategoryDetails } from '../../src/domain/categories';
 
 const testUrl = process.env.DATABASE_URL_TEST;

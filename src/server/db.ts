@@ -10,4 +10,3 @@ export function db() {
   }
   return globalDb.patrimoineDb;
 }
-export type Db = ReturnType<typeof db>;

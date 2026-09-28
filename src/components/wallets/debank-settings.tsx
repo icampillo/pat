@@ -1,4 +1,5 @@
 'use client';
+import { errorMessage } from '@/shared/errors';
 import type { SaveAction } from '@/components/forms';
 import { Confirm } from '@/components/ui/confirm';
 import type { AppState } from '@/shared/types';
@@ -45,7 +46,7 @@ export function DeBankSettings({ state, save }: { state: AppState; save: SaveAct
               'Configuration enregistrée. Les adresses actives seront synchronisées automatiquement.',
             );
           } catch (error) {
-            setMessage((error as Error).message);
+            setMessage(errorMessage(error));
           } finally {
             setBusy(false);
           }
@@ -126,7 +127,7 @@ export function DeBankSettings({ state, save }: { state: AppState; save: SaveAct
             try {
               await save('debank/config', 'DELETE', {});
             } catch (error) {
-              setMessage((error as Error).message);
+              setMessage(errorMessage(error));
             }
           }}
         >

@@ -9,7 +9,7 @@ export function HistoryPage({ state }: { state: AppState }) {
   const { currency } = useWorkspace();
   return (
     <>
-      <PageHeading view="history" title="Historique" />
+      <PageHeading view="history" title="Activité · Historique du patrimoine" />
       <HistoryView state={state} currency={currency} />
     </>
   );

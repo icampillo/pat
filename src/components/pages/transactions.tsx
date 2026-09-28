@@ -16,7 +16,7 @@ export function TransactionsPage({ state }: { state: AppState }) {
   const [search, setSearch] = useState('');
   return (
     <>
-      <PageHeading view="transactions" title="Transactions" />
+      <PageHeading view="transactions" title="Activité · Transactions" />
       <section className="panel">
         <div className="table-toolbar">
           <div className="search">
@@ -65,7 +65,7 @@ export function TransactionEditorPage({
         save={save}
         initialAsset={searchParams.get('asset') || undefined}
         done={() => {
-          router.push('/transactions');
+          router.push('/activity');
           router.refresh();
         }}
       />

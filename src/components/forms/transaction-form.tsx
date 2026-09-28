@@ -1,4 +1,5 @@
 'use client';
+import { errorMessage } from '@/shared/errors';
 import { decimal } from '@/domain/money';
 import { transactionSchema, typeLabels } from '@/shared/schemas';
 import type { AppState, TransactionView } from '@/shared/types';
@@ -76,7 +77,7 @@ export function TransactionForm({
       );
       done();
     } catch (err) {
-      setError((err as Error).message);
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -103,7 +104,7 @@ export function TransactionForm({
     );
   return (
     <div className="form-wrap">
-      <Link className="back" href="/transactions">
+      <Link className="back" href="/activity">
         <ArrowLeft size={16} /> Toutes les transactions
       </Link>
       <form className="panel form-panel" onSubmit={submit}>
@@ -263,7 +264,7 @@ export function TransactionForm({
           </p>
         )}
         <div className="form-actions">
-          <Link className="btn" href="/transactions">
+          <Link className="btn" href="/activity">
             Annuler
           </Link>
           <button className="btn primary" disabled={busy}>

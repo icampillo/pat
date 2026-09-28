@@ -1,5 +1,5 @@
 import { db } from './db';
-import { runSnapshot } from './portfolio';
+import { runSnapshot } from './portfolio-query';
 
 const worker = globalThis as unknown as {
   snapshotTimer?: ReturnType<typeof setInterval>;

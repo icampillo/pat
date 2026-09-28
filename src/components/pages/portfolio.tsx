@@ -14,7 +14,7 @@ export function PortfolioPage({ state }: { state: AppState }) {
   const total = currency === 'EUR' ? state.totals.valueEur : state.totals.valueUsd;
   return (
     <>
-      <PageHeading view="portfolio" title="Mon portefeuille" />
+      <PageHeading view="portfolio" title="Portefeuille" />
       <>
         <div className="metrics">
           <Metric

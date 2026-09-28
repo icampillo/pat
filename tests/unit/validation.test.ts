@@ -66,3 +66,28 @@ it('neutralise les formules CSV en conservant les décimaux', () => {
   expect(csv).toContain('0.123456789123456789');
   expect(csv).toContain('"-12.50"');
 });
+
+it('exige une confirmation booléenne et un motif textuel non vide pour annuler', async () => {
+  const { transactionVoidSchema } = await import('../../src/shared/schemas');
+  for (const input of [
+    null,
+    {},
+    { confirmed: 'true', reason: 'Erreur de saisie' },
+    { confirmed: 1, reason: 'Erreur de saisie' },
+    { confirmed: false, reason: 'Erreur de saisie' },
+    { confirmed: true, reason: 42 },
+    { confirmed: true, reason: null },
+    { confirmed: true, reason: '   ' },
+    { confirmed: true, reason: 'x'.repeat(501) },
+  ])
+    expect(transactionVoidSchema.safeParse(input).success).toBe(false);
+  const valid = { confirmed: true, reason: '  Motif conservé tel que saisi  ' };
+  expect(transactionVoidSchema.parse(valid)).toEqual(valid);
+});
+
+it('affiche un message de secours quand une erreur UI n’est pas une instance Error', async () => {
+  const { errorMessage } = await import('../../src/shared/errors');
+  expect(errorMessage(new Error('Erreur métier'))).toBe('Erreur métier');
+  for (const error of [null, undefined, 'texte', {}, new Error('')])
+    expect(errorMessage(error, 'Réessayez.')).toBe('Réessayez.');
+});

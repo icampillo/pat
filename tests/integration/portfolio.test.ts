@@ -4,7 +4,8 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { db } from '../../src/server/db';
 import { createUser } from '../../src/server/provision';
-import { command, getState, runSnapshot } from '../../src/server/portfolio';
+import { command } from '../../src/server/portfolio';
+import { getState, runSnapshot } from '../../src/server/portfolio-query';
 import { auth } from '../../src/server/auth';
 import { importCommand, type ImportPreview } from '../../src/server/imports';
 import { saveImage, getImage } from '../../src/server/images';
@@ -686,4 +687,39 @@ describe('Métaux et images privées', () => {
       ),
     ).rejects.toMatchObject({ status: 422 });
   });
+});
+
+it('refuse une annulation mal formée sans mutation et conserve une annulation valide', async () => {
+  const asset = await createAsset();
+  const transaction = await commandFor('POST', 'transactions', purchase(asset.id));
+  const before = await db().transaction.findUniqueOrThrow({ where: { id: transaction.id } });
+  const portfolio = await db().portfolio.findUniqueOrThrow({ where: { id: portfolioId } });
+  for (const input of [
+    null,
+    { confirmed: 'true', reason: 'Erreur' },
+    { confirmed: 1, reason: 'Erreur' },
+    { confirmed: true, reason: 42 },
+    { confirmed: true, reason: '   ' },
+    { confirmed: true, reason: 'x'.repeat(501) },
+  ]) {
+    await expect(
+      commandFor('DELETE', 'transactions/' + transaction.id, input, '1'),
+    ).rejects.toMatchObject({ code: 'CONFIRMATION_REQUIRED', status: 422 });
+  }
+  expect(await db().transaction.findUniqueOrThrow({ where: { id: transaction.id } })).toEqual(
+    before,
+  );
+  expect((await db().portfolio.findUniqueOrThrow({ where: { id: portfolioId } })).version).toBe(
+    portfolio.version,
+  );
+  const reason = '  Correction de saisie  ';
+  await commandFor('DELETE', 'transactions/' + transaction.id, { confirmed: true, reason }, '1');
+  expect(await db().transaction.findUniqueOrThrow({ where: { id: transaction.id } })).toMatchObject(
+    { voided: true, version: 2 },
+  );
+  expect(
+    await db().transactionRevision.findFirstOrThrow({
+      where: { transactionId: transaction.id, version: 2 },
+    }),
+  ).toMatchObject({ reason });
 });

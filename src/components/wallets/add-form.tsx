@@ -7,15 +7,16 @@ export function WalletAddForm({
   save,
   busy,
   run,
+  onAdded,
 }: {
   save: SaveAction;
+  onAdded: () => void;
   busy: boolean;
   run: (action: () => Promise<unknown>) => Promise<void>;
 }) {
   const params = useSearchParams();
   return (
     <section className="panel detail-panel wallet-add">
-      <h2>Ajouter une adresse</h2>
       <p className="muted">
         Les réseaux compatibles et les protocoles DeFi sont détectés par DeBank. Aucun portefeuille
         à connecter ni signature à fournir.
@@ -33,6 +34,7 @@ export function WalletAddForm({
               ...(fd.get('reference') ? { referenceUsd: fd.get('reference') } : {}),
             });
             form.reset();
+            onAdded();
           });
         }}
       >

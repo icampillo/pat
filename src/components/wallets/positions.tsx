@@ -68,7 +68,38 @@ export function WalletPositions({ state }: { state: AppState }) {
   );
   return (
     <>
-      {' '}
+      <div className="wallet-overview" aria-label="Résumé des adresses sélectionnées">
+        <div>
+          <span>Total net DeBank</span>
+          <strong>{usd(total)}</strong>
+        </div>
+        <div>
+          <span>Positions DeFi nettes</span>
+          <strong>{usd(sum('defiUsd'))}</strong>
+        </div>
+        <div>
+          <span>Wallets</span>
+          <strong>{chosen.length}</strong>
+        </div>
+        <div>
+          <span>Protocoles détectés</span>
+          <strong>{new Set(data.flatMap((w) => w.positions.map((p) => p.protocol))).size}</strong>
+        </div>
+        <div>
+          <span>Dettes déduites</span>
+          <strong>{usd(sum('debtUsd'))}</strong>
+        </div>
+        <div>
+          <span title="Détail des positions, non ajouté au total">Récompenses (détail)</span>
+          <strong>{usd(sum('rewardsUsd'))}</strong>
+        </div>
+      </div>
+      {chosen.some((w) => !w.data || w.stale || w.status === 'ERROR') && (
+        <p className="small muted">
+          Couverture partielle ou données anciennes : consultez les statuts des wallets ci-dessous.
+          Les montants disponibles sont conservés.
+        </p>
+      )}
       <div className="wallet-filters">
         <label>
           Wallet
@@ -120,36 +151,6 @@ export function WalletPositions({ state }: { state: AppState }) {
         Ce filtre masque seulement les lignes ; les totaux DeBank ne changent pas.
         {!eurUsd && ' Taux EUR/USD indisponible : toutes les lignes restent visibles.'}
       </p>
-      <div className="metrics">
-        {[
-          {
-            title: 'Total net DeBank',
-            value: total,
-            note: 'Solde DeBank des adresses sélectionnées',
-          },
-          {
-            title: 'Positions DeFi nettes',
-            value: sum('defiUsd'),
-            note: 'Staking, pools, prêts · dettes déduites',
-          },
-          {
-            title: 'Dettes',
-            value: sum('debtUsd'),
-            note: 'Déjà déduites des positions nettes',
-          },
-          {
-            title: 'Récompenses',
-            value: sum('rewardsUsd'),
-            note: 'Détail des positions · non ajouté au total',
-          },
-        ].map((m) => (
-          <section className="metric" key={m.title}>
-            <div className="metric-top">{m.title}</div>
-            <strong>{usd(m.value)}</strong>
-            <p>{m.note}</p>
-          </section>
-        ))}
-      </div>
       {data.some((w) => d(w.reconciliationUsd).abs().gte('0.01')) && (
         <p className="notice">
           Écart entre le total DeBank et les détails :{' '}
@@ -158,6 +159,90 @@ export function WalletPositions({ state }: { state: AppState }) {
           total net DeBank.
         </p>
       )}
+      <section className="panel">
+        <div className="section-title">
+          <div>
+            <h2>Staking & positions DeFi</h2>
+            <p>Positions détectées par DeBank · tous les protocoles compatibles</p>
+          </div>
+          <span className="tag">{positions.length} position(s)</span>
+        </div>
+        <div className="defi-positions">
+          {positions.map((p) => (
+            <article key={p.key} className="defi-position">
+              <div className="wallet-source">
+                <div>
+                  <h3>{p.protocol}</h3>
+                  <p className="small muted">
+                    {p.chain} · {p.wallet}
+                  </p>
+                </div>
+                <span className="tag">{positionLabels[p.kind] || p.kind}</span>
+                <strong>{p.valueText || `${p.approximate ? '≈ ' : ''}${usd(p.netUsd)}`}</strong>
+              </div>
+              <p className="small">
+                <strong>
+                  {p.supplies.map((t) => t.symbol).join(' · ') || 'Détail des tokens non fourni'}
+                </strong>
+              </p>
+              <details>
+                <summary>Détail de la position</summary>
+                {p.description && <p className="small muted">{p.description}</p>}
+                <div className="defi-columns">
+                  <div>
+                    <h4>Actifs déposés</h4>
+                    <TokenList
+                      tokens={p.supplies.filter(showToken)}
+                      empty={
+                        p.supplies.length && !showSmall
+                          ? 'Valeurs inférieures à 1 € masquées.'
+                          : `Actifs : ${usd(p.assetsUsd)} · détail non fourni`
+                      }
+                    />
+                  </div>
+                  <div>
+                    <h4>Emprunts</h4>
+                    <TokenList
+                      tokens={p.borrows.filter(showToken)}
+                      empty={
+                        p.borrows.length && !showSmall
+                          ? 'Valeurs inférieures à 1 € masquées.'
+                          : d(p.debtUsd).isZero()
+                            ? 'Aucun'
+                            : usd(p.debtUsd)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <h4>Récompenses</h4>
+                    <TokenList
+                      tokens={p.rewards.filter(showToken)}
+                      empty={
+                        p.rewards.length && !showSmall
+                          ? 'Valeurs inférieures à 1 € masquées.'
+                          : 'Aucune indiquée'
+                      }
+                    />
+                  </div>
+                </div>
+                <p className="small muted">
+                  {p.observedAt
+                    ? `Observation DeBank : ${date(p.observedAt)}`
+                    : 'Données du profil public · valeurs arrondies'}
+                  {p.unlockAt && ` · Déverrouillage : ${date(p.unlockAt)}`}
+                </p>
+              </details>
+            </article>
+          ))}
+        </div>
+        {!positions.length && (
+          <p className="empty-inline">
+            {data.length
+              ? 'Aucune position DeFi pour cette sélection.'
+              : 'Vos positions apparaîtront après la première synchronisation.'}
+          </p>
+        )}
+      </section>
       <section className="panel">
         <div className="section-title">
           <h2>Tokens en wallet</h2>
@@ -197,82 +282,6 @@ export function WalletPositions({ state }: { state: AppState }) {
             {data.length
               ? 'Aucun token pour cette sélection.'
               : 'Vos tokens apparaîtront après la première synchronisation.'}
-          </p>
-        )}
-      </section>
-      <section className="panel">
-        <div className="section-title">
-          <div>
-            <h2>Staking & positions DeFi</h2>
-            <p>Positions détectées par DeBank · tous les protocoles compatibles</p>
-          </div>
-          <span className="tag">{positions.length} position(s)</span>
-        </div>
-        <div className="defi-positions">
-          {positions.map((p) => (
-            <article key={p.key} className="defi-position">
-              <div className="wallet-source">
-                <div>
-                  <h3>{p.protocol}</h3>
-                  <p className="small muted">
-                    {p.chain} · {p.wallet}
-                  </p>
-                </div>
-                <span className="tag">{positionLabels[p.kind] || p.kind}</span>
-                <strong>{p.valueText || `${p.approximate ? '≈ ' : ''}${usd(p.netUsd)}`}</strong>
-              </div>
-              {p.description && <p className="small muted">{p.description}</p>}
-              <div className="defi-columns">
-                <div>
-                  <h4>Actifs déposés</h4>
-                  <TokenList
-                    tokens={p.supplies.filter(showToken)}
-                    empty={
-                      p.supplies.length && !showSmall
-                        ? 'Valeurs inférieures à 1 € masquées.'
-                        : `Actifs : ${usd(p.assetsUsd)} · détail non fourni`
-                    }
-                  />
-                </div>
-                <div>
-                  <h4>Emprunts</h4>
-                  <TokenList
-                    tokens={p.borrows.filter(showToken)}
-                    empty={
-                      p.borrows.length && !showSmall
-                        ? 'Valeurs inférieures à 1 € masquées.'
-                        : d(p.debtUsd).isZero()
-                          ? 'Aucun'
-                          : usd(p.debtUsd)
-                    }
-                  />
-                </div>
-                <div>
-                  <h4>Récompenses</h4>
-                  <TokenList
-                    tokens={p.rewards.filter(showToken)}
-                    empty={
-                      p.rewards.length && !showSmall
-                        ? 'Valeurs inférieures à 1 € masquées.'
-                        : 'Aucune indiquée'
-                    }
-                  />
-                </div>
-              </div>
-              <p className="small muted">
-                {p.observedAt
-                  ? `Observation DeBank : ${date(p.observedAt)}`
-                  : 'Données du profil public · valeurs arrondies'}
-                {p.unlockAt && ` · Déverrouillage : ${date(p.unlockAt)}`}
-              </p>
-            </article>
-          ))}
-        </div>
-        {!positions.length && (
-          <p className="empty-inline">
-            {data.length
-              ? 'Aucune position DeFi pour cette sélection.'
-              : 'Vos positions apparaîtront après la première synchronisation.'}
           </p>
         )}
       </section>

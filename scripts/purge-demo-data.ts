@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { db } from '../src/server/db';
-import { json, valuation } from '../src/server/portfolio';
+import { json } from '../src/server/portfolio-store';
+import { valuation } from '../src/server/portfolio-query';
 
 const DEMO_NOTE = 'Exemple fictif — ne constitue pas une cotation de marché.';
 

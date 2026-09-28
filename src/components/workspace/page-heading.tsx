@@ -8,10 +8,12 @@ export function PageHeading({
   view,
   title,
   detail = false,
+  actions,
 }: {
   view: string;
   title: string;
   detail?: boolean;
+  actions?: React.ReactNode;
 }) {
   const { save, run, busy, flash, setFlash } = useWorkspace();
   return (
@@ -37,9 +39,10 @@ export function PageHeading({
                       : 'Vos positions et leur répartition.'}
           </p>
         </div>
+        {actions}
         {!detail && !['settings', 'wallets'].includes(view) && (
           <div className="heading-actions">
-            {['dashboard', 'assets'].includes(view) && (
+            {['dashboard', 'assets', 'portfolio'].includes(view) && (
               <Link className="btn" href="/categories/stocks#import-bourse">
                 Importer un CSV Bourse
               </Link>

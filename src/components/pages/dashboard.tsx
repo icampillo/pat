@@ -124,7 +124,7 @@ export function DashboardPage({ state }: { state: AppState }) {
             <EvolutionChart points={points} currency={currency} />
             <div className="chart-foot">
               <span className="dot purple" /> Valeur totale du portefeuille
-              <Link href="/history">
+              <Link href="/activity?view=history">
                 Voir l’historique <ArrowUpRight size={14} />
               </Link>
             </div>

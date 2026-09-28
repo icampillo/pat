@@ -1,4 +1,5 @@
 'use client';
+import { errorMessage } from '@/shared/errors';
 import type { SaveAction } from '@/components/forms';
 import type { AppState } from '@/shared/types';
 import { useRouter } from 'next/navigation';
@@ -63,7 +64,7 @@ export function WorkspaceProvider({
     try {
       await action();
     } catch (err) {
-      setFlash((err as Error).message);
+      setFlash(errorMessage(err));
     } finally {
       setBusy(false);
     }

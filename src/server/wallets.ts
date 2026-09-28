@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { db } from './db';
 import { AppError } from './errors';
-import { capture, json, mutate } from './portfolio';
+import { capture } from './portfolio-query';
+import { json, mutate } from './portfolio-store';
 import { addressSchema, fetchDeBank, DeBankError } from './debank';
 import { encryptKey, decryptKey } from './wallet-crypto';
 

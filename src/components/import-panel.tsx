@@ -1,4 +1,5 @@
 'use client';
+import { errorMessage } from '@/shared/errors';
 import { useState } from 'react';
 import { Upload } from 'lucide-react';
 import type { ImportPreview } from '@/server/imports';
@@ -49,7 +50,7 @@ export function ImportPanel({ save }: { save: SaveAction }) {
           try {
             setPreview((await save('imports/preview', 'POST', { csv })) as ImportPreview);
           } catch (e) {
-            setError((e as Error).message);
+            setError(errorMessage(e));
           } finally {
             setBusy(false);
           }
@@ -123,7 +124,7 @@ export function ImportPanel({ save }: { save: SaveAction }) {
                 setPreview(null);
                 setCsv('');
               } catch (e) {
-                setError((e as Error).message);
+                setError(errorMessage(e));
               } finally {
                 setBusy(false);
               }
