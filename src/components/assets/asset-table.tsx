@@ -1,7 +1,7 @@
 'use client';
 import type { AssetView } from '@/shared/types';
 import { ChevronRight } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/components/workspace/link';
 
 import { AssetAvatar, Empty, money, qty, Signed } from '@/components/workspace/display';
 export function AssetTable({ rows, currency }: { rows: AssetView[]; currency: 'EUR' | 'USD' }) {

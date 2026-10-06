@@ -3,7 +3,7 @@ import { errorMessage } from '@/shared/errors';
 import { assetCreationSchema, assetUpdateSchema } from '@/shared/schemas';
 import type { AppState, AssetView } from '@/shared/types';
 import { ArrowLeft, Save } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/components/workspace/link';
 import { useState } from 'react';
 import { Field, type SaveAction } from './shared';
 import { RealEstateForm } from './real-estate-form';

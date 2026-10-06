@@ -8,11 +8,19 @@ export function PriceHistoryList({ id, currency }: { id: string; currency: strin
       { id: string; price: string; observedAt: string; source: string }[] | null
     >(null),
     [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   return (
     <div className="price-history">
       <button
         className="text-link"
+        disabled={loading}
         onClick={async () => {
+          if (prices) {
+            setPrices(null);
+            return;
+          }
+          setLoading(true);
+          setError('');
           try {
             const res = await fetch(`/api/v1/assets/${id}/prices`);
             if (!res.ok) throw new Error();
@@ -20,11 +28,21 @@ export function PriceHistoryList({ id, currency }: { id: string; currency: strin
             setPrices(data.data);
           } catch {
             setError('Historique indisponible.');
+          } finally {
+            setLoading(false);
           }
         }}
       >
-        Consulter l’historique des prix <History size={15} />
+        {loading
+          ? 'Chargement des prix…'
+          : prices
+            ? 'Masquer l’historique des prix'
+            : 'Consulter l’historique des prix'}{' '}
+        <History size={15} />
       </button>
+      {loading && (
+        <span className="loading-spinner" role="status" aria-label="Chargement des prix" />
+      )}
       {error && <p role="alert">{error}</p>}
       {prices && (
         <div className="price-list">

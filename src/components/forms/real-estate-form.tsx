@@ -1,7 +1,7 @@
 'use client';
 import { errorMessage } from '@/shared/errors';
 import { useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/workspace/link';
 import { assetCreationSchema, assetUpdateSchema } from '@/shared/schemas';
 import { propertyTypes, propertyUsages } from '@/shared/real-estate';
 import { monthlyPayment } from '@/domain/mortgage';

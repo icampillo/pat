@@ -1,6 +1,6 @@
 'use client';
 import { Camera, Download, Plus, X } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/components/workspace/link';
 
 import { useWorkspace } from '@/components/workspace/context';
 

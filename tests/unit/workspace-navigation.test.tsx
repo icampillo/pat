@@ -1,7 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { useEffect } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { AppState } from '@/shared/types';
+import { workspaceFixture } from '../fixtures/workspace';
 import { WorkspaceProvider, useWorkspace } from '@/components/workspace/context';
 import Dashboard from '@/app/(private)/dashboard/page';
 import Portfolio from '@/app/(private)/portfolio/page';
@@ -17,14 +16,14 @@ const mocks = vi.hoisted(() => ({
   slug: 'crypto',
   refresh: vi.fn(),
   render: vi.fn(() => null),
-  read: vi.fn(() => {
-    throw new Error('Unexpected portfolio reload during navigation');
-  }),
 }));
-vi.mock('@/app/(private)/_data', () => ({ getPrivateData: mocks.read }));
 vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react')>()),
   useEffect: vi.fn(),
+}));
+vi.mock('next/link', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/link')>()),
+  useLinkStatus: () => ({ pending: false }),
 }));
 vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard',
@@ -48,10 +47,7 @@ vi.mock('@/components/pages/category', () => ({ CategoryRoutePage: mocks.render 
 vi.mock('@/components/pages/assets', () => ({ NewAssetPage: mocks.render }));
 
 // Only route plumbing is exercised; page bodies are replaced by a prop observer.
-const state = {
-  portfolio: { displayCurrency: 'EUR', version: 1 },
-  categories: [{ id: 'crypto-id', key: 'CRYPTO', label: 'Crypto', color: '#6556dc' }],
-} as AppState;
+const state = workspaceFixture();
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -60,7 +56,7 @@ beforeEach(() => {
 });
 
 it.each([Dashboard, Portfolio, Wallets, Settings, Activity, Category, NewAsset, NewTransaction])(
-  'renders a route from the shared state, including refreshed layout props',
+  'renders a route from the shared state, including a newer initial snapshot',
   (Page) => {
     for (const current of [state, { ...state, portfolio: { ...state.portfolio, version: 2 } }]) {
       renderToStaticMarkup(
@@ -73,7 +69,6 @@ it.each([Dashboard, Portfolio, Wallets, Settings, Activity, Category, NewAsset, 
         undefined,
       );
     }
-    expect(mocks.read).not.toHaveBeenCalled();
   },
 );
 
@@ -114,7 +109,7 @@ it('preserves category selection, unknown-category rejection and activity query 
   expect(html).toContain('aria-current="page" href="/activity?view=history"');
 });
 
-it('still refreshes the authenticated layout after a successful mutation', async () => {
+it('revalidates data after a successful mutation without invalidating the route cache', async () => {
   let workspace: ReturnType<typeof useWorkspace>;
   function Probe() {
     workspace = useWorkspace();
@@ -127,30 +122,22 @@ it('still refreshes the authenticated layout after a successful mutation', async
   );
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { id: 'saved' } }) }),
+    vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { id: 'saved' } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: state }) }),
   );
   try {
     await expect(workspace!.save('settings', 'PATCH', { name: 'Updated' })).resolves.toEqual({
       id: 'saved',
     });
-    expect(mocks.refresh).toHaveBeenCalledOnce();
-  } finally {
-    vi.unstubAllGlobals();
-  }
-});
-
-it('refreshes old data without making each page wait for a portfolio reload', () => {
-  for (const age of [0, 59_000, 61_000]) {
-    mocks.refresh.mockClear();
-    const current = { ...state, asOf: new Date(Date.now() - age).toISOString() };
-    renderToStaticMarkup(
-      <WorkspaceProvider state={current}>
-        <Dashboard />
-      </WorkspaceProvider>,
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/v1/state',
+      expect.objectContaining({ cache: 'no-store' }),
     );
     expect(mocks.refresh).not.toHaveBeenCalled();
-    const effect = vi.mocked(useEffect).mock.lastCall![0];
-    effect();
-    expect(mocks.refresh).toHaveBeenCalledTimes(age >= 60_000 ? 1 : 0);
+  } finally {
+    vi.unstubAllGlobals();
   }
 });

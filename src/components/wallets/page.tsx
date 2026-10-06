@@ -2,7 +2,7 @@
 import { errorMessage } from '@/shared/errors';
 import type { SaveAction } from '@/components/forms';
 import type { AppState } from '@/shared/types';
-import Link from 'next/link';
+import Link from '@/components/workspace/link';
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import * as Dialog from '@radix-ui/react-dialog';

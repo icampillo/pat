@@ -1,5 +1,5 @@
 'use client';
-import Link from 'next/link';
+import Link from '@/components/workspace/link';
 import { HistoryPage } from '@/components/pages/history';
 import { TransactionsPage } from '@/components/pages/transactions';
 import { useWorkspace } from '@/components/workspace/context';

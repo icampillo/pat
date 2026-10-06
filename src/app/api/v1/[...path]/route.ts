@@ -22,7 +22,8 @@ async function handle(request: Request, context: { params: Promise<{ path: strin
       if (path.length === 3 && path[0] === 'assets' && path[2] === 'image')
         return await getImage(session.user.id, path[1]);
       if (path[0] === 'exports' && path[1]) return await exportData(session.user.id, path[1]);
-      if (path[0] === 'state') return response(await getState(session.user.id));
+      if (path.length === 1 && path[0] === 'state')
+        return response({ ...(await getState(session.user.id)), userName: session.user.name });
       if (path[0] === 'assets' && path[1] && path[2] === 'prices') {
         const p = await owned(session.user.id);
         return response(

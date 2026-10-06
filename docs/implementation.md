@@ -6,7 +6,7 @@
 
 Next.js App Router, React, TypeScript strict, PostgreSQL 17, Prisma 7 avec adaptateur pg, Better Auth, Zod et Decimal.js. L’interface utilise Tailwind CSS et les primitives accessibles Radix. Les fonctions métier restent indépendantes des composants React.
 
-Le navigateur reçoit un état du portefeuille préparé côté serveur. Une transaction PostgreSQL en lecture répétable rend les quantités, prix, taux et totaux cohérents. Les calculs métier utilisent des décimaux ; la conversion en Number est réservée au tracé des graphiques et au formatage de l’affichage. Les écritures JSON transportent les nombres financiers sous forme de chaînes.
+Depuis le 6 octobre 2026, les routes affichent une structure sans données privées. Le navigateur charge l’état via `/api/v1/state` authentifié et le conserve dans un contexte partagé entre les pages, avec revalidation après écriture et en arrière-plan. Voir [le fonctionnement et la réception de la navigation](navigation-performance.md). L’état du portefeuille reste préparé côté serveur. Une transaction PostgreSQL en lecture répétable rend les quantités, prix, taux et totaux cohérents. Les calculs métier utilisent des décimaux ; la conversion en Number est réservée au tracé des graphiques et au formatage de l’affichage. Les écritures JSON transportent les nombres financiers sous forme de chaînes.
 
 Les mutations métier passent par une transaction sérialisable, une clé d’idempotence et une écriture de version du portefeuille. Trois tentatives au maximum sont permises en cas de conflit sérialisable. Les commandes d’édition des fiches et des transactions nécessitent If-Match. Les ventes sont vérifiées en rejouant le journal complet, y compris pour les opérations antidatées, corrigées ou annulées.
 
@@ -32,7 +32,7 @@ Toutes les routes ci-dessous exigent une session. Les mutations exigent aussi un
 
 | Méthode | Route après /api/v1 | Fonction |
 | --- | --- | --- |
-| GET | /state | Portefeuille, positions, journal, catégories, taux et 600 captures les plus récentes |
+| GET | /state | Portefeuille, positions, journal, catégories, taux, 600 captures les plus récentes et `userName` de la session |
 | POST | /assets | Création d’une fiche |
 | PATCH | /assets/:id | Remplacement validé de la fiche, If-Match obligatoire |
 | DELETE | /assets/:id | Alias d’archivage confirmé, position soldée, If-Match ; aucune destruction |

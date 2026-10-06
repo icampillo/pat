@@ -6,7 +6,7 @@ import { dietz } from '@/domain/ledger';
 import { decimal as d } from '@/domain/money';
 import type { AppState } from '@/shared/types';
 import { ArrowDownRight, ArrowUpRight, Coins } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/components/workspace/link';
 import { useState } from 'react';
 
 import { useWorkspace } from '@/components/workspace/context';

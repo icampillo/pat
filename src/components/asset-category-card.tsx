@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/workspace/link';
 import { ArrowUpRight, Bitcoin, ChartNoAxesCombined, Gem, House, Layers3 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { AssetCategorySummary } from '@/shared/types';

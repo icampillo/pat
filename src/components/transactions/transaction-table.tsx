@@ -4,7 +4,7 @@ import { Confirm } from '@/components/ui/confirm';
 import { typeLabels } from '@/shared/schemas';
 import type { AppState } from '@/shared/types';
 import { Pencil, Trash2 } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/components/workspace/link';
 
 import { date, Empty, money, qty } from '@/components/workspace/display';
 export function TransactionTable({

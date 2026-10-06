@@ -1,6 +1,4 @@
 'use client';
-import { WalletAutoRefresh } from '@/components/wallets';
-import type { AppState } from '@/shared/types';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   ArrowLeftRight,
@@ -15,12 +13,11 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import Link from '@/components/workspace/link';
 import { useState } from 'react';
 
 import { categorySlug } from '@/domain/categories';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useWorkspace } from './context';
 const nav = [
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
@@ -39,17 +36,9 @@ const titles: Record<string, string> = {
   wallets: 'Wallets DeFi',
 };
 
-export function WorkspaceShell({
-  state,
-  userName,
-  children,
-}: {
-  state: AppState;
-  userName: string;
-  children: React.ReactNode;
-}) {
-  const router = useRouter();
+export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [view, slug] = pathname.split('/').filter(Boolean);
   const activeView =
     view === 'assets' || view === 'categories'
@@ -58,7 +47,7 @@ export function WorkspaceShell({
         ? 'activity'
         : view;
   const [mobile, setMobile] = useState(false);
-  const { currency, setCurrency } = useWorkspace();
+  const { state, userName, currency, setCurrency } = useWorkspace();
   const pageTitle =
     view === 'categories'
       ? state.categories.find((c) => categorySlug(c.key) === slug)?.label
@@ -86,6 +75,7 @@ export function WorkspaceShell({
           <Link
             key={n.href}
             href={n.href}
+            prefetch={true}
             onClick={() => {
               setMobile(false);
             }}
@@ -103,6 +93,7 @@ export function WorkspaceShell({
       <div className="sidebar-bottom">
         <Link
           href="/settings"
+          prefetch={true}
           onClick={() => setMobile(false)}
           aria-current={view === 'settings' ? 'page' : undefined}
           className={`nav-item ${view === 'settings' ? 'active' : ''}`}
@@ -118,13 +109,12 @@ export function WorkspaceShell({
         <button
           className="user-button"
           onClick={async () => {
-            await fetch('/api/auth/sign-out', {
+            const response = await fetch('/api/auth/sign-out', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: '{}',
             });
-            router.replace('/login');
-            router.refresh();
+            if (response.ok) router.replace('/login');
           }}
         >
           <span className="user-avatar">{userName.slice(0, 2).toUpperCase()}</span>
@@ -193,7 +183,6 @@ export function WorkspaceShell({
         </header>
         <main id="main" className="main">
           {children}
-          <WalletAutoRefresh state={state} />
           <footer className="footer">
             <span>Patrimoine · Votre espace personnel</span>
             <span>

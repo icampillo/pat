@@ -24,7 +24,6 @@ export function NewAssetPage({
         save={save}
         done={(id) => {
           router.push('/assets/' + id);
-          router.refresh();
         }}
       />
     </>

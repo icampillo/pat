@@ -66,7 +66,6 @@ export function TransactionEditorPage({
         initialAsset={searchParams.get('asset') || undefined}
         done={() => {
           router.push('/activity');
-          router.refresh();
         }}
       />
     </>

@@ -2,7 +2,7 @@
 import { decimal as d } from '@/domain/money';
 import type { AssetView } from '@/shared/types';
 import { Shapes } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/components/workspace/link';
 export const money = (value: string | number | null, currency = 'EUR') =>
   value === null
     ? '—'

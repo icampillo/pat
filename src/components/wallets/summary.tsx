@@ -1,7 +1,7 @@
 'use client';
 import type { AppState } from '@/shared/types';
 import { ExternalLink, Wallet } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/components/workspace/link';
 
 export function WalletSummary({ state, currency }: { state: AppState; currency: 'EUR' | 'USD' }) {
   const { onchain } = state;

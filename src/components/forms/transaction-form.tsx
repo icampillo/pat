@@ -4,7 +4,7 @@ import { decimal } from '@/domain/money';
 import { transactionSchema, typeLabels } from '@/shared/schemas';
 import type { AppState, TransactionView } from '@/shared/types';
 import { ArrowLeft, Check } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/components/workspace/link';
 import { useState } from 'react';
 import { Field, nowLocal, type SaveAction } from './shared';
 export function TransactionForm({

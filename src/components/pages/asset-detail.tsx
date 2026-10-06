@@ -14,8 +14,7 @@ import {
   TrendingUp,
   Wallet,
 } from 'lucide-react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import Link from '@/components/workspace/link';
 import { useState } from 'react';
 
 import { PriceHistoryList } from '@/components/assets/price-history';
@@ -26,7 +25,6 @@ import { PageHeading } from '@/components/workspace/page-heading';
 
 export function AssetDetailPage({ state, asset }: { state: AppState; asset: AssetView }) {
   const { currency, save, run, busy, setFlash } = useWorkspace();
-  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const val = (a: AssetView) => (currency === 'EUR' ? a.valueEur : a.valueUsd);
   const gain = (a: AssetView) => (currency === 'EUR' ? a.gainEur : a.gainUsd);
@@ -40,7 +38,6 @@ export function AssetDetailPage({ state, asset }: { state: AppState; asset: Asse
           save={save}
           done={() => {
             setEditing(false);
-            router.refresh();
           }}
         />
       ) : (
@@ -150,7 +147,11 @@ export function AssetDetailPage({ state, asset }: { state: AppState; asset: Asse
                         : 'En attente de cotation.'}{' '}
                       Actualisation toutes les 15 minutes lorsque le serveur fonctionne.
                     </p>
-                    <PriceHistoryList id={asset.id} currency={asset.currency} />
+                    <PriceHistoryList
+                      key={asset.priceDate}
+                      id={asset.id}
+                      currency={asset.currency}
+                    />
                   </section>
                 ) : asset.category.key === 'METALS' ? (
                   <section className="panel detail-panel">
@@ -164,7 +165,11 @@ export function AssetDetailPage({ state, asset }: { state: AppState; asset: Asse
                         ? `Dernier cours du ${date(asset.priceDate)}${asset.stale ? ' · cours ancien' : ''}`
                         : 'En attente de la première cotation.'}
                     </p>
-                    <PriceHistoryList id={asset.id} currency={asset.currency} />
+                    <PriceHistoryList
+                      key={asset.priceDate}
+                      id={asset.id}
+                      currency={asset.currency}
+                    />
                   </section>
                 ) : (
                   <section className="panel detail-panel">
@@ -196,7 +201,11 @@ export function AssetDetailPage({ state, asset }: { state: AppState; asset: Asse
                         Enregistrer le prix
                       </button>
                     </form>
-                    <PriceHistoryList id={asset.id} currency={asset.currency} />
+                    <PriceHistoryList
+                      key={asset.priceDate}
+                      id={asset.id}
+                      currency={asset.currency}
+                    />
                     <button
                       className="text-link"
                       disabled={busy}

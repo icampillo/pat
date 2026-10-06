@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/workspace/link';
 import { categorySlug } from '@/domain/categories';
 import { decimal as d } from '@/domain/money';
 import type { AppState, AssetView } from '@/shared/types';
