@@ -206,3 +206,29 @@ Les actifs créés par cet import utilisent `pricingMode: SECURITIES_MARKET` et 
 La récupération utilise les endpoints publics Yahoo Finance sans clé API. Leur disponibilité n’est pas garantie et les cours peuvent être différés selon la place ; voir [les sources et délais Yahoo Finance](https://help.yahoo.com/kb/SLN2310.html). Le fournisseur est isolé dans `src/modules/prices/securities.ts` pour pouvoir le remplacer sans modifier l’import ou l’interface.
 
 La migration `20260923160000_bourse_label` renomme le libellé existant « Actions & ETF » en « Bourse ». La clé technique `SECURITIES` et la route `/categories/stocks` restent compatibles avec les données et les liens existants.
+
+
+## Déploiement Vercel
+
+Vercel utilise le preset **Next.js** et `pnpm build` (voir `vercel.json`). Laisser le dossier de sortie à sa valeur par défaut : ne pas le remplacer par `.next/standalone`. Activer les variables système Vercel (`VERCEL=1`, normalement exposée automatiquement) au build et à l’exécution. Le mode standalone et les inclusions forcées de Playwright sont réservés à Node/Docker. Après cette correction, redéployer sans le cache de build.
+
+Configurer côté Vercel `DATABASE_URL` (PostgreSQL accessible depuis Vercel), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` et `APP_ORIGIN` (ces deux URL doivent correspondre au domaine utilisé). Conserver `BETTER_AUTH_SECRET` : ce secret sert aussi au chiffrement des clés DeBank. Appliquer les migrations avec `pnpm db:deploy` dans un job séparé et contrôlé, jamais au build des previews. Aucun secret ne doit être commité.
+
+### Workers et wallets : serveur permanent nécessaire
+
+Les trois workers sont automatiquement désactivés **dans les fonctions Vercel** : leurs timers ne survivent pas de manière fiable aux requêtes. Les synchronisations de wallets, y compris le bouton manuel, passent par une file en base. Sans worker séparé, elles restent en attente ; les cours et snapshots automatiques ne sont pas actualisés non plus.
+
+Sur un serveur Node 24 permanent, utiliser le même code et la même base que l’application, puis :
+
+```sh
+pnpm install --frozen-lockfile
+pnpm db:generate
+pnpm wallet:install
+pnpm workers
+```
+
+Le processus doit être supervisé par l’hébergeur et rester actif. Sous Linux, les bibliothèques système Chromium doivent aussi être présentes (voir la section Docker). Fournir `DATABASE_URL` et, pour les clés DeBank chiffrées, le même `BETTER_AUTH_SECRET` que l’application. Ne pas définir `VERCEL=1` sur ce serveur. Les variables `SNAPSHOT_WORKER_DISABLED`, `MARKET_WORKER_DISABLED` et `WALLET_WORKER_DISABLED` restent prises en charge. Ne pas démarrer en parallèle une seconde application Node avec ses workers activés : choisir un seul hébergement pour les tâches planifiées.
+
+Chromium s’exécute sur ce serveur, pas dans Vercel. Aucun service navigateur distant ni abonnement n’est activé. Pour un déploiement sur une seule machine, conserver Docker/Node avec les workers intégrés, sans lancer `pnpm workers` en plus.
+
+Le build local ne valide pas l’empaquetage final des fonctions Vercel : un redéploiement reste nécessaire pour confirmer la disparition de l’erreur initiale.

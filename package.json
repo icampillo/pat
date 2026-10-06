@@ -27,6 +27,7 @@
     "format": "prettier --write src scripts tests prisma/seed.ts *.ts *.mjs *.json *.yaml *.yml",
     "db:backup": "tsx scripts/backup.ts",
     "db:restore": "tsx scripts/backup.ts --restore",
+    "workers": "tsx scripts/workers.ts",
     "wallet:install": "playwright install chromium",
     "wallet:check": "tsx scripts/check-wallet.ts",
     "market:sync": "tsx scripts/sync-market.ts"
