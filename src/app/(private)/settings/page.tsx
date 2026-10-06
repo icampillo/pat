@@ -1,3 +1,8 @@
+'use client';
 import { SettingsPage } from '@/components/pages/settings';
-import { getPrivateData } from '../_data';
-export default async function Page(){const {state}=await getPrivateData();return <SettingsPage state={state}/>;}
+import { useWorkspace } from '@/components/workspace/context';
+
+export default function Page() {
+  const { state } = useWorkspace();
+  return <SettingsPage state={state} />;
+}

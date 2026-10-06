@@ -1,3 +1,8 @@
+'use client';
 import { TransactionEditorPage } from '@/components/pages/transactions';
-import { getPrivateData } from '../../_data';
-export default async function Page(){const {state}=await getPrivateData();return <TransactionEditorPage state={state}/>;}
+import { useWorkspace } from '@/components/workspace/context';
+
+export default function Page() {
+  const { state } = useWorkspace();
+  return <TransactionEditorPage state={state} />;
+}

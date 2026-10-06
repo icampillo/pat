@@ -1,3 +1,8 @@
+'use client';
 import { PortfolioPage } from '@/components/pages/portfolio';
-import { getPrivateData } from '../_data';
-export default async function Page(){const {state}=await getPrivateData();return <PortfolioPage state={state}/>;}
+import { useWorkspace } from '@/components/workspace/context';
+
+export default function Page() {
+  const { state } = useWorkspace();
+  return <PortfolioPage state={state} />;
+}

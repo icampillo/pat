@@ -1,3 +1,8 @@
+'use client';
 import { DashboardPage } from '@/components/pages/dashboard';
-import { getPrivateData } from '../_data';
-export default async function Page(){const {state}=await getPrivateData();return <DashboardPage state={state}/>;}
+import { useWorkspace } from '@/components/workspace/context';
+
+export default function Page() {
+  const { state } = useWorkspace();
+  return <DashboardPage state={state} />;
+}

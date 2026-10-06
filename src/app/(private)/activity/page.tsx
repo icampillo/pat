@@ -1,10 +1,12 @@
+'use client';
 import Link from 'next/link';
 import { HistoryPage } from '@/components/pages/history';
 import { TransactionsPage } from '@/components/pages/transactions';
-import { getPrivateData } from '../_data';
-export default async function Page({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
-  const { state } = await getPrivateData();
-  const history = (await searchParams).view === 'history';
+import { useWorkspace } from '@/components/workspace/context';
+import { useSearchParams } from 'next/navigation';
+export default function Page() {
+  const { state } = useWorkspace();
+  const history = useSearchParams().get('view') === 'history';
   return (
     <>
       <nav className="activity-tabs" aria-label="Vues de l’activité">

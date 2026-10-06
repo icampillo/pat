@@ -2,9 +2,10 @@
 import { errorMessage } from '@/shared/errors';
 import type { SaveAction } from '@/components/forms';
 import type { AppState } from '@/shared/types';
-import { useRouter } from 'next/navigation';
-import { createContext, useContext, useRef, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 type WorkspaceContextValue = {
+  state: AppState;
   currency: 'EUR' | 'USD';
   setCurrency: (currency: 'EUR' | 'USD') => void;
   save: SaveAction;
@@ -27,6 +28,11 @@ export function WorkspaceProvider({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  // Reuse the layout immediately; update older market/worker data in the background.
+  useEffect(() => {
+    if (Date.now() - Date.parse(state.asOf) >= 60_000) router.refresh();
+  }, [pathname, router, state.asOf]);
   const [currency, setCurrency] = useState<'EUR' | 'USD'>(state.portfolio.displayCurrency);
   const [flash, setFlash] = useState(''),
     [busy, setBusy] = useState(false);
@@ -71,7 +77,9 @@ export function WorkspaceProvider({
   }
 
   return (
-    <WorkspaceContext.Provider value={{ currency, setCurrency, save, run, busy, flash, setFlash }}>
+    <WorkspaceContext.Provider
+      value={{ state, currency, setCurrency, save, run, busy, flash, setFlash }}
+    >
       {children}
     </WorkspaceContext.Provider>
   );
