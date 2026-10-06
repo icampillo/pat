@@ -319,7 +319,7 @@ describe('analysis prompt', () => {
     state.rows[0].notes = 'private note';
     state.rows[0].externalId = 'private external id';
     const prompt = buildPortfolioAnalysisPrompt(buildPortfolioContext(state, 'EUR', now));
-    expect(prompt.startsWith('Tu es un analyste de portefeuille.')).toBe(true);
+    expect(prompt.startsWith('Tu es un analyste de portefeuille senior.')).toBe(true);
     for (const text of [
       '100 000 EUR',
       'RÉSUMÉ DU PATRIMOINE',
@@ -330,7 +330,11 @@ describe('analysis prompt', () => {
       '1. "MSCI World"',
       'Poids du portefeuille : 30 %',
       'P&L latent',
-      'pas de recommandation personnalisée',
+      'recommandations conditionnelles',
+      'OPPORTUNITÉS HORS PORTEFEUILLE',
+      'RÉÉQUILIBRAGE CHIFFRÉ ET FINANCEMENT',
+      'SCÉNARIOS DÉFAVORABLE, CENTRAL ET FAVORABLE',
+      'PLAN D’ACTION ET SUIVI',
     ])
       expect(prompt).toContain(text);
     expect(prompt).not.toMatch(

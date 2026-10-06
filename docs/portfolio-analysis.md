@@ -1,4 +1,4 @@
-# Analyse de portefeuille par prompt — V1
+# Analyse de portefeuille par prompt
 
 ## Utilisation et périmètre
 
@@ -193,3 +193,35 @@ mêmes exécutables locaux, sans réinstallation ni modification du lockfile.
    partir de l'état authentifié et prévoir consentement explicite, minimisation des
    données et limites de taille. Aucun fournisseur ni profil investisseur préparé
    artificiellement dans cette V1.
+
+## Prompt enrichi — 2026-10-06
+
+Le prompt demande désormais une note de comité d’investissement : synthèse
+priorisée, diagnostic des expositions, revue des positions avec décisions
+conditionnelles, opportunités hors portefeuille, rééquilibrage financé,
+scénarios de stress et plan d’action.
+
+L’absence de profil ne bloque plus les recommandations : l’IA doit expliciter
+des scénarios prudent/équilibré/dynamique et les questions qui permettraient de
+les départager. Les allocations proposées sont des hypothèses, jamais des
+données enregistrées par l’application. Les calculs dérivés sont autorisés pour
+les simulations uniquement, avec périmètre et financement vérifiables.
+
+La recherche web est demandée seulement si l’IA destinataire en dispose :
+sources datées pour les faits de marché, sinon candidats à étudier sans cours
+ni valorisation inventés. Les opportunités doivent apporter une valeur marginale
+par rapport aux lignes existantes et aux liquidités, avec contre-thèse,
+recouvrement ETF, conditions d’entrée et d’invalidation.
+
+Aucun changement des données exportées, de la copie, des calculs métier ou des
+appels réseau. Aucun appel LLM exécuté : la qualité d’une réponse finale dépend
+du modèle destinataire et des informations de profil/marché disponibles.
+
+Validation de cette révision : 148 tests unitaires réussis (dont 23 sur
+l’analyse), TypeScript, ESLint, Prettier ciblé et contrôle du diff réussis.
+Commandes : `node_modules/.bin/vitest run tests/unit`,
+`node_modules/.bin/tsc --noEmit`, `node_modules/.bin/eslint .`,
+`node_modules/.bin/prettier --check src/domain/portfolio-analysis-prompt.ts tests/unit/portfolio-analysis.test.ts`,
+`git diff --check`. Le binaire pnpm n’est pas disponible ; les binaires locaux
+existants ont été utilisés sans installation. Build et navigateur non relancés
+pour cette modification des instructions textuelles uniquement.
