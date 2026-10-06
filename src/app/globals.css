@@ -2323,3 +2323,26 @@ textarea:hover {
     animation: none;
   }
 }
+
+.portfolio-analysis-dialog {
+  width: min(850px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.portfolio-analysis-dialog .section-title {
+  align-items: flex-start;
+  gap: 12px;
+}
+.portfolio-analysis-prompt {
+  display: block;
+  width: 100%;
+  height: clamp(160px, 42dvh, 500px);
+  margin-top: 8px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  resize: vertical;
+}
+.portfolio-analysis-dialog .dialog-actions {
+  flex-wrap: wrap;
+}

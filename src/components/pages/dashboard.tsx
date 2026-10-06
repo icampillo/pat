@@ -3,6 +3,8 @@ import { AssetCategoryCard } from '@/components/asset-category-card';
 import { AllocationChart, EvolutionChart } from '@/components/charts';
 import { buildCategoryDetails } from '@/domain/categories';
 import { dietz } from '@/domain/ledger';
+import { canCalculatePortfolioPerformance } from '@/domain/portfolio-performance';
+import { PortfolioAnalysisDialog } from '@/components/portfolio-analysis-dialog';
 import { decimal as d } from '@/domain/money';
 import type { AppState } from '@/shared/types';
 import { ArrowDownRight, ArrowUpRight, Coins } from 'lucide-react';
@@ -55,14 +57,7 @@ export function DashboardPage({ state }: { state: AppState }) {
     slices.push({ name: 'Liquidités', color: '#a0adbd', value: Number(cashTotal) });
   const first = visibleSnapshots[0];
   const adjusted =
-    !state.rows.some((asset) => asset.category.key === 'REAL_ESTATE') &&
-    !state.totals.incompleteCostBasis &&
-    !state.onchain.includedCount &&
-    !state.snapshots.some((s) => s.kind === 'WALLET') &&
-    !state.historyRevised &&
-    currency === 'EUR' &&
-    first?.totalEur &&
-    state.totals.valueEur
+    canCalculatePortfolioPerformance(state, currency) && first?.totalEur && state.totals.valueEur
       ? dietz(first.totalEur, state.totals.valueEur, first.capturedAt, state.asOf, state.flows)
       : null;
   return (
@@ -174,9 +169,12 @@ export function DashboardPage({ state }: { state: AppState }) {
             <p className="eyebrow">VOTRE ALLOCATION</p>
             <h2>Vos investissements</h2>
           </div>
-          <Link className="text-link" href="/portfolio">
-            Voir le portefeuille <ArrowUpRight size={16} />
-          </Link>
+          <div className="heading-actions">
+            <PortfolioAnalysisDialog state={state} />
+            <Link className="text-link" href="/portfolio">
+              Voir le portefeuille <ArrowUpRight size={16} />
+            </Link>
+          </div>
         </div>
         <section aria-label="Catégories détenues" className="category-grid">
           {categoryDetails

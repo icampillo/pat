@@ -232,3 +232,10 @@ Le processus doit être supervisé par l’hébergeur et rester actif. Sous Linu
 Chromium s’exécute sur ce serveur, pas dans Vercel. Aucun service navigateur distant ni abonnement n’est activé. Pour un déploiement sur une seule machine, conserver Docker/Node avec les workers intégrés, sans lancer `pnpm workers` en plus.
 
 Le build local ne valide pas l’empaquetage final des fonctions Vercel : un redéploiement reste nécessaire pour confirmer la disparition de l’erreur initiale.
+
+## Analyser avec une IA (prompt local)
+
+Dans le dashboard, **Analyser avec une IA** ouvre un résumé structuré du portefeuille
+à consulter et copier dans l'IA de votre choix. Aucun appel LLM ni envoi automatique
+n'est effectué. Le prompt utilise la devise affichée et signale les données ou
+performances indisponibles. [Architecture, métriques, limites et validations](docs/portfolio-analysis.md).
