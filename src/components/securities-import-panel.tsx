@@ -1,4 +1,6 @@
 'use client';
+import { sortByValue, valueInEur } from '@/domain/value-sort';
+import { decimal as d } from '@/domain/money';
 import { errorMessage } from '@/shared/errors';
 import { useState } from 'react';
 import { RefreshCw, Upload } from 'lucide-react';
@@ -6,7 +8,13 @@ import type { SaveAction } from './forms';
 import type { SecuritiesPreview } from '@/server/securities-import';
 import { categoryMoney } from './asset-category-card';
 
-export function SecuritiesImportPanel({ save }: { save: SaveAction }) {
+export function SecuritiesImportPanel({
+  save,
+  eurUsd,
+}: {
+  save: SaveAction;
+  eurUsd: string | null;
+}) {
   const [csv, setCsv] = useState(''),
     [platform, setPlatform] = useState('BoursoBank'),
     [boursoCurrency, setCurrency] = useState('EUR');
@@ -178,11 +186,16 @@ export function SecuritiesImportPanel({ save }: { save: SaveAction }) {
                   <th className="num">Quantité</th>
                   <th className="num">Coût total</th>
                   <th className="num">Cours récupéré</th>
+                  <th className="num" aria-sort="descending">
+                    Valeur actuelle
+                  </th>
                   <th>Import</th>
                 </tr>
               </thead>
               <tbody>
-                {preview.rows.map((row) => (
+                {sortByValue(preview.rows, (row) =>
+                  valueInEur(d(row.quantity).mul(row.quote.price), row.quote.currency, eurUsd),
+                ).map((row) => (
                   <tr key={row.line}>
                     <td className="strong">
                       {row.quote.name}
@@ -204,6 +217,12 @@ export function SecuritiesImportPanel({ save }: { save: SaveAction }) {
                       <small className="muted">
                         {new Date(row.quote.observedAt).toLocaleString('fr-FR')}
                       </small>
+                    </td>
+                    <td className="num">
+                      {categoryMoney(
+                        Number(d(row.quantity).mul(row.quote.price)),
+                        row.quote.currency,
+                      )}
                     </td>
                     <td>{row.existingAssetId ? 'Déjà présente · ignorée' : 'Nouvelle position'}</td>
                   </tr>

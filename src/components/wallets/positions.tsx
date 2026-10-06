@@ -1,4 +1,5 @@
 'use client';
+import { sortByValue } from '@/domain/value-sort';
 import { decimal as d } from '@/domain/money';
 import { showWalletValue } from '@/domain/wallet-display';
 import type { AppState } from '@/shared/types';
@@ -10,7 +11,7 @@ import { date, qty, usd } from './format';
 function TokenList({ tokens, empty }: { tokens: WalletToken[]; empty: string }) {
   return tokens.length ? (
     <ul className="wallet-token-list">
-      {tokens.map((t, i) => (
+      {sortByValue(tokens, (t) => t.valueUsd).map((t, i) => (
         <li key={`${t.id}:${i}`}>
           <span>
             {qty(t.amount)} <strong>{t.symbol}</strong>
@@ -168,7 +169,7 @@ export function WalletPositions({ state }: { state: AppState }) {
           <span className="tag">{positions.length} position(s)</span>
         </div>
         <div className="defi-positions">
-          {positions.map((p) => (
+          {sortByValue(positions, (p) => p.netUsd).map((p) => (
             <article key={p.key} className="defi-position">
               <div className="wallet-source">
                 <div>
@@ -257,11 +258,13 @@ export function WalletPositions({ state }: { state: AppState }) {
                 <th>Wallet</th>
                 <th className="num">Quantité</th>
                 <th className="num">Prix USD</th>
-                <th className="num">Valeur USD</th>
+                <th className="num" aria-sort="descending">
+                  Valeur USD
+                </th>
               </tr>
             </thead>
             <tbody>
-              {tokens.map((t) => (
+              {sortByValue(tokens, (t) => t.valueUsd).map((t) => (
                 <tr key={t.key}>
                   <td>
                     <strong>{t.symbol}</strong>

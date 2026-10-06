@@ -1,4 +1,5 @@
 'use client';
+import { sortByValue, valueInEur } from '@/domain/value-sort';
 import { type SaveAction } from '@/components/forms';
 import { Confirm } from '@/components/ui/confirm';
 import { typeLabels } from '@/shared/schemas';
@@ -18,6 +19,12 @@ export function TransactionTable({
   save: SaveAction;
   run: (action: () => Promise<unknown>) => Promise<void>;
 }) {
+  const sorted = sortByValue(rows, (t) =>
+    t.type === 'ADJUSTMENT' &&
+    state.rows.find((a) => a.id === t.assetId)?.metadata.costBasis === 'UNKNOWN'
+      ? null
+      : valueInEur(t.amount, t.currency, state.fxRate?.eurUsd ?? null),
+  );
   return (
     <div className="table-scroll">
       <table>
@@ -27,7 +34,9 @@ export function TransactionTable({
             <th>Opération</th>
             <th>Actif</th>
             <th className="num">Quantité</th>
-            <th className="num">Montant brut</th>
+            <th className="num" aria-sort="descending">
+              Montant brut
+            </th>
             <th className="num">Frais</th>
             <th>Plateforme</th>
             <th>
@@ -36,7 +45,7 @@ export function TransactionTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((t) => (
+          {sorted.map((t) => (
             <tr key={t.id}>
               <td>{date(t.occurredAt)}</td>
               <td>

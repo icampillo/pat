@@ -1,3 +1,4 @@
+import { sortByValue } from '@/domain/value-sort';
 import Link from '@/components/workspace/link';
 import { categorySlug } from '@/domain/categories';
 import { decimal as d } from '@/domain/money';
@@ -20,6 +21,36 @@ export function PortfolioBreakdown({
     rows.some((a) => field(a) === null)
       ? null
       : rows.reduce((sum, a) => sum.add(field(a)!), d(0)).toFixed(2);
+  const categoryRows = state.categories.map((c) => {
+    const rows = held.filter((a) => a.categoryId === c.id);
+    const crypto = c.key === 'CRYPTO' && state.onchain.includedCount > 0;
+    const walletValue = currency === 'EUR' ? state.onchain.valueEur : state.onchain.valueUsd;
+    const manualValue = sum(rows, value);
+    const combined = crypto
+      ? manualValue === null || walletValue === null
+        ? null
+        : d(manualValue).add(walletValue).toFixed(2)
+      : manualValue;
+    const g = crypto ? null : sum(rows, gain);
+    return { c, combined, g };
+  });
+  const currencyRows = ['EUR', 'USD'].map((c) => {
+    const cash = state.cash
+      .filter((a) => a.currency === c)
+      .map((a) => (currency === 'EUR' ? a.valueEur : a.valueUsd));
+    const manualValue = sum(
+      held.filter((a) => a.currency === c),
+      value,
+    );
+    const walletValue = currency === 'EUR' ? state.onchain.valueEur : state.onchain.valueUsd;
+    const combined =
+      c === 'USD' && state.onchain.includedCount
+        ? manualValue === null || walletValue === null
+          ? null
+          : d(manualValue).add(walletValue).toFixed(2)
+        : manualValue;
+    return { c, combined, cash };
+  });
   return (
     <>
       <div className="detail-grid">
@@ -32,23 +63,14 @@ export function PortfolioBreakdown({
               <thead>
                 <tr>
                   <th>Catégorie</th>
-                  <th className="num">Valeur {currency}</th>
+                  <th className="num" aria-sort="descending">
+                    Valeur {currency}
+                  </th>
                   <th className="num">Gain latent {currency}</th>
                 </tr>
               </thead>
               <tbody>
-                {state.categories.map((c) => {
-                  const rows = held.filter((a) => a.categoryId === c.id);
-                  const crypto = c.key === 'CRYPTO' && state.onchain.includedCount > 0;
-                  const walletValue =
-                    currency === 'EUR' ? state.onchain.valueEur : state.onchain.valueUsd;
-                  const manualValue = sum(rows, value);
-                  const combined = crypto
-                    ? manualValue === null || walletValue === null
-                      ? null
-                      : d(manualValue).add(walletValue).toFixed(2)
-                    : manualValue;
-                  const g = crypto ? null : sum(rows, gain);
+                {sortByValue(categoryRows, (row) => row.combined).map(({ c, combined, g }) => {
                   return (
                     <tr key={c.id}>
                       <td>
@@ -79,27 +101,14 @@ export function PortfolioBreakdown({
               <thead>
                 <tr>
                   <th>Devise</th>
-                  <th className="num">Actifs</th>
+                  <th className="num" aria-sort="descending">
+                    Actifs
+                  </th>
                   <th className="num">Liquidités</th>
                 </tr>
               </thead>
               <tbody>
-                {['EUR', 'USD'].map((c) => {
-                  const cash = state.cash
-                    .filter((a) => a.currency === c)
-                    .map((a) => (currency === 'EUR' ? a.valueEur : a.valueUsd));
-                  const manualValue = sum(
-                    held.filter((a) => a.currency === c),
-                    value,
-                  );
-                  const walletValue =
-                    currency === 'EUR' ? state.onchain.valueEur : state.onchain.valueUsd;
-                  const combined =
-                    c === 'USD' && state.onchain.includedCount
-                      ? manualValue === null || walletValue === null
-                        ? null
-                        : d(manualValue).add(walletValue).toFixed(2)
-                      : manualValue;
+                {sortByValue(currencyRows, (row) => row.combined).map(({ c, combined, cash }) => {
                   return (
                     <tr key={c}>
                       <td>{c}</td>

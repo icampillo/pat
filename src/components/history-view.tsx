@@ -1,4 +1,5 @@
 'use client';
+import { sortByValue } from '@/domain/value-sort';
 import { useState } from 'react';
 import { Download } from 'lucide-react';
 import { EvolutionChart } from './charts';
@@ -23,6 +24,18 @@ export function HistoryView({ state, currency }: { state: AppState; currency: 'E
   }
   const rows = [...buckets.values()];
   const value = (s: SnapshotView) => (currency === 'EUR' ? s.totalEur : s.totalUsd);
+  const tableRows = sortByValue(
+    rows.map((s, i) => {
+      const before = i > 0 ? value(rows[i - 1]) : null;
+      const current = value(s);
+      return {
+        s,
+        current,
+        delta: before !== null && current !== null ? d(current).sub(before).toFixed(2) : null,
+      };
+    }),
+    (row) => row.current,
+  );
   const money = (v: string | null) =>
     v === null
       ? '—'
@@ -77,52 +90,48 @@ export function HistoryView({ state, currency }: { state: AppState; currency: 'E
             <tr>
               <th>Date de capture</th>
               <th>Type</th>
-              <th className="num">Valeur {currency}</th>
+              <th className="num" aria-sort="descending">
+                Valeur {currency}
+              </th>
               <th className="num">Variation brute</th>
             </tr>
           </thead>
           <tbody>
-            {rows
-              .map((s, i) => {
-                const before = i > 0 ? value(rows[i - 1]) : null,
-                  current = value(s);
-                const delta =
-                  before !== null && current !== null ? d(current).sub(before).toFixed(2) : null;
-                return (
-                  <tr key={s.id}>
-                    <td>
-                      {new Date(s.capturedAt).toLocaleString('fr-FR', {
-                        timeZone: state.portfolio.timezone,
-                        dateStyle: 'medium',
-                        timeStyle: 'short',
-                      })}
-                    </td>
-                    <td>
-                      <span className="tag">
-                        {s.kind === 'SEED'
-                          ? 'Démonstration'
-                          : s.kind === 'DAILY'
-                            ? 'Quotidien'
-                            : s.kind === 'INVALIDATED'
-                              ? 'Capture écartée'
-                              : s.kind === 'IMPORT'
-                                ? 'Import d’inventaire'
-                                : s.kind === 'WALLET'
-                                  ? 'Wallet / DeBank'
-                                  : 'Manuel'}
-                      </span>
-                    </td>
-                    <td className="num strong">{money(current)}</td>
-                    <td
-                      className={`num ${delta !== null && d(delta).lt(0) ? 'negative' : 'positive'}`}
-                    >
-                      {delta !== null && d(delta).gte(0) ? '+' : ''}
-                      {money(delta)}
-                    </td>
-                  </tr>
-                );
-              })
-              .reverse()}
+            {tableRows.map(({ s, current, delta }) => {
+              return (
+                <tr key={s.id}>
+                  <td>
+                    {new Date(s.capturedAt).toLocaleString('fr-FR', {
+                      timeZone: state.portfolio.timezone,
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    })}
+                  </td>
+                  <td>
+                    <span className="tag">
+                      {s.kind === 'SEED'
+                        ? 'Démonstration'
+                        : s.kind === 'DAILY'
+                          ? 'Quotidien'
+                          : s.kind === 'INVALIDATED'
+                            ? 'Capture écartée'
+                            : s.kind === 'IMPORT'
+                              ? 'Import d’inventaire'
+                              : s.kind === 'WALLET'
+                                ? 'Wallet / DeBank'
+                                : 'Manuel'}
+                    </span>
+                  </td>
+                  <td className="num strong">{money(current)}</td>
+                  <td
+                    className={`num ${delta !== null && d(delta).lt(0) ? 'negative' : 'positive'}`}
+                  >
+                    {delta !== null && d(delta).gte(0) ? '+' : ''}
+                    {money(delta)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -1,4 +1,5 @@
 'use client';
+import { sortByValue } from '@/domain/value-sort';
 import { useState } from 'react';
 import Link from '@/components/workspace/link';
 import { ArrowLeft } from 'lucide-react';
@@ -28,7 +29,8 @@ export function CategoryPage({
   asOf: string;
 }) {
   const [period, setPeriod] = useState('30d');
-  const { category, assets } = details;
+  const { category } = details;
+  const assets = sortByValue(details.assets, (asset) => asset.value);
   const estate = category.realEstate;
   const points = filterCategoryHistory(details.history, period, asOf);
   const slices = assets
@@ -188,7 +190,9 @@ export function CategoryPage({
                   <th>Détention</th>
                   <th className="num">Brut détenu</th>
                   <th className="num">Dette</th>
-                  <th className="num">Valeur nette</th>
+                  <th className="num" aria-sort="descending">
+                    Valeur nette
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -219,7 +223,9 @@ export function CategoryPage({
                   <th>Actif</th>
                   <th className="num">Quantité</th>
                   <th className="num">Prix actuel</th>
-                  <th className="num">Valeur ({currency})</th>
+                  <th className="num" aria-sort="descending">
+                    Valeur ({currency})
+                  </th>
                   <th className="num">Performance 30j</th>
                   <th className="num">Plus-value latente</th>
                 </tr>

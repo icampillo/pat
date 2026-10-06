@@ -1,11 +1,12 @@
 'use client';
+import { sortByValue, valueInEur } from '@/domain/value-sort';
 import { errorMessage } from '@/shared/errors';
 import { useState } from 'react';
 import { Upload } from 'lucide-react';
 import type { ImportPreview } from '@/server/imports';
 import type { SaveAction } from './forms';
 import { typeLabels } from '@/shared/schemas';
-export function ImportPanel({ save }: { save: SaveAction }) {
+export function ImportPanel({ save, eurUsd }: { save: SaveAction; eurUsd: string | null }) {
   const [csv, setCsv] = useState(''),
     [preview, setPreview] = useState<ImportPreview | null>(null),
     [error, setError] = useState(''),
@@ -90,11 +91,13 @@ export function ImportPanel({ save }: { save: SaveAction }) {
                   <th>Actif</th>
                   <th>Opération</th>
                   <th>Quantité</th>
-                  <th>Montant brut</th>
+                  <th aria-sort="descending">Montant brut</th>
                 </tr>
               </thead>
               <tbody>
-                {preview.rows.map((r) => (
+                {sortByValue(preview.rows, (row) =>
+                  valueInEur(row.amount, row.currency, eurUsd),
+                ).map((r) => (
                   <tr key={r.line}>
                     <td>{r.line}</td>
                     <td>{r.asset}</td>

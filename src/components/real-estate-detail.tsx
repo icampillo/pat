@@ -1,4 +1,5 @@
 'use client';
+import { sortByValue } from '@/domain/value-sort';
 import { useMemo, useState } from 'react';
 import { amortization } from '@/domain/mortgage';
 import { propertyTypes, propertyUsages } from '@/shared/real-estate';
@@ -152,29 +153,36 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
                     'Paiement total',
                     'Capital restant',
                   ].map((title) => (
-                    <th key={title}>{title}</th>
+                    <th
+                      key={title}
+                      aria-sort={title === 'Capital restant' ? 'descending' : undefined}
+                    >
+                      {title}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {rows.slice(page * 12, (page + 1) * 12).map((row) => (
-                  <tr key={row.number}>
-                    <td>{row.number}</td>
-                    <td>{row.date}</td>
-                    {[
-                      row.payment,
-                      row.interest,
-                      row.principal,
-                      row.insurance,
-                      row.totalPayment,
-                      row.remainingPrincipal,
-                    ].map((v, i) => (
-                      <td className="num" key={i}>
-                        {amount(v)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {sortByValue(rows, (row) => row.remainingPrincipal)
+                  .slice(page * 12, (page + 1) * 12)
+                  .map((row) => (
+                    <tr key={row.number}>
+                      <td>{row.number}</td>
+                      <td>{row.date}</td>
+                      {[
+                        row.payment,
+                        row.interest,
+                        row.principal,
+                        row.insurance,
+                        row.totalPayment,
+                        row.remainingPrincipal,
+                      ].map((v, i) => (
+                        <td className="num" key={i}>
+                          {amount(v)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>

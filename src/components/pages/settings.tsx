@@ -170,8 +170,8 @@ function SettingsContent({
           actualise les adresses ajoutées dans Wallets & DeFi.
         </p>
       </section>
-      <ImportPanel save={save} />
-      <SecuritiesImportPanel save={save} />
+      <ImportPanel eurUsd={state.fxRate?.eurUsd ?? null} save={save} />
+      <SecuritiesImportPanel eurUsd={state.fxRate?.eurUsd ?? null} save={save} />
     </div>
   );
 }

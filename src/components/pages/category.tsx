@@ -14,7 +14,9 @@ export function CategoryRoutePage({ state, categoryId }: { state: AppState; cate
   return (
     <>
       <PageHeading view="categories" title={details.category.name} detail />
-      {details.category.slug === 'stocks' && <SecuritiesImportPanel save={save} />}
+      {details.category.slug === 'stocks' && (
+        <SecuritiesImportPanel eurUsd={state.fxRate?.eurUsd ?? null} save={save} />
+      )}
       <CategoryPage key={categoryId} details={details} currency={currency} asOf={state.asOf} />
     </>
   );

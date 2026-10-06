@@ -1,4 +1,5 @@
 'use client';
+import { sortByValue } from '@/domain/value-sort';
 import type { AssetView } from '@/shared/types';
 import { ChevronRight } from 'lucide-react';
 import Link from '@/components/workspace/link';
@@ -16,7 +17,9 @@ export function AssetTable({ rows, currency }: { rows: AssetView[]; currency: 'E
             <th>Catégorie</th>
             <th className="num">Quantité</th>
             <th className="num">Prix actuel</th>
-            <th className="num">Valeur</th>
+            <th className="num" aria-sort="descending">
+              Valeur
+            </th>
             <th className="num">Plus-value latente</th>
             <th>
               <span className="sr-only">Détail</span>
@@ -24,7 +27,7 @@ export function AssetTable({ rows, currency }: { rows: AssetView[]; currency: 'E
           </tr>
         </thead>
         <tbody>
-          {rows.map((a) => (
+          {sortByValue(rows, val).map((a) => (
             <tr key={a.id}>
               <td>
                 <Link href={`/assets/${a.id}`} className="asset-cell">
