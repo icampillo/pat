@@ -141,3 +141,39 @@ it('revalidates data after a successful mutation without invalidating the route 
     vi.unstubAllGlobals();
   }
 });
+
+it.each(['assets/asset-id', 'transactions/transaction-id'])(
+  'keeps the same idempotency key after a non-JSON save failure on %s',
+  async (route) => {
+    let workspace: ReturnType<typeof useWorkspace>;
+    function Probe() {
+      workspace = useWorkspace();
+      return null;
+    }
+    renderToStaticMarkup(
+      <WorkspaceProvider state={state}>
+        <Probe />
+      </WorkspaceProvider>,
+    );
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('An error occurred', { status: 504 }))
+      .mockResolvedValueOnce(Response.json({ data: { id: 'saved' } }))
+      .mockResolvedValueOnce(new Response('<html>Unavailable</html>', { status: 502 }));
+    vi.stubGlobal('fetch', fetcher);
+    try {
+      await expect(workspace!.save(route, 'PATCH', { name: 'Updated' }, 2)).rejects.toThrow(
+        'Confirmation d’enregistrement indisponible',
+      );
+      await expect(workspace!.save(route, 'PATCH', { name: 'Updated' }, 2)).resolves.toEqual({
+        id: 'saved',
+      });
+      expect(fetcher.mock.calls[0][1].headers['Idempotency-Key']).toBe(
+        fetcher.mock.calls[1][1].headers['Idempotency-Key'],
+      );
+      expect(fetcher).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  },
+);

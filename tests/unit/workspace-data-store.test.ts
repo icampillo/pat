@@ -124,3 +124,17 @@ it('makes concurrent saves wait for the latest revalidation, not an aborted read
   await Promise.all([first, second]);
   expect(store.getSnapshot().data?.portfolio.version).toBe(3);
 });
+
+it('keeps saved data when revalidation receives a hosting error instead of JSON', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(new Response('An error occurred', { status: 504 })),
+  );
+  const store = createWorkspaceStore(data(2));
+  await store.refresh(true);
+  expect(store.getSnapshot()).toMatchObject({
+    data: { portfolio: { version: 2 } },
+    loading: false,
+    error: 'Actualisation indisponible. Réessayez. (HTTP 504)',
+  });
+});

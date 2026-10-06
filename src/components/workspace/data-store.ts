@@ -1,4 +1,5 @@
 import type { AppState } from '@/shared/types';
+import { readApiResponse } from './api';
 
 export type WorkspaceData = AppState & { userName?: string };
 const STALE_TIME = 60_000;
@@ -40,11 +41,13 @@ export function createWorkspaceStore(initialData?: WorkspaceData) {
           publish({ data: undefined, unauthorized: true });
           return;
         }
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error?.message || 'Actualisation indisponible.');
+        const result = await readApiResponse<WorkspaceData>(
+          response,
+          'Actualisation indisponible. Réessayez.',
+        );
         if (controller !== request) return;
         receivedAt = Date.now();
-        publish({ data: result.data, unauthorized: false });
+        publish({ data: result, unauthorized: false });
       } catch (error) {
         if (controller !== request) return;
         publish({

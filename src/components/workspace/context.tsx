@@ -12,6 +12,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { createWorkspaceStore } from './data-store';
+import { readApiResponse } from './api';
 import { WorkspaceLoading } from './loading';
 
 type WorkspaceContextValue = {
@@ -100,8 +101,10 @@ export function WorkspaceProvider({
       },
       body: JSON.stringify(data),
     });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error?.message || 'L’enregistrement a échoué.');
+    const result = await readApiResponse<{ id?: string }>(
+      res,
+      'Confirmation d’enregistrement indisponible. Vérifiez les données avant de réessayer.',
+    );
     pending.current.delete(signature);
     setFlash(
       route.startsWith('securities/') || route.endsWith('/preview')
@@ -109,7 +112,7 @@ export function WorkspaceProvider({
         : 'Enregistrement effectué.',
     );
     if (!route.endsWith('/preview')) await store.refresh(true);
-    return result.data;
+    return result;
   };
   async function run(action: () => Promise<unknown>) {
     setBusy(true);

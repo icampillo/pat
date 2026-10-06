@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { auth } from '@/server/auth';
 import { command } from '@/server/portfolio';
 import { getState } from '@/server/portfolio-query';
@@ -123,12 +124,15 @@ async function handle(request: Request, context: { params: Promise<{ path: strin
       (request.method === 'POST' || request.method === 'PATCH') &&
       (result as { metadata?: { metalType?: string } }).metadata?.metalType
     ) {
-      try {
-        const portfolio = await owned(session.user.id);
-        await syncMarketData(portfolio.id);
-      } catch {
-        console.warn(JSON.stringify({ code: 'METAL_PRICE_AFTER_SAVE_UNAVAILABLE' }));
-      }
+      // The write is committed: external quotes must not delay its acknowledgement.
+      after(async () => {
+        try {
+          const portfolio = await owned(session.user.id);
+          await syncMarketData(portfolio.id);
+        } catch {
+          console.warn(JSON.stringify({ code: 'METAL_PRICE_AFTER_SAVE_UNAVAILABLE' }));
+        }
+      });
     }
     return response(result, request.method === 'POST' ? 201 : 200);
   } catch (error) {
