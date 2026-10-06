@@ -46,12 +46,12 @@ export function buildPortfolioContext(
   const positions: PortfolioAnalysisPosition[] = [];
   const allocation: PortfolioAnalysisContext['portfolio']['allocationByCategory'] = [];
   const limitations = [
-    'Le périmètre est celui enregistré dans Patrimoine, pas nécessairement tout le patrimoine de la personne.',
+    'La valorisation porte sur les positions enregistrées dans Patrimoine ; les éventuelles données manquantes ou non rapprochées sont signalées ci-dessous.',
     'Concentration par ligne détenue, liquidités comprises : les expositions identiques entre comptes, tokens ou ETF ne sont pas consolidées.',
     'Les P&L sont latents sur le coût restant des positions, pas un rendement total depuis l’origine.',
     'Performances 30 jours et YTD par position omises : la date de référence du 30 jours n’est pas exposée et le YTD n’est pas calculé dans les données courantes.',
     'Performance totale depuis l’origine omise : l’historique chargé est limité à 600 captures et ne garantit pas une valorisation initiale complète.',
-    'Profil investisseur, objectifs, horizon, exposition sectorielle/géographique et composition des ETF non fournis.',
+    'Exposition sectorielle/géographique et composition des ETF non fournies.',
   ];
   let undetailed = false;
   for (const category of state.categories) {

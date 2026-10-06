@@ -110,8 +110,10 @@ Les apports ne sont pas assimilés à des gains.
   le taux actuel serait incorrecte.
 - **Coûts et P&L wallets, inventaires à coût inconnu, immobilier générique** : données
   insuffisantes dans les projections existantes, aucune acquisition fictive créée.
-- Profil investisseur, allocation cible, géographie, secteurs, composition ETF,
-  volatilité, drawdown, corrélations : hors périmètre et non fabriqués.
+- Géographie, secteurs, composition ETF, volatilité, drawdown, corrélations :
+  hors périmètre des données exportées et non fabriqués. Le profil déclaré par
+  l’utilisateur figure dans le prompt (révision du 2026-10-07 ci-dessous) ; les
+  allocations cibles restent des recommandations, pas des données enregistrées.
 
 Il s'agit d'un audit du schéma et des calculs, pas d'une lecture des données privées
 de production. La présence effective des captures nécessaires est évaluée à chaque
@@ -201,9 +203,9 @@ priorisée, diagnostic des expositions, revue des positions avec décisions
 conditionnelles, opportunités hors portefeuille, rééquilibrage financé,
 scénarios de stress et plan d’action.
 
-L’absence de profil ne bloque plus les recommandations : l’IA doit expliciter
-des scénarios prudent/équilibré/dynamique et les questions qui permettraient de
-les départager. Les allocations proposées sont des hypothèses, jamais des
+Dans cette révision, l’absence de profil ne bloquait plus les recommandations :
+l’IA devait expliciter des scénarios prudent/équilibré/dynamique et les questions
+qui permettraient de les départager. Les allocations proposées sont des hypothèses, jamais des
 données enregistrées par l’application. Les calculs dérivés sont autorisés pour
 les simulations uniquement, avec périmètre et financement vérifiables.
 
@@ -225,3 +227,32 @@ Commandes : `node_modules/.bin/vitest run tests/unit`,
 `git diff --check`. Le binaire pnpm n’est pas disponible ; les binaires locaux
 existants ont été utilisés sans installation. Build et navigateur non relancés
 pour cette modification des instructions textuelles uniquement.
+
+## Profil déclaré par défaut — 2026-10-07
+
+À la demande explicite de l’utilisateur, le prompt inclut désormais : patrimoine
+intégralement enregistré dans l’application, horizon long terme, risque accepté,
+absence habituelle de besoin de liquidités et DCA de **300 EUR par mois**.
+Ces déclarations remplacent les scénarios de profil manquant de la révision précédente ;
+elles s’appliquent par défaut tant que l’utilisateur ne les corrige pas explicitement.
+Elles ne sont ni déduites des positions ni stockées dans un nouveau schéma de profil.
+
+L’IA doit proposer une stratégie principale, une allocation cible et la répartition
+concrète des 300 EUR mensuels, puis comparer rééquilibrage par apports et arbitrages.
+Les projections à six/douze mois intègrent les apports futurs sans les compter comme
+du cash actuel. Le budget reste en EUR même en affichage USD ; aucune conversion
+implicite. Les questions se limitent aux précisions réellement décisives non fournies.
+
+Les mentions contradictoires « profil non fourni » et « pas nécessairement tout le
+patrimoine » ont été retirées du contexte. Les limites de valorisation, les données
+de marché à vérifier et l’absence de seuil de perte chiffré restent distinctes de
+l’acceptation du risque. Aucun calcul métier, appel réseau, UI ou schéma modifié.
+
+Validation de cette révision : 23 tests ciblés réussis, TypeScript, ESLint ciblé,
+Prettier ciblé et `git diff --check` réussis. Commandes :
+`node_modules/.bin/vitest run tests/unit/portfolio-analysis.test.ts`,
+`node_modules/.bin/tsc --noEmit`,
+`node_modules/.bin/eslint src/domain/portfolio-analysis.ts src/domain/portfolio-analysis-prompt.ts`,
+`node_modules/.bin/prettier --check src/domain/portfolio-analysis.ts src/domain/portfolio-analysis-prompt.ts`.
+Pas de build, navigateur ou appel LLM relancé pour cette révision textuelle.
+Modifications locales non commitées ; aucun push ni déploiement.
