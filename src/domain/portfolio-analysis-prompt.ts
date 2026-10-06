@@ -134,12 +134,38 @@ export function buildPortfolioAnalysisPrompt(context: PortfolioAnalysisContext):
     if (position.priceCurrency)
       metric('Dernier prix connu', position.currentPrice, ` ${position.priceCurrency}`, true);
     timestamp('Date de cotation', position.priceDate);
-    metric('Valeur actuelle', position.currentValue, money);
+    metric(
+      position.wallet?.protocol ? 'Valeur nette actuelle' : 'Valeur actuelle',
+      position.currentValue,
+      money,
+    );
     metric('Poids du portefeuille', position.portfolioWeight, ' %');
     metric('PRU (devise de référence, coût historique)', position.averageBuyPrice, money, true);
     metric('Coût restant', position.costBasis, money);
     metric('P&L latent', position.pnl?.amount, money);
     metric('P&L latent relatif au coût', position.pnl?.percentage, ' %');
+    if (position.wallet) {
+      const wallet = position.wallet;
+      lines.push(`Wallet : ${label(wallet.label)}`);
+      if (wallet.chain) lines.push(`Réseau : ${label(wallet.chain)}`);
+      if (wallet.protocol) {
+        lines.push(`Protocole : ${label(wallet.protocol)}`);
+        metric('Actifs déposés (déjà inclus dans la valeur nette)', wallet.assetsValue, money);
+        metric('Dette (déjà déduite de la valeur nette)', wallet.debtValue, money);
+        timestamp('Déverrouillage', wallet.unlockAt);
+        lines.push('Sous-jacents DeFi > 50 EUR — détail non additionnable à la valeur nette :');
+        if (!wallet.tokens.length)
+          lines.push('Aucun sous-jacent valorisé au-delà du seuil dans les données disponibles.');
+        for (const token of wallet.tokens) {
+          const fields = [`${token.role} : ${label(token.name)} (${label(token.symbol)})`];
+          if (token.chain) fields.push(`réseau : ${label(token.chain)}`);
+          if (finite(token.quantity)) fields.push(`quantité : ${number(token.quantity, true)}`);
+          if (finite(token.currentValue))
+            fields.push(`valeur : ${number(token.currentValue)}${money}`);
+          lines.push(`- ${fields.join(' — ')}`);
+        }
+      }
+    }
     for (const note of position.notes) lines.push(`Note : ${note}`);
     lines.push('');
   });

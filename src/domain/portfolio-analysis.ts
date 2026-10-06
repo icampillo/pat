@@ -12,6 +12,7 @@ import {
 } from './categories';
 import { decimal as d } from './money';
 import { dietz } from './ledger';
+import { valueInEur } from './value-sort';
 import { canCalculatePortfolioPerformance } from './portfolio-performance';
 
 const optionalNumber = (value: unknown) => numeric(value) ?? undefined;
@@ -42,6 +43,36 @@ export function buildPortfolioContext(
   generatedAt = new Date().toISOString(),
 ): PortfolioAnalysisContext {
   const total = numeric(currency === 'EUR' ? state.totals.valueEur : state.totals.valueUsd);
+  const eurUsd = numeric(state.fxRate?.eurUsd);
+  const walletThresholdUsd = eurUsd !== null && eurUsd > 0 ? d(state.fxRate!.eurUsd).mul(50) : null;
+  const includeWalletValue = (value: string | null) =>
+    numeric(value) !== null && walletThresholdUsd !== null && d(value!).gt(walletThresholdUsd);
+  const walletValue = (value: string | null) =>
+    optionalNumber(
+      currency === 'USD'
+        ? value
+        : valueInEur(value, 'USD', walletThresholdUsd ? state.fxRate!.eurUsd : null)?.toString(),
+    );
+  // Filter a presentation copy before category expansion: one unpriced dust token
+  // must not collapse every known holding into the wallet total. The existing
+  // category reconciler retains all omitted value in a single residual line.
+  const analysisState: AppState = {
+    ...state,
+    onchain: {
+      ...state.onchain,
+      wallets: state.onchain.wallets.map((wallet) => ({
+        ...wallet,
+        data: wallet.data && {
+          ...wallet.data,
+          tokens: wallet.data.tokens.filter((token) => includeWalletValue(token.valueUsd)),
+          positions: wallet.data.positions.filter((position) =>
+            // A small net value must not hide significant collateral or debt.
+            [position.netUsd, position.assetsUsd, position.debtUsd].some(includeWalletValue),
+          ),
+        },
+      })),
+    },
+  };
   const rows = new Map(state.rows.map((row) => [row.id, row]));
   const positions: PortfolioAnalysisPosition[] = [];
   const allocation: PortfolioAnalysisContext['portfolio']['allocationByCategory'] = [];
@@ -55,7 +86,7 @@ export function buildPortfolioContext(
   ];
   let undetailed = false;
   for (const category of state.categories) {
-    const details = buildCategoryDetails(state, category, currency);
+    const details = buildCategoryDetails(analysisState, category, currency);
     if (!details.assets.length) continue;
     allocation.push({
       category: category.label,
@@ -72,6 +103,9 @@ export function buildPortfolioContext(
       const token = wallet?.data?.tokens.find(
         (item) => position.id === `${wallet.id}:token:${item.chain}:${item.id}`,
       );
+      const defi = wallet?.data?.positions.find(
+        (item) => position.id === `${wallet.id}:defi:${item.id}`,
+      );
       const value = numeric(position.value);
       const cost = numeric(position.cost);
       const quantity = numeric(position.quantity);
@@ -83,8 +117,12 @@ export function buildPortfolioContext(
         notes.push('Dernière cotation ancienne ; valeur non temps réel.');
       if (position.realEstate)
         notes.push('Valeur immobilière nette de dette, à hauteur de la quote-part détenue.');
-      if (position.isAdjustment)
-        notes.push('Ajustement de rapprochement du wallet, pas un actif identifié.');
+      if (wallet?.data?.rounded || defi?.approximate)
+        notes.push('Valorisation DeBank arrondie ou approximative.');
+      if (wallet && position.id.endsWith(':other'))
+        notes.push(
+          'Solde non détaillé : actifs de 50 EUR ou moins, valeurs inconnues et/ou écarts de rapprochement ; pas un actif identifié.',
+        );
       if (
         !row &&
         (position.isAdjustment || position.id.endsWith(':other') || wallet?.id === position.id)
@@ -92,7 +130,7 @@ export function buildPortfolioContext(
         undetailed = true;
       positions.push({
         id: position.id,
-        name: position.name,
+        name: token ? `${token.name} · ${wallet!.label}` : position.name,
         symbol: row?.symbol || token?.symbol || undefined,
         category: category.label,
         type:
@@ -100,11 +138,11 @@ export function buildPortfolioContext(
             ? 'ETF'
             : row?.metadata.instrumentType === 'STOCK'
               ? 'Action'
-              : row?.subcategory || undefined,
+              : row?.subcategory || defi?.kind || undefined,
         quantity: position.realEstate ? undefined : (quantity ?? undefined),
         currentPrice: position.realEstate ? undefined : optionalNumber(position.price),
         priceCurrency: position.priceCurrency,
-        priceDate: row?.priceDate ?? wallet?.lastSuccessAt ?? undefined,
+        priceDate: row?.priceDate ?? defi?.observedAt ?? wallet?.lastSuccessAt ?? undefined,
         currentValue: value ?? undefined,
         portfolioWeight: optionalNumber(calculateCategoryWeight(value, total)),
         // Use historical reference-currency cost, not today's FX on native PRU.
@@ -118,6 +156,38 @@ export function buildPortfolioContext(
               pnl: {
                 amount: optionalNumber(pnl.unrealizedPnL),
                 percentage: optionalNumber(pnl.unrealizedPnLPercent),
+              },
+            }
+          : {}),
+        ...(wallet
+          ? {
+              wallet: {
+                label: wallet.label,
+                chain: token?.chain || defi?.chain || undefined,
+                protocol: defi?.protocol,
+                assetsValue: defi ? walletValue(defi.assetsUsd) : undefined,
+                debtValue: defi ? walletValue(defi.debtUsd) : undefined,
+                unlockAt: defi?.unlockAt ?? undefined,
+                tokens: defi
+                  ? (
+                      [
+                        ['supplies', 'Dépôt'],
+                        ['borrows', 'Emprunt'],
+                        ['rewards', 'Récompense'],
+                      ] as const
+                    ).flatMap(([key, role]) =>
+                      defi[key]
+                        .filter((item) => includeWalletValue(item.valueUsd))
+                        .map((item) => ({
+                          role,
+                          name: item.name,
+                          symbol: item.symbol,
+                          chain: item.chain || defi.chain,
+                          quantity: optionalNumber(item.amount),
+                          currentValue: walletValue(item.valueUsd),
+                        })),
+                    )
+                  : [],
               },
             }
           : {}),
@@ -213,10 +283,19 @@ export function buildPortfolioContext(
     limitations.push(
       'Performance globale YTD indisponible : borne historique ou flux comparables insuffisants.',
     );
-  if (state.onchain.includedCount)
+  if (state.onchain.includedCount) {
+    limitations.push(
+      'Détail des wallets : seuls les actifs strictement supérieurs à 50 EUR par ligne sont nommés, au taux EUR/USD enregistré, même en affichage USD. Les autres montants restent dans le solde non détaillé et dans les totaux ; ce solde ne constitue pas un actif ni des liquidités disponibles.',
+      'DeFi : positions conservées si leur valeur nette, leurs actifs déposés ou leur dette dépassent 50 EUR ; sous-jacents détaillés uniquement au-delà de 50 EUR chacun. Dépôts, emprunts et récompenses sont des détails de la valeur nette, jamais des montants à ajouter au patrimoine ni des dettes à déduire une seconde fois.',
+    );
+    if (walletThresholdUsd === null)
+      limitations.push(
+        'Taux EUR/USD indisponible ou invalide : seuil de 50 EUR non vérifiable, détail des wallets omis ; les totaux disponibles sont conservés.',
+      );
     limitations.push(
       'Wallets/DeFi : valeurs nettes observées, parfois arrondies ; pas de coût d’acquisition fiable, de suivi complet des flux ni d’exposition sous-jacente consolidée.',
     );
+  }
   if (state.onchain.staleCount)
     limitations.push('Certaines observations de wallets sont anciennes.');
   if (state.fxRate)

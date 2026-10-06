@@ -20,6 +20,22 @@ export interface PortfolioAnalysisPosition {
   averageBuyPrice?: number;
   costBasis?: number;
   pnl?: { amount?: number; percentage?: number };
+  wallet?: {
+    label: string;
+    chain?: string;
+    protocol?: string;
+    assetsValue?: number;
+    debtValue?: number;
+    unlockAt?: string;
+    tokens: {
+      role: 'Dépôt' | 'Emprunt' | 'Récompense';
+      name: string;
+      symbol: string;
+      chain: string;
+      quantity?: number;
+      currentValue?: number;
+    }[];
+  };
   notes: string[];
 }
 

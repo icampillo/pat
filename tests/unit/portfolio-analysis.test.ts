@@ -236,19 +236,150 @@ describe('portfolio analysis context', () => {
     state.totals.valueUsd = '0';
     expect(buildPortfolioContext(state, 'USD').positions).toHaveLength(0);
   });
-  it('retains wallet totals when detail is missing and omits concentrations', () => {
+  it('retains known DeFi detail and reconciles the remainder when a token value is missing', () => {
     const state = portfolio([]);
     const item = wallet();
     item.data!.tokens[0].valueUsd = null;
     state.onchain.wallets = [item];
     state.onchain.includedCount = 1;
     state.totals.valueUsd = '150';
-    expect(buildPortfolioContext(state, 'USD').positions.map((p) => p.currentValue)).toEqual([150]);
+    expect(buildPortfolioContext(state, 'USD').positions.map((p) => p.currentValue)).toEqual([
+      110, 40,
+    ]);
     expect(buildPortfolioContext(state, 'USD').portfolio.concentration).toEqual({});
     item.data = null;
     state.totals.valueUsd = null;
     expect(buildPortfolioContext(state, 'USD').positions[0].currentValue).toBeUndefined();
   });
+  it.each(['EUR', 'USD'] as const)(
+    'details only wallet holdings strictly above 50 EUR in %s, retaining dust in totals',
+    (currency) => {
+      const state = portfolio([40]);
+      const item = wallet();
+      const data = item.data!;
+      data.positions = [];
+      data.totalUsd = '400';
+      data.tokens.push(
+        ...[
+          ['above', '55.011'],
+          ['boundary', '55'],
+          ['below', '54.99'],
+          ['dust', null],
+          ['invalid', 'NaN'],
+          ['infinite', 'Infinity'],
+        ].map(([name, valueUsd]) => ({
+          ...data.tokens[0],
+          id: name!,
+          name: `Token ${name}`,
+          symbol: name!,
+          valueUsd,
+        })),
+      );
+      data.tokens[4].valueText = '<$0.01';
+      state.onchain.wallets = [item];
+      state.onchain.includedCount = 1;
+      state.totals.valueEur = String(40 + 400 / 1.1);
+      state.totals.valueUsd = '444';
+      const before = structuredClone(state);
+      const context = buildPortfolioContext(state, currency);
+      expect(context.positions.filter((p) => p.wallet && p.symbol).map((p) => p.symbol)).toEqual([
+        'ETH',
+        'above',
+      ]);
+      expect(context.positions).toHaveLength(4);
+      expect(context.positions.find((p) => p.id === 'asset-0')).toBeDefined();
+      const residual = context.positions.find((p) => p.id === 'wallet:other')!;
+      expect(residual.currentValue).toBeCloseTo(currency === 'EUR' ? 244.989 / 1.1 : 244.989);
+      expect(context.positions.reduce((sum, p) => sum + p.currentValue!, 0)).toBeCloseTo(
+        context.portfolio.totalValue!,
+      );
+      expect(context.portfolio.allocationByCategory[0].percentage).toBeCloseTo(100);
+      expect(context.positions.reduce((sum, p) => sum + p.portfolioWeight!, 0)).toBeCloseTo(100);
+      expect(context.portfolio.concentration).toEqual({});
+      const prompt = buildPortfolioAnalysisPrompt(context);
+      expect(prompt).toContain('Ethereum · Wallet test');
+      expect(prompt).toContain('Wallet : "Wallet test"');
+      expect(prompt).toContain('Réseau : "eth"');
+      expect(prompt).toContain('Token above');
+      expect(prompt).toContain('strictement supérieurs à 50 EUR');
+      expect(prompt).not.toMatch(
+        /Token boundary|Token below|Token dust|Token invalid|Token infinite/,
+      );
+      expect(prompt).not.toContain(item.address);
+      expect(prompt).not.toContain('wallet:token:');
+      expect(state).toEqual(before);
+    },
+  );
+  it('exports significant DeFi collateral, debt and rewards as non-additive details of a net position', () => {
+    const state = portfolio([]);
+    const item = wallet();
+    const data = item.data!;
+    data.totalUsd = '121';
+    const position = data.positions[0];
+    const token = data.tokens[0];
+    Object.assign(position, {
+      assetsUsd: '341',
+      debtUsd: '330',
+      netUsd: '11',
+      unlockAt: '2027-01-01T00:00:00.000Z',
+      approximate: true,
+      supplies: [
+        { ...token, name: 'Collateral', valueUsd: '220' },
+        { ...token, name: 'Boundary collateral', valueUsd: '55' },
+      ],
+      borrows: [{ ...token, name: 'Borrowed stablecoin', symbol: 'USDC', valueUsd: '330' }],
+      rewards: [{ ...token, name: 'Reward token', symbol: 'REWARD', valueUsd: '66' }],
+    });
+    state.onchain.wallets = [item];
+    state.onchain.includedCount = 1;
+    state.totals.valueEur = '110';
+    state.totals.valueUsd = '121';
+    const context = buildPortfolioContext(state);
+    const defi = context.positions.find((p) => p.wallet?.protocol === 'Aave')!;
+    expect(defi).toMatchObject({
+      currentValue: 10,
+      type: 'Lending',
+      wallet: { assetsValue: 310, debtValue: 300, unlockAt: position.unlockAt },
+    });
+    expect(defi.wallet!.tokens.map((t) => [t.role, t.symbol, t.currentValue])).toEqual([
+      ['Dépôt', 'ETH', 200],
+      ['Emprunt', 'USDC', 300],
+      ['Récompense', 'REWARD', 60],
+    ]);
+    expect(context.positions.reduce((sum, p) => sum + p.currentValue!, 0)).toBeCloseTo(110);
+    const prompt = buildPortfolioAnalysisPrompt(context);
+    expect(prompt).toContain('Valeur nette actuelle : 10 EUR');
+    expect(prompt).toContain('Actifs déposés (déjà inclus dans la valeur nette) : 310 EUR');
+    expect(prompt).toContain('Dette (déjà déduite de la valeur nette) : 300 EUR');
+    expect(prompt).toContain(
+      'Dépôt : "Collateral" ("ETH") — réseau : "eth" — quantité : 1 — valeur : 200 EUR',
+    );
+    expect(prompt).toContain('Emprunt : "Borrowed stablecoin"');
+    expect(prompt).toContain('Récompense : "Reward token"');
+    expect(prompt).toContain('Déverrouillage : 2027-01-01');
+    expect(prompt).toContain('arrondie ou approximative');
+    expect(prompt).not.toContain('Boundary collateral');
+    expect(prompt).not.toContain(item.address);
+    item.included = false;
+    state.onchain.includedCount = 0;
+    expect(buildPortfolioContext(state).positions).toHaveLength(0);
+  });
+  it.each([null, '0', '-1', 'NaN', 'Infinity'])(
+    'does not reinterpret the EUR threshold as USD when FX is unavailable or invalid (%s)',
+    (rate) => {
+      const state = portfolio([]);
+      state.fxRate = rate === null ? null : { ...state.fxRate!, eurUsd: rate };
+      state.onchain.wallets = [wallet()];
+      state.onchain.includedCount = 1;
+      state.totals.valueUsd = '150';
+      const context = buildPortfolioContext(state, 'USD');
+      expect(context.positions.map((p) => p.currentValue)).toEqual([150]);
+      expect(context.positions[0].portfolioWeight).toBe(100);
+      expect(context.portfolio.concentration).toEqual({});
+      expect(context.limitations.join(' ')).toContain('seuil de 50 EUR non vérifiable');
+      expect(buildPortfolioAnalysisPrompt(context)).not.toMatch(/Ethereum|Aave|NaN|Infinity/);
+    },
+  );
   it('does not multiply real estate gross value or synthesize purchase cost/P&L', () => {
     const state = portfolio([120000]);
     const metadata = { ...property, mortgage: { ...loan, borrowedAmount: '180000' } };

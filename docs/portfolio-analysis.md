@@ -54,7 +54,7 @@ règle, dans `src/domain/portfolio-performance.ts` et partagés avec le dashboar
 | PRU/coût | Coût restant historique dans la devise d'analyse, PRU = coût / quantité ; pas de conversion du coût ancien au taux d'aujourd'hui |
 | P&L | Latent : valeur moins coût restant ; pourcentage uniquement si coût strictement positif |
 | Concentration | Top 1/3/5/10 des lignes par valeur décroissante ; les rangs au-delà du nombre de lignes additionnent simplement toutes les lignes |
-| Wallets/DeFi | Détail et valeur nette existants, dette non recomptée ; le résidu reste une ligne de rapprochement explicite |
+| Wallets/DeFi | Actifs > 50 EUR, réseau, wallet et sous-jacents DeFi significatifs ; valeur nette et reste non détaillé conservés, aucun double comptage |
 | Immobilier | Valeur nette de dette à hauteur de la quote-part ; pas de faux prix unitaire/PRU/P&L générique |
 | Qualité | Cotations/observations anciennes, coût inconnu, défaut de rapprochement et limites de performance signalés |
 
@@ -255,4 +255,67 @@ Prettier ciblé et `git diff --check` réussis. Commandes :
 `node_modules/.bin/eslint src/domain/portfolio-analysis.ts src/domain/portfolio-analysis-prompt.ts`,
 `node_modules/.bin/prettier --check src/domain/portfolio-analysis.ts src/domain/portfolio-analysis-prompt.ts`.
 Pas de build, navigateur ou appel LLM relancé pour cette révision textuelle.
+Modifications locales non commitées ; aucun push ni déploiement.
+
+
+## Détail des wallets au-delà de 50 EUR — 2026-10-07
+
+Le contexte du prompt détaille désormais les tokens de wallet dont la valeur est
+**strictement supérieure à 50 EUR par ligne** : nom, symbole, wallet, réseau,
+quantité, prix connu, date, valeur et poids. Le seuil utilise le taux EUR/USD
+chargé, indépendamment de la devise d’affichage ; une ligne à exactement 50 EUR
+reste exclue du détail. Le filtre ne concerne pas les actifs hors wallets.
+
+Cause du regroupement précédent : le calcul des catégories remplace le détail
+entier d’un wallet par son total dès qu’une ligne est non valorisée, notamment
+les poussières DeBank « <$0.01 ». Pour l’analyse uniquement, une copie en mémoire
+filtre les lignes avant de réutiliser le calcul des catégories. Les données
+sources, la page Wallets et les calculs globaux restent inchangés. Les petites
+lignes, les valeurs inconnues et les écarts DeBank restent dans un **solde non
+détaillé**, explicitement distinct d’un actif ou de liquidités mobilisables.
+Les concentrations restent omises en présence de ce résidu.
+
+Les positions DeFi significatives précisent protocole, type, réseau, valeur nette,
+actifs déposés, dette déjà déduite et déverrouillage connu. Les dépôts, emprunts et
+récompenses individuellement valorisés à plus de 50 EUR sont nommés avec quantité
+et valeur, comme détails **non additionnables** à la valeur nette. Une position
+reste visible si sa valeur nette, ses actifs déposés ou sa dette dépassent 50 EUR,
+pour ne pas masquer une exposition importante derrière une faible valeur nette.
+Les sous-jacents sans valorisation vérifiable ne sont pas inventés.
+
+Sans taux EUR/USD valide, le seuil ne peut être vérifié : seuls les totaux connus
+sont conservés, avec une limite explicite, sans remplacer 50 EUR par 50 USD.
+Les wallets exclus du patrimoine restent exclus ; les adresses et identifiants
+techniques ne sont pas ajoutés au texte. Aucun appel réseau, LLM, migration,
+nouvelle dépendance ou modification de données.
+
+Vérifications de cette révision : 31 tests ciblés (8 cas supplémentaires),
+156 tests unitaires au total, TypeScript strict, ESLint complet, Prettier ciblé
+et contrôle du diff réussis. Couverture : poussière non valorisée, valeurs
+invalides, seuil exact, EUR/USD, totaux et poids inchangés, absence de mutation,
+détail DeFi sans double comptage, wallet exclu, taux absent/invalide et absence
+d’adresses dans le prompt.
+
+Commandes exécutées :
+
+```sh
+node_modules/.bin/vitest run tests/unit/portfolio-analysis.test.ts
+node_modules/.bin/vitest run tests/unit
+node_modules/.bin/tsc --noEmit
+node_modules/.bin/eslint .
+node_modules/.bin/prettier --check src/shared/portfolio-analysis.ts src/domain/portfolio-analysis.ts src/domain/portfolio-analysis-prompt.ts tests/unit/portfolio-analysis.test.ts
+git diff --check
+```
+
+Build de production réussi (Prisma generate, webpack, TypeScript, 15 pages
+statiques, traces ; code 0), avec workers désactivés et URL PostgreSQL factice
+locale inaccessible pour ne pas utiliser la base configurée :
+
+```sh
+DATABASE_URL=postgresql://unused:unused@127.0.0.1:1/unused_build VERCEL=1 NEXT_TELEMETRY_DISABLED=1 WALLET_WORKER_DISABLED=1 MARKET_WORKER_DISABLED=1 SNAPSHOT_WORKER_DISABLED=1 npm run build
+```
+
+Pas de test navigateur, d’intégration PostgreSQL ni d’appel LLM pour cette
+révision du contexte et du texte. Les outils MCP hôte restent incomplets
+(3 outils exclus par la politique du runtime) et n’ont pas été utilisés.
 Modifications locales non commitées ; aucun push ni déploiement.
