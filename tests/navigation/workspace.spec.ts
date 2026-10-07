@@ -36,7 +36,7 @@ test('loads once, navigates without data reads and does not prefetch asset rows'
   const timings: Record<string, number> = {};
   for (const [link, title] of [
     ['Portefeuille', 'Portefeuille'],
-    ['Wallets DeFi', 'Wallets & DeFi'],
+    ['Wallets DeFi', 'Wallets DeFi'],
     ['Activité', 'Activité · Transactions'],
     ['Tableau de bord', 'Vue d’ensemble'],
   ]) {
@@ -51,12 +51,10 @@ test('loads once, navigates without data reads and does not prefetch asset rows'
   expect(reads).toBe(1);
   expect(detailRequests).toBe(0);
   expect(errors).toEqual([]);
-  await test
-    .info()
-    .attach('navigation-timings.json', {
-      body: JSON.stringify(timings),
-      contentType: 'application/json',
-    });
+  await test.info().attach('navigation-timings.json', {
+    body: JSON.stringify(timings),
+    contentType: 'application/json',
+  });
   await page.screenshot({ path: test.info().outputPath('dashboard.png'), fullPage: true });
 });
 
@@ -125,7 +123,7 @@ test('retries initial failure and clears private content on session expiry', asy
         : route.fulfill({ status: 401, json: { error: { message: 'Session expirée' } } });
   });
   await page.goto('/dashboard');
-  await expect(page.getByRole('alert')).toContainText('Service indisponible');
+  await expect(page.getByRole('main').getByRole('alert')).toContainText('Service indisponible');
   await page.getByRole('button', { name: 'Réessayer' }).click();
   await expect(page.getByRole('heading', { name: 'Vue d’ensemble' })).toBeVisible();
   await page.clock.install();

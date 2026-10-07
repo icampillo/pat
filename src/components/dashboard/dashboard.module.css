@@ -21,3 +21,22 @@
   --shadow-float: 0 4px 16px #1720330d;
   color: var(--ink);
 }
+
+.allocationSector {
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+}
+
+.allocationSector:focus-visible {
+  outline: none;
+  stroke: var(--ink);
+  stroke-width: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .allocationSector {
+    transition: none;
+  }
+}

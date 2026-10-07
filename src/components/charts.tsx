@@ -1,6 +1,9 @@
 'use client';
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { ChartNoAxesCombined } from 'lucide-react';
+import { money } from '@/components/workspace/display';
+import { calculateCategoryWeight } from '@/domain/categories';
+import styles from '@/components/dashboard/dashboard.module.css';
 import {
   AreaChart,
   Area,
@@ -12,6 +15,8 @@ import {
   PieChart,
   Pie,
   Cell,
+  Sector,
+  type PieSectorShapeProps,
 } from 'recharts';
 export function EvolutionChart({
   points,
@@ -134,48 +139,132 @@ export function AllocationChart({
   slices,
   unit = 'catégories',
   variant = 'default',
+  currency = 'EUR',
+  total = null,
+  selectedName = null,
+  onSelect,
 }: {
   slices: { name: string; value: number; color: string }[];
   unit?: string;
   variant?: 'default' | 'dashboard';
+  currency?: string;
+  total?: number | null;
+  selectedName?: string | null;
+  onSelect?: (name: string | null) => void;
 }) {
+  const [hoveredName, setHoveredName] = useState<string | null>(null);
+  const dashboard = variant === 'dashboard';
+  const active = slices.find((slice) => slice.name === (hoveredName ?? selectedName));
+  const weight = calculateCategoryWeight(active?.value ?? null, total);
+  const select = (name: string) => onSelect?.(selectedName === name ? null : name);
   return (
     <div
-      className={variant === 'dashboard' ? 'relative h-[210px] min-w-0' : 'donut'}
-      role="img"
+      className={dashboard ? 'relative h-[210px] min-w-0' : 'donut'}
+      role={onSelect ? 'group' : 'img'}
       aria-label={`Répartition par ${unit}, détaillée dans la liste adjacente`}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          onSelect?.(null);
+          setHoveredName(null);
+        }
+      }}
     >
       <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
+        <PieChart accessibilityLayer={!onSelect}>
           <Pie
             data={slices}
             dataKey="value"
-            innerRadius={variant === 'dashboard' ? 68 : 65}
-            outerRadius={variant === 'dashboard' ? 86 : 84}
-            paddingAngle={slices.length === 1 && variant === 'dashboard' ? 0 : 3}
+            innerRadius={dashboard ? 68 : 65}
+            outerRadius={dashboard ? 86 : 84}
+            paddingAngle={slices.length === 1 && dashboard ? 0 : 3}
+            startAngle={dashboard ? 90 : 0}
+            endAngle={dashboard ? -270 : 360}
+            cornerRadius={dashboard ? 4 : 0}
             stroke="none"
-            isAnimationActive={false}
+            isAnimationActive={dashboard ? 'auto' : false}
+            animationBegin={100}
+            animationDuration={1000}
+            animationEasing="ease-out"
+            rootTabIndex={onSelect ? -1 : 0}
+            onClick={onSelect ? (_, index) => select(slices[index].name) : undefined}
+            onMouseEnter={onSelect ? (_, index) => setHoveredName(slices[index].name) : undefined}
+            onMouseLeave={onSelect ? () => setHoveredName(null) : undefined}
+            shape={
+              onSelect
+                ? (props: PieSectorShapeProps) => {
+                    const slice = slices[props.index];
+                    const highlighted = active?.name === slice.name;
+                    return (
+                      <Sector
+                        cx={props.cx}
+                        cy={props.cy}
+                        innerRadius={props.innerRadius}
+                        outerRadius={props.outerRadius}
+                        startAngle={props.startAngle}
+                        endAngle={props.endAngle}
+                        cornerRadius={props.cornerRadius}
+                        fill={slice.color}
+                        className={styles.allocationSector}
+                        style={{
+                          transformOrigin: `${props.cx}px ${props.cy}px`,
+                          transform: highlighted ? 'scale(1.06)' : 'scale(1)',
+                          opacity: active && !highlighted ? 0.45 : 1,
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${slice.name} : ${money(slice.value, currency)}`}
+                        aria-pressed={selectedName === slice.name}
+                        onFocus={() => setHoveredName(slice.name)}
+                        onBlur={() => setHoveredName(null)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            select(slice.name);
+                          }
+                        }}
+                      />
+                    );
+                  }
+                : undefined
+            }
           >
             {slices.map((s, index) => (
               <Cell key={`${s.name}-${index}`} fill={s.color} />
             ))}
           </Pie>
+          {onSelect && (
+            <Tooltip
+              formatter={(value) => money(Number(value), currency)}
+              contentStyle={{
+                borderRadius: 12,
+                border: '1px solid var(--line)',
+                background: 'var(--surface)',
+                fontSize: 12,
+                boxShadow: 'var(--shadow-float)',
+              }}
+              itemStyle={{ color: 'var(--ink)' }}
+            />
+          )}
         </PieChart>
       </ResponsiveContainer>
       <div
         className={
-          variant === 'dashboard'
+          dashboard
             ? 'pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1'
             : 'donut-center'
         }
       >
-        <strong
-          className={variant === 'dashboard' ? 'text-3xl tracking-tight tabular-nums' : undefined}
-        >
-          {slices.length}
+        <strong className={dashboard ? 'max-w-32 text-2xl tracking-tight tabular-nums' : undefined}>
+          {active ? (weight === null ? '—' : `${weight.toFixed(1)} %`) : slices.length}
         </strong>
-        <span className={variant === 'dashboard' ? 'text-xs text-(--muted)' : undefined}>
-          {slices.length === 1 ? unit.replace(/s$/, '') : unit}
+        <span
+          className={
+            dashboard
+              ? 'max-w-28 text-center text-xs text-(--muted) [overflow-wrap:anywhere]'
+              : undefined
+          }
+        >
+          {active?.name ?? (slices.length === 1 ? unit.replace(/s$/, '') : unit)}
         </span>
       </div>
     </div>

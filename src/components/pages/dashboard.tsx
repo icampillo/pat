@@ -8,6 +8,7 @@ import {
   Plus,
   Sparkles,
   Wallet,
+  X,
 } from 'lucide-react';
 import { AssetCategoryCard } from '@/components/asset-category-card';
 import { AllocationChart, EvolutionChart } from '@/components/charts';
@@ -33,6 +34,7 @@ import type { AppState } from '@/shared/types';
 export function DashboardPage({ state }: { state: AppState }) {
   const { currency } = useWorkspace();
   const [period, setPeriod] = useState('1y');
+  const [selectedAllocation, setSelectedAllocation] = useState<string | null>(null);
   const total = currency === 'EUR' ? state.totals.valueEur : state.totals.valueUsd;
   const categoryDetails = state.categories.map((item) =>
     buildCategoryDetails(state, item, currency),
@@ -77,6 +79,7 @@ export function DashboardPage({ state }: { state: AppState }) {
       name: category.name,
       color: category.color,
       value: category.totalValue!,
+      href: `/categories/${category.slug}`,
     }));
   // Preserve the allocation's known-cash perimeter, without presenting a partial sum as a KPI total.
   const knownCash = state.cash.reduce(
@@ -88,7 +91,9 @@ export function DashboardPage({ state }: { state: AppState }) {
       name: cashValue === null ? 'Liquidités connues' : 'Liquidités',
       color: 'var(--cash)',
       value: Number(knownCash),
+      href: '/portfolio',
     });
+  const selectedSlice = slices.find((slice) => slice.name === selectedAllocation);
   const first = visibleSnapshots[0];
   const adjusted =
     canCalculatePortfolioPerformance(state, currency) && first?.totalEur && state.totals.valueEur
@@ -189,52 +194,126 @@ export function DashboardPage({ state }: { state: AppState }) {
           )}
         </DashboardCard>
 
-        <DashboardCard aria-labelledby="allocation-heading" className="overflow-hidden">
-          <div className="px-5 pt-5">
-            <h2 id="allocation-heading" className="text-sm!">
-              Répartition
-            </h2>
-            <p className="mt-1! text-xs text-(--muted)">
-              {total === null
-                ? 'Valorisation incomplète · valeurs connues'
-                : 'Le poids de chaque catégorie'}
-            </p>
-          </div>
-          {slices.length ? (
-            <>
-              <div className="grid items-center sm:grid-cols-[210px_minmax(0,1fr)] xl:grid-cols-1">
-                <AllocationChart slices={slices} variant="dashboard" />
-                <ul className="flex flex-col gap-3 px-5 pb-5" aria-label="Poids des catégories">
-                  {slices.map((slice) => (
-                    <li className="flex items-center gap-2.5 text-xs" key={slice.name}>
-                      <span
-                        className="size-2 shrink-0 rounded-full"
-                        style={{ background: slice.color }}
-                        aria-hidden="true"
-                      />
-                      <span className="min-w-0 flex-1 text-(--muted) [overflow-wrap:anywhere]">
-                        {slice.name}
-                      </span>
-                      <strong className="shrink-0 tabular-nums">
-                        {total && d(total).gt(0)
-                          ? `${d(slice.value).div(total).mul(100).toFixed(1)} %`
-                          : '—'}
-                      </strong>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <p className="border-t border-(--line) bg-(--surface-secondary) px-5 py-3 text-xs text-(--muted)">
-                Valeurs positives · liquidités incluses
+        <div className="grid min-w-0 gap-5">
+          <DashboardCard aria-labelledby="allocation-heading" className="overflow-hidden">
+            <div className="px-5 pt-5">
+              <h2 id="allocation-heading" className="text-sm!">
+                Répartition
+              </h2>
+              <p className="mt-1! text-xs text-(--muted)">
+                {total === null
+                  ? 'Valorisation incomplète · valeurs connues'
+                  : 'Le poids de chaque catégorie'}
               </p>
-            </>
-          ) : (
-            <div className="flex min-h-64 flex-col items-center justify-center gap-3 p-6 text-center text-xs text-(--muted)">
-              <Layers3 size={28} aria-hidden="true" />
-              <p>Votre répartition apparaîtra après un premier achat valorisé.</p>
             </div>
-          )}
-        </DashboardCard>
+            {slices.length ? (
+              <>
+                <div className="grid items-center sm:grid-cols-[210px_minmax(0,1fr)] xl:grid-cols-1">
+                  <AllocationChart
+                    slices={slices}
+                    variant="dashboard"
+                    currency={currency}
+                    total={total === null ? null : Number(total)}
+                    selectedName={selectedSlice?.name}
+                    onSelect={setSelectedAllocation}
+                  />
+                  <ul className="flex flex-col gap-1 px-3 pb-3" aria-label="Poids des catégories">
+                    {slices.map((slice) => (
+                      <li key={slice.name}>
+                        <button
+                          type="button"
+                          aria-pressed={selectedSlice?.name === slice.name}
+                          onClick={() =>
+                            setSelectedAllocation(
+                              selectedSlice?.name === slice.name ? null : slice.name,
+                            )
+                          }
+                          className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 text-left text-xs transition-colors hover:bg-(--surface-secondary) aria-pressed:bg-(--accent-soft) motion-reduce:transition-none"
+                        >
+                          <span
+                            className="size-2 shrink-0 rounded-full"
+                            style={{ background: slice.color }}
+                            aria-hidden="true"
+                          />
+                          <span className="min-w-0 flex-1 text-(--muted) [overflow-wrap:anywhere]">
+                            {slice.name}
+                          </span>
+                          <strong className="shrink-0 tabular-nums">
+                            {total && d(total).gt(0)
+                              ? `${d(slice.value).div(total).mul(100).toFixed(1)} %`
+                              : '—'}
+                          </strong>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div
+                  aria-live="polite"
+                  aria-atomic="true"
+                  data-testid="allocation-details"
+                  className="mx-4 mb-4 rounded-xl border border-(--line) bg-(--surface-secondary) p-3 text-xs"
+                >
+                  {selectedSlice ? (
+                    <>
+                      <div className="flex items-center justify-between gap-2">
+                        <strong className="min-w-0 [overflow-wrap:anywhere]">
+                          {selectedSlice.name}
+                        </strong>
+                        <button
+                          type="button"
+                          aria-label="Effacer la sélection"
+                          onClick={() => setSelectedAllocation(null)}
+                          className="-mr-1 grid size-8 shrink-0 place-items-center rounded-md text-(--muted) hover:bg-(--surface)"
+                        >
+                          <X size={14} aria-hidden="true" />
+                        </button>
+                      </div>
+                      <p className="mt-1! text-xl font-semibold tracking-tight tabular-nums [overflow-wrap:anywhere]">
+                        {money(selectedSlice.value, currency)}
+                      </p>
+                      <p className="mt-1! text-(--muted)">
+                        {total && d(total).gt(0)
+                          ? `${d(selectedSlice.value).div(total).mul(100).toFixed(1)} % du patrimoine`
+                          : 'Poids indisponible · valorisation incomplète'}
+                      </p>
+                      <Link
+                        href={selectedSlice.href}
+                        className="mt-2 inline-flex min-h-8 items-center gap-1 font-medium text-(--accent)!"
+                      >
+                        Voir les positions <ArrowUpRight size={14} aria-hidden="true" />
+                      </Link>
+                    </>
+                  ) : (
+                    <p className="text-(--muted)">
+                      Cliquez sur une section ou une catégorie pour voir le détail.
+                    </p>
+                  )}
+                </div>
+                <p className="border-t border-(--line) bg-(--surface-secondary) px-5 py-3 text-xs text-(--muted)">
+                  Valeurs positives · liquidités incluses
+                </p>
+              </>
+            ) : (
+              <div className="flex min-h-64 flex-col items-center justify-center gap-3 p-6 text-center text-xs text-(--muted)">
+                <Layers3 size={28} aria-hidden="true" />
+                <p>Votre répartition apparaîtra après un premier achat valorisé.</p>
+              </div>
+            )}
+          </DashboardCard>
+          <DashboardCard className="flex flex-col gap-3 p-4" aria-label="Analyse du portefeuille">
+            <div className="flex items-center gap-2">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-(--accent-soft) text-(--accent)">
+                <Sparkles size={17} aria-hidden="true" />
+              </span>
+              <h2 className="text-sm!">Un regard éclairé</h2>
+            </div>
+            <p className="text-xs text-(--muted)">
+              Un résumé de votre patrimoine, prêt à partager avec votre IA.
+            </p>
+            <PortfolioAnalysisDialog state={state} triggerClassName={dashboardPrimaryAction} />
+          </DashboardCard>
+        </div>
       </div>
 
       <section aria-labelledby="investments-heading" className="flex flex-col gap-4">
@@ -258,7 +337,7 @@ export function DashboardPage({ state }: { state: AppState }) {
           <div
             aria-label="Catégories détenues"
             role="group"
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 min-[1440px]:grid-cols-3 min-[1700px]:grid-cols-4"
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 min-[90rem]:grid-cols-3 min-[106.25rem]:grid-cols-4"
           >
             {held.map((item) => (
               <AssetCategoryCard
@@ -284,22 +363,6 @@ export function DashboardPage({ state }: { state: AppState }) {
           </DashboardCard>
         )}
       </section>
-
-      <DashboardCard
-        className="flex flex-wrap items-center gap-4 p-4 sm:p-5"
-        aria-label="Analyse du portefeuille"
-      >
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-(--accent-soft) text-(--accent)">
-          <Sparkles size={20} aria-hidden="true" />
-        </span>
-        <div className="min-w-0 flex-1 basis-48">
-          <h2 className="text-sm!">Un autre regard sur votre patrimoine</h2>
-          <p className="mt-1! text-xs text-(--muted)">
-            Préparez un résumé à analyser avec votre IA. Vous gardez le contrôle du partage.
-          </p>
-        </div>
-        <PortfolioAnalysisDialog state={state} triggerClassName={dashboardPrimaryAction} />
-      </DashboardCard>
     </div>
   );
 }
