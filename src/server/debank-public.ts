@@ -242,10 +242,16 @@ export async function fetchDeBankPublic(address: string): Promise<WalletData> {
   let browser: Browser;
   try {
     if (process.env.VERCEL === '1') {
-      const { default: serverless } = await import('@sparticuz/chromium');
+      const { default: serverless } = await import('@sparticuz/chromium-min');
+      if (process.arch !== 'x64' && process.arch !== 'arm64')
+        throw new Error('Unsupported architecture');
+      // Official release packs must stay aligned with chromium-min's pinned version.
+      const remotePack =
+        process.env.CHROMIUM_PACK_URL ||
+        `https://github.com/Sparticuz/chromium/releases/download/v153.0.0/chromium-v153.0.0-pack.${process.arch}.tar`;
       browser = await chromium.launch({
         args: serverless.args,
-        executablePath: await serverless.executablePath(),
+        executablePath: await serverless.executablePath(remotePack),
         headless: true,
         timeout: 20_000,
       });

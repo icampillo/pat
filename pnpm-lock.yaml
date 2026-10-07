@@ -20,7 +20,7 @@ importers:
       '@radix-ui/react-dialog':
         specifier: 1.1.23
         version: 1.1.23(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@sparticuz/chromium':
+      '@sparticuz/chromium-min':
         specifier: 153.0.0
         version: 153.0.0
       better-auth:
@@ -1410,8 +1410,8 @@ packages:
   '@rtsao/scc@1.1.0':
     resolution: {integrity: sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==}
 
-  '@sparticuz/chromium@153.0.0':
-    resolution: {integrity: sha512-jiGWqSvPMdu4+P9TilYqAR7yEGPEHINx+lCvE/NqNO/EHYzF/x1hUiI5T6ioVIt7dEy7n88byyT0vk+dnsgQwA==}
+  '@sparticuz/chromium-min@153.0.0':
+    resolution: {integrity: sha512-NptrPP1GRzu0YSt1VnD5vus2baVoQrQbiIaOVDO5Hdgw1vsrvGXFO9hoTE0wIb0tmlrLAzAi1tUJZS2OOGagrg==}
     engines: {node: ^22.17.0 || >=24.0.0}
 
   '@standard-schema/spec@1.1.0':
@@ -5080,7 +5080,7 @@ snapshots:
 
   '@rtsao/scc@1.1.0': {}
 
-  '@sparticuz/chromium@153.0.0':
+  '@sparticuz/chromium-min@153.0.0':
     dependencies:
       tar-fs: 3.1.3
     transitivePeerDependencies:

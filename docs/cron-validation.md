@@ -1,5 +1,7 @@
 # Validation des jobs Vercel — 7 octobre 2026
 
+> Rapport historique du commit `a695d17`. Le déploiement a ensuite révélé une erreur de packaging non détectée par le build Next local. La section Chromium ci-dessous est remplacée par [la correction et sa validation](chromium-vercel-validation.md) (`chromium-min` + pack distant).
+
 ## 1. Statut du build
 
 **Réussi, code de sortie 0**, mode production Vercel (`VERCEL=1`), Node 24.21.0, Next.js 16.3.5, webpack. Génération Prisma, compilation, TypeScript, 15 pages statiques et collecte des traces terminées. Les trois routes cron apparaissent dans le build comme routes dynamiques.

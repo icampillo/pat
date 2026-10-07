@@ -37,7 +37,7 @@
     "@prisma/client": "7.10.0",
     "@radix-ui/react-alert-dialog": "1.1.23",
     "@radix-ui/react-dialog": "1.1.23",
-    "@sparticuz/chromium": "153.0.0",
+    "@sparticuz/chromium-min": "153.0.0",
     "better-auth": "1.7.5",
     "csv-parse": "7.0.2",
     "csv-stringify": "6.8.3",
