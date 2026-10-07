@@ -47,8 +47,8 @@ Toutes les routes ci-dessous exigent une session. Les mutations exigent aussi un
 | PATCH | /settings | Nom du portefeuille, devise par défaut et fuseau |
 | POST | /snapshots | Capture manuelle |
 | GET | /snapshots/:id | Détail immuable d’une capture |
-| POST | /imports/preview | CSV borné, aperçu persisté sans écriture financière |
-| POST | /imports/:id/confirm | Confirmation explicite de toutes les lignes du lot |
+| POST | /imports/preview | CSV ou avis PDF Bourso borné, rapprochement sans écriture financière |
+| POST | /imports/:id/confirm | Ajout atomique des nouvelles lignes et des ambiguïtés explicitement choisies |
 | GET | /exports/assets.csv | Fiches et valorisation courante |
 | GET | /exports/transactions.csv | Journal, y compris les transactions annulées |
 | GET | /exports/history.csv | Toutes les captures et leurs détails JSON |
@@ -70,7 +70,31 @@ Une erreur de validation donne 422, un conflit de solde ou d’idempotence 409, 
 
 ## Import et prix
 
-L’import accepte les transactions sur des actifs préexistants, identifiés par asset_id ou par un asset_symbol non ambigu. Le modèle est [import-transactions.csv](../public/import-transactions.csv). Le lot garde l’empreinte du CSV, les données normalisées, les erreurs et la version du portefeuille. Après 30 minutes ou une modification du portefeuille, il faut refaire l’aperçu. Une référence externe déjà présente ou un fichier déjà confirmé est refusé. La confirmation est atomique et rejouable sans doublon.
+L’import accepte soit `csv`, soit `pdfBase64`, avec `platform`, `currency` et `source` (`GENERIC` / `BOURSORAMA`). Le PDF impose un compte et force la source Bourso. Le modèle CSV est [import-transactions.csv](../public/import-transactions.csv). `transaction-csv.ts` normalise les colonnes, montants et dates ; `bourso-notice.ts` extrait un avis textuel via `unpdf`, puis applique le même parcours. Limites : CSV 200 Ko / 500 lignes, PDF 150 Ko / deux pages / une exécution Euronext Paris. Aucun document utilisateur n’est fourni avec les tests : le PDF de test est synthétique.
+
+Les actifs sont identifiés par `asset_id`, ou par compte et ISIN/symbole. Un ISIN inconnu avec nom produit une fiche Bourse au prix manuel, créée uniquement à la confirmation. `import-matching.ts` privilégie les références courtier isolées par source et compte, puis compare les empreintes normalisées en conservant les occurrences multiples. Les statuts sont `EXISTING`, `NEW`, `CHANGED`, `AMBIGUOUS`. Une référence conflictuelle ou annulée n’est jamais recréée ; une opération sans référence fiable peut être ajoutée comme distincte après choix explicite. Les inventaires restent intacts, et les avis potentiellement antérieurs sont signalés.
+
+L’aperçu conserve les données normalisées (pas le PDF), erreurs et version du portefeuille pendant 30 minutes. Un réimport entièrement connu renvoie `id: unchanged` sans persistance, audit ni incrément de version. La confirmation `{ confirmed: true, decisions?: [{ line, action: 'CREATE' | 'IGNORE' }] }` refait le rapprochement sous le verrou de mutation existant, ajoute les nouvelles lignes, ignore les ambiguïtés par défaut et valide le journal entier. Les choix explicites imposent une version inchangée ; les doublons concurrents peuvent être ignorés automatiquement. Le lot confirmé est rejouable sans écriture. Aucune migration n’est nécessaire. Le brut BUY/SELL conserve l’arrondi courtier (écart maximal de 0,01 avec quantité × cours) dans le coût et les flux ; les anciens montants à zéro restent calculés depuis quantité × cours.
+
+
+### Validation de l’import (7 octobre 2026)
+
+200 tests unitaires et 67 tests d’intégration réussis ; test ciblé supplémentaire réussi pour préserver le brut arrondi après édition du commentaire. TypeScript, ESLint, formatage ciblé, contrôle du diff et build production Next.js réussis. L’intégration utilise une base PGlite éphémère exposée uniquement sur `127.0.0.1:55439` : elle ne remplace pas une validation de concurrence sur un serveur PostgreSQL natif. Aucun test navigateur ni déploiement effectué lors de cette finalisation.
+
+Commandes reproductibles depuis le projet, avec Node 24 et les dépendances installées :
+
+```sh
+node node_modules/vitest/vitest.mjs run tests/unit
+node node_modules/typescript/bin/tsc --noEmit
+node node_modules/eslint/bin/eslint.js .
+# Définir les TROIS variables vers une base locale dédiée dont le nom finit par _test.
+# DIRECT_URL est également utilisée par Prisma migrate deploy dans les tests.
+DATABASE_URL="$DATABASE_URL_TEST" DIRECT_URL="$DATABASE_URL_TEST" \
+  node node_modules/vitest/vitest.mjs run tests/integration --maxWorkers=1
+VERCEL=1 node node_modules/next/dist/bin/next build --webpack
+```
+
+Lors de cette validation, les trois URL de base et les paramètres d’authentification ont été explicitement remplacés dans les processus enfants, y compris pour le build ; aucun fichier `.env` modifié. Le seul PDF versionné est synthétique.
 
 Les providers crypto, titres, métaux et cartes sont des adaptateurs explicitement non configurés. Leur indisponibilité conserve la dernière observation et sa date d’origine. Le prix au gramme est calculé avec Decimal.js à partir du poids brut, de la pureté et de la prime ; le cours du métal est saisi par l’utilisateur. Aucun prix de démonstration ne provient d’un marché réel.
 

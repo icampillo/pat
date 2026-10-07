@@ -1,9 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { db } from './db';
 import { capture, getState } from './portfolio-query';
 import { insertTransaction, validateLedger } from './portfolio';
-import { json, mutate } from './portfolio-store';
+import { json, mutate, UnchangedMutation } from './portfolio-store';
 import { fetchEcbRate } from './market';
 import { saveSecurityQuote } from './securities-market';
 import { parseSecuritiesCsv, securityCsvRowSchema } from '@/domain/securities-csv';
@@ -56,16 +55,6 @@ export async function previewSecurities(
         .trim()}`,
     )
     .digest('hex');
-  if (
-    await db().importBatch.findFirst({
-      where: { portfolioId: initial.portfolio.id, hash, status: 'COMMITTED' },
-    })
-  )
-    throw new AppError(
-      'IMPORT_DUPLICATE',
-      'Ce relevé a déjà été importé. Aucune position n’a été ajoutée.',
-      409,
-    );
   const rows: ImportRow[] = [],
     errors = [...parsed.errors];
   const cache = new Map<string, ReturnType<typeof resolveSecurity>>();
@@ -181,6 +170,13 @@ export async function previewSecurities(
           409,
         );
       const expiresAt = new Date(Date.now() + 30 * 60_000);
+      if (!errors.length && rows.every((row) => row.existingAssetId))
+        throw new UnchangedMutation({
+          id: 'unchanged',
+          rows,
+          errors,
+          expiresAt: expiresAt.toISOString(),
+        });
       const batch = await tx.importBatch.create({
         data: {
           portfolioId: portfolio.id,
@@ -228,7 +224,7 @@ export async function confirmSecurities(
         created: payload.rows.filter((row) => !row.existingAssetId).length,
         skipped: payload.rows.filter((row) => row.existingAssetId).length,
       };
-      if (batch.status === 'COMMITTED') return result;
+      if (batch.status === 'COMMITTED') throw new UnchangedMutation(result);
       if (batch.expiresAt < new Date() || batch.ledgerVersion !== portfolio.version)
         throw new AppError(
           'PREVIEW_STALE',

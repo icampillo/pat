@@ -31,6 +31,12 @@ export async function owned(userId: string, client: TxDb = db()) {
     );
   return p;
 }
+// Sortie sans écriture : annule aussi version, audit et clé d’idempotence.
+export class UnchangedMutation extends Error {
+  constructor(readonly result: unknown) {
+    super('Aucune modification');
+  }
+}
 export async function mutate(
   userId: string,
   key: string | null,
@@ -70,6 +76,7 @@ export async function mutate(
         { isolationLevel: 'Serializable', timeout: 20_000 },
       );
     } catch (error) {
+      if (error instanceof UnchangedMutation) return error.result;
       const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
       if (code === 'P2034' && attempt < 2) continue;
       if (code === 'P2002') throw new AppError('DUPLICATE', 'Cette référence existe déjà.', 409);

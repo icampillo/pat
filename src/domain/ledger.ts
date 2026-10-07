@@ -55,7 +55,8 @@ export function replay(transactions: LedgerTransaction[]) {
       amount = d(tx.amount),
       eur = d(tx.fxToEur);
     const usd = tx.fxToUsd ? d(tx.fxToUsd) : null;
-    const gross = q.abs().mul(p),
+    // Le courtier peut arrondir le montant brut au centime sans arrondir le cours.
+    const gross = ['BUY', 'SELL'].includes(tx.type) && amount.gt(0) ? amount : q.abs().mul(p),
       eurGross = gross.mul(eur);
     const a = tx.assetId
       ? (assets[tx.assetId] ||= {

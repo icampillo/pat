@@ -46,7 +46,9 @@ export function SecuritiesImportPanel({
           <h2>Importer mes positions Bourse</h2>
           <p className="muted">
             Déposez l’export « Positions instantanées » de BoursoBank. Les produits, quantités,
-            coûts d’acquisition et cours sont récupérés automatiquement.
+            coûts d’acquisition et cours sont récupérés automatiquement. Pour réimporter un
+            historique d’achats et de ventes ou ajouter un nouvel avis, utilisez « Importer mes
+            nouvelles opérations ».
           </p>
         </div>
         <Upload size={22} aria-hidden="true" />
@@ -235,24 +237,30 @@ export function SecuritiesImportPanel({
             valorisation moins la plus-value pour conserver le coût malgré l’arrondi du PRU. Aucune
             position n’est créée avant confirmation.
           </p>
-          <button
-            className="btn primary"
-            disabled={busy || preview.errors.length > 0 || !preview.rows.length}
-            onClick={() =>
-              run(async () => {
-                const result = (await save(`securities/imports/${preview.id}/confirm`, 'POST', {
-                  confirmed: true,
-                })) as { created: number; skipped: number };
-                setMessage(
-                  `Import terminé : ${result.created} position(s) créée(s), ${result.skipped} déjà présente(s). Les cours seront actualisés automatiquement.`,
-                );
-                setPreview(null);
-                setCsv('');
-              })
-            }
-          >
-            Confirmer l’import Bourse
-          </button>
+          {preview.id === 'unchanged' ? (
+            <p className="notice" role="status">
+              Toutes les positions sont déjà à jour. Aucun changement en base.
+            </p>
+          ) : (
+            <button
+              className="btn primary"
+              disabled={busy || preview.errors.length > 0 || !preview.rows.length}
+              onClick={() =>
+                run(async () => {
+                  const result = (await save(`securities/imports/${preview.id}/confirm`, 'POST', {
+                    confirmed: true,
+                  })) as { created: number; skipped: number };
+                  setMessage(
+                    `Import terminé : ${result.created} position(s) créée(s), ${result.skipped} déjà présente(s). Les cours seront actualisés automatiquement.`,
+                  );
+                  setPreview(null);
+                  setCsv('');
+                })
+              }
+            >
+              Confirmer l’import Bourse
+            </button>
+          )}
         </>
       )}
       <p className="small muted">

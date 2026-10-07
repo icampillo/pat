@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { readFileSync } from 'node:fs';
 import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -18,6 +19,7 @@ if (!testUrl || !new URL(testUrl).pathname.endsWith('_test'))
     'Tests refusés : DATABASE_URL_TEST doit désigner une base se terminant par _test.',
   );
 process.env.DATABASE_URL = testUrl;
+process.env.DIRECT_URL = testUrl;
 let userId: string,
   secondId: string,
   portfolioId: string,
@@ -506,7 +508,7 @@ describe('Cycle de vie des actifs', () => {
   });
 });
 describe('Import CSV avec aperçu', () => {
-  const csv = (id: string, reference = randomUUID(), q = '1') =>
+  const csv = (id: string, reference: string = randomUUID(), q = '1') =>
     `asset_id,type,quantity,unit_price,currency,occurred_at,platform,external_reference\n${id},BUY,${q},100,EUR,2025-01-01T00:00:00Z,Personnel,${reference}`;
   const preview = async (text: string) =>
     (await importCommand(
@@ -521,7 +523,7 @@ describe('Import CSV avec aperçu', () => {
     const asset = await createAsset();
     const batch = await preview(csv(asset.id));
     await commandFor('DELETE', `assets/${asset.id}`, { confirmed: true }, '1');
-    await expect(confirm(batch.id)).rejects.toMatchObject({ code: 'PREVIEW_STALE' });
+    await expect(confirm(batch.id)).rejects.toMatchObject({ code: 'ASSET_ARCHIVED' });
     for (const text of [
       csv(asset.id),
       csv(asset.id).replace('asset_id', 'asset_symbol').replace(asset.id, 'ARCHIVED_ONLY'),
@@ -546,7 +548,17 @@ describe('Import CSV avec aperçu', () => {
     await confirm(batch.id);
     await confirm(batch.id);
     expect(await db().transaction.count({ where: { assetId: asset.id } })).toBe(1);
-    await expect(preview(text)).rejects.toMatchObject({ status: 409 });
+    const before = await db().portfolio.findUniqueOrThrow({ where: { id: portfolioId } });
+    for (let i = 0; i < 10; i++) {
+      expect(await preview(text)).toMatchObject({
+        id: 'unchanged',
+        errors: [],
+        summary: { EXISTING: 1, NEW: 0 },
+      });
+      await confirm(batch.id);
+    }
+    expect(await db().portfolio.findUniqueOrThrow({ where: { id: portfolioId } })).toEqual(before);
+    expect(await db().transaction.count({ where: { assetId: asset.id } })).toBe(1);
   });
   it('détecte les lignes invalides et interdit toute validation partielle', async () => {
     const asset = await createAsset(),
@@ -555,24 +567,179 @@ describe('Import CSV avec aperçu', () => {
     await expect(confirm(batch.id)).rejects.toMatchObject({ status: 422 });
     expect(await db().transaction.count({ where: { assetId: asset.id } })).toBe(0);
   });
-  it('refuse un aperçu périmé après modification du portefeuille', async () => {
+  it('revérifie un aperçu après une modification sans rapport et refuse son expiration', async () => {
     const asset = await createAsset(),
       batch = await preview(csv(asset.id));
     await createAsset();
-    await expect(confirm(batch.id)).rejects.toMatchObject({ status: 409 });
+    expect(await confirm(batch.id)).toMatchObject({ count: 1 });
+    const expired = await preview(csv(asset.id));
+    await db().importBatch.update({ where: { id: expired.id }, data: { expiresAt: new Date(0) } });
+    await expect(confirm(expired.id)).rejects.toMatchObject({ code: 'PREVIEW_STALE' });
   });
   it('détecte les références déjà importées et les ventes sans provision', async () => {
     const asset = await createAsset(),
       reference = randomUUID(),
       batch = await preview(csv(asset.id, reference));
     await confirm(batch.id);
-    expect((await preview(csv(asset.id, reference, '2'))).errors[0].message).toContain(
-      'déjà utilisée',
-    );
+    const changed = await preview(csv(asset.id, reference, '2'));
+    expect(changed.errors).toEqual([]);
+    expect(changed.rows[0]).toMatchObject({ status: 'CHANGED', canCreate: false });
+    await confirm(changed.id);
+    expect(
+      (
+        await db().transaction.findFirstOrThrow({ where: { assetId: asset.id } })
+      ).quantity.toString(),
+    ).toBe('1');
     expect(
       (await preview(csv(asset.id).replace(',BUY,', ',SELL,').replace(',1,100,', ',9,100,')))
         .errors[0].message,
     ).toContain('insuffisante');
+  });
+  it('persiste le montant brut au centime et ne double pas un avis converti en CSV', async () => {
+    const asset = await createAsset();
+    const text = `asset_id;type;quantity;unit_price;amount;currency;occurred_at;platform;external_reference\n${asset.id};BUY;55;6,8890;378,90;EUR;2026-09-15T09:58:14+02:00;Personnel;avis-test-001`;
+    const batch = await preview(text);
+    expect(batch.errors).toEqual([]);
+    await confirm(batch.id);
+    expect(
+      (await getState(userId)).rows.find((r: { id: string }) => r.id === asset.id),
+    ).toMatchObject({ quantity: '55', costEur: '378.9' });
+    expect((await preview(text)).summary).toMatchObject({ EXISTING: 1, NEW: 0 });
+    const entry = await db().transaction.findFirstOrThrow({ where: { assetId: asset.id } });
+    // Le formulaire d’édition envoie amount=0 pour BUY/SELL : préserver le brut du courtier.
+    await commandFor(
+      'PATCH',
+      `transactions/${entry.id}`,
+      {
+        transaction: {
+          assetId: asset.id,
+          type: 'BUY',
+          quantity: '55',
+          unitPrice: '6.889',
+          amount: '0',
+          currency: 'EUR',
+          platform: 'Personnel',
+          occurredAt: entry.occurredAt.toISOString(),
+          externalReference: entry.externalReference,
+          comment: 'Commentaire corrigé',
+        },
+        reason: 'Corriger seulement le commentaire',
+      },
+      String(entry.version),
+    );
+    expect(
+      (await db().transaction.findUniqueOrThrow({ where: { id: entry.id } })).amount.toString(),
+    ).toBe('378.9');
+    expect((await preview(text)).summary).toMatchObject({ EXISTING: 1, NEW: 0 });
+  });
+  it('ajoute un avis PDF après un inventaire sans toucher celui-ci, puis ignore son réimport', async () => {
+    const category = await db().assetCategory.findFirstOrThrow({
+      where: { portfolioId, key: 'SECURITIES' },
+    });
+    const asset = await commandFor('POST', 'assets', {
+      name: 'ETF avis PDF',
+      symbol: 'PDFTEST',
+      categoryId: category.id,
+      currency: 'EUR',
+      platform: 'PEA PDF',
+      metadata: { isin: 'IE0002XZSHO1' },
+    });
+    await commandFor('POST', 'transactions', {
+      assetId: asset.id,
+      type: 'ADJUSTMENT',
+      quantity: '10',
+      unitPrice: '100',
+      currency: 'EUR',
+      platform: 'PEA PDF',
+      occurredAt: '2026-01-01T00:00:00Z',
+      comment: 'Inventaire initial synthétique',
+    });
+    const inventory = await db().transaction.findFirstOrThrow({ where: { assetId: asset.id } });
+    const input = {
+      platform: 'PEA PDF',
+      pdfBase64: readFileSync('tests/fixtures/bourso-notice-synthetic.pdf').toString('base64'),
+    };
+    const batch = (await importCommand(
+      userId,
+      ['imports', 'preview'],
+      input,
+      randomUUID(),
+    )) as ImportPreview;
+    expect(batch.errors).toEqual([]);
+    expect(batch.summary).toMatchObject({ NEW: 1, reinforced: 1 });
+    await confirm(batch.id);
+    expect(
+      (await getState(userId)).rows.find((r: { id: string }) => r.id === asset.id),
+    ).toMatchObject({ quantity: '65', costEur: '1378.9' });
+    expect(await db().transaction.findUnique({ where: { id: inventory.id } })).toEqual(inventory);
+    const unchanged = (await importCommand(
+      userId,
+      ['imports', 'preview'],
+      input,
+      randomUUID(),
+    )) as ImportPreview;
+    expect(unchanged.summary).toMatchObject({ NEW: 0, EXISTING: 1 });
+  });
+  it('importe 100 opérations puis seulement 3 nouvelles et conserve le journal initial', async () => {
+    const asset = await createAsset();
+    const header = 'asset_id;type;quantity;unit_price;currency;occurred_at;platform';
+    const lines = Array.from(
+      { length: 103 },
+      (_, i) =>
+        `${asset.id};BUY;1;100;EUR;${new Date(Date.UTC(2024, 0, i + 1)).toISOString()};Personnel`,
+    );
+    const first = await preview([header, ...lines.slice(0, 100)].join('\n'));
+    expect(first.summary.NEW).toBe(100);
+    expect(await confirm(first.id)).toMatchObject({ count: 100 });
+    const initial = await db().transaction.findMany({
+      where: { assetId: asset.id },
+      orderBy: { sequence: 'asc' },
+    });
+    const next = await preview([header, ...lines].join('\n'));
+    expect(next.summary).toMatchObject({ EXISTING: 100, NEW: 3 });
+    expect(await confirm(next.id)).toMatchObject({ count: 3, skipped: 100 });
+    expect(
+      await db().transaction.findMany({
+        where: { id: { in: initial.map((t) => t.id) } },
+        orderBy: { sequence: 'asc' },
+      }),
+    ).toEqual(initial);
+    const row = (await getState(userId)).rows.find((r: { id: string }) => r.id === asset.id);
+    expect(row).toMatchObject({ quantity: '103', costEur: '10300' });
+    expect((await preview([header, ...lines.reverse()].join('\n'))).summary).toMatchObject({
+      EXISTING: 103,
+      NEW: 0,
+    });
+  });
+  it('sérialise deux confirmations et deux aperçus identiques sans doublons', async () => {
+    const asset = await createAsset();
+    const text = csv(asset.id, 'same-operation');
+    const first = await preview(text),
+      second = await preview(text);
+    const results = await Promise.all([confirm(first.id), confirm(second.id)]);
+    expect(results.map((r) => (r as { count: number }).count).sort()).toEqual([0, 1]);
+    const before = await db().portfolio.findUniqueOrThrow({ where: { id: portfolioId } });
+    await Promise.all([confirm(first.id), confirm(first.id)]);
+    expect(await db().portfolio.findUniqueOrThrow({ where: { id: portfolioId } })).toEqual(before);
+    expect(await db().transaction.count({ where: { assetId: asset.id } })).toBe(1);
+  });
+  it('ne crée rien si une vente devenue impossible invalide un lot à la confirmation', async () => {
+    const asset = await createAsset();
+    await commandFor('POST', 'transactions', purchase(asset.id, '2'));
+    const batch = await preview(
+      csv(asset.id)
+        .replace(',BUY,', ',SELL,')
+        .replace('2025-01-01T00:00:00Z', '2025-02-01T00:00:00Z'),
+    );
+    expect(batch.errors).toEqual([]);
+    await commandFor('POST', 'transactions', {
+      ...purchase(asset.id, '2'),
+      type: 'SELL',
+      occurredAt: '2025-01-01T00:00:00Z',
+    });
+    const before = await db().transaction.count({ where: { assetId: asset.id } });
+    await expect(confirm(batch.id)).rejects.toThrow('insuffisante');
+    expect(await db().transaction.count({ where: { assetId: asset.id } })).toBe(before);
   });
   it('isole les aperçus entre propriétaires', async () => {
     const asset = await createAsset(),

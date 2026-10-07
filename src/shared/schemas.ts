@@ -132,6 +132,12 @@ export const transactionSchema = z
   .superRefine((v, ctx) => {
     const fail = (path: string, message: string) =>
       ctx.addIssue({ code: 'custom', path: [path], message });
+    if (
+      ['BUY', 'SELL'].includes(v.type) &&
+      !decimal(v.amount).isZero() &&
+      decimal(v.amount).sub(decimal(v.quantity).mul(v.unitPrice)).abs().gt('0.01')
+    )
+      fail('amount', 'Montant brut incohérent avec quantité × prix (tolérance d’arrondi : 0,01).');
     if (['BUY', 'SELL', 'REWARD', 'ADJUSTMENT', 'DIVIDEND'].includes(v.type) && !v.assetId)
       fail('assetId', 'Sélectionnez un actif.');
     if (

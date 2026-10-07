@@ -14,6 +14,7 @@ import { importCommand } from '../../src/server/imports';
 const url = process.env.DATABASE_URL_TEST;
 if (!url || !new URL(url).pathname.endsWith('_test')) throw new Error('Base de test obligatoire');
 process.env.DATABASE_URL = url;
+process.env.DIRECT_URL = url;
 beforeAll(() => {
   execFileSync(process.execPath, ['node_modules/prisma/build/index.js', 'migrate', 'deploy'], {
     env: process.env,
@@ -130,18 +131,25 @@ it('imports Bourso atomically with precise cost, live quote, snapshot and no dup
   });
   expect(Number(state.rows[0].costEur)).toBeCloseTo(20.01, 10);
   expect(state.snapshots).toHaveLength(1);
-  await expect(
-    previewSecurities(user.userId, { csv, platform: 'BoursoBank PEA' }, randomUUID()),
-  ).rejects.toMatchObject({ code: 'IMPORT_DUPLICATE' });
-  const again = await previewSecurities(
-    user.userId,
-    { csv: csv.replace('ETF de test', 'Autre libellé'), platform: 'BoursoBank PEA' },
-    randomUUID(),
-  );
-  expect(again.errors).toEqual([]);
-  expect(
-    await confirmSecurities(user.userId, again.id, { confirmed: true }, randomUUID()),
-  ).toMatchObject({ created: 0, skipped: 1 });
+  const before = await getState(user.userId);
+  for (let i = 0; i < 10; i++) {
+    const again = await previewSecurities(
+      user.userId,
+      {
+        csv: i % 2 ? csv.replace('ETF de test', 'Autre libellé') : csv,
+        platform: 'BoursoBank PEA',
+      },
+      randomUUID(),
+    );
+    expect(again.errors).toEqual([]);
+    expect(again.id).toBe('unchanged');
+    expect(again.rows[0].existingAssetId).toBe(state.rows[0].id);
+    expect(
+      await confirmSecurities(user.userId, preview.id, { confirmed: true }, randomUUID()),
+    ).toEqual(result);
+  }
+  expect((await getState(user.userId)).portfolio.version).toBe(before.portfolio.version);
+  expect((await getState(user.userId)).snapshots).toEqual(before.snapshots);
   expect((await getState(user.userId)).transactions).toHaveLength(1);
 });
 it('preserves unknown cost, fetches FX for USD and blocks manual replacement of automatic prices', async () => {

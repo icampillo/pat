@@ -104,9 +104,17 @@ export async function prepareTransaction(
     occurredAt: new Date(data.occurredAt),
     fxToEur: preserveFx ? previous.fxToEur : fxToEur,
     fxToUsd: preserveFx ? previous.fxToUsd : fxToUsd,
-    amount: ['BUY', 'SELL'].includes(data.type)
-      ? precise(d(data.quantity).mul(data.unitPrice))
-      : data.amount,
+    amount:
+      ['BUY', 'SELL'].includes(data.type) && d(data.amount).isZero()
+        ? previous &&
+          previous.type === data.type &&
+          previous.currency === data.currency &&
+          d(String(previous.quantity)).eq(data.quantity) &&
+          d(String(previous.unitPrice)).eq(data.unitPrice) &&
+          d(String(previous.amount)).gt(0)
+          ? String(previous.amount)
+          : precise(d(data.quantity).mul(data.unitPrice))
+        : data.amount,
   };
 }
 export async function insertTransaction(
