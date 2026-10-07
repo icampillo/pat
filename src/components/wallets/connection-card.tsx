@@ -83,7 +83,7 @@ export function WalletConnectionCard({
         </p>
         <p className="small muted">
           Dernière réussite : {date(w.lastSuccessAt)}
-          {config.enabled && w.enabled && <> · Prochaine : {date(w.nextSyncAt)}</>}
+          {config.enabled && w.enabled && <> · Éligible dès : {date(w.nextSyncAt)}</>}
         </p>
         {!!w.data?.warnings?.length && (
           <details>

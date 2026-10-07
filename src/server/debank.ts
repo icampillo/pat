@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { providerFetch } from './provider-fetch';
 import { decimal as d, precise } from '@/domain/money';
 import type { WalletData, WalletToken, DefiPosition } from '@/shared/wallets';
 
@@ -172,7 +173,7 @@ export async function fetchDeBank(address: string, accessKey: string): Promise<W
   const id = addressSchema.parse(address);
   const get = async (path: string) => {
     try {
-      const res = await fetch(
+      const res = await providerFetch(
         `https://pro-openapi.debank.com/v1/user/${path}${path.includes('?') ? '&' : '?'}id=${id}`,
         {
           headers: { accept: 'application/json', AccessKey: accessKey },

@@ -38,7 +38,7 @@ Le dossier .local/postgres contient les données persistantes. Arrêter le termi
 
 ## Cours et change automatiques
 
-Quand le serveur fonctionne, il interroge toutes les 15 minutes le [taux de référence EUR/USD de la BCE](https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml) et les cours publics [XAU/XAG de Gold API](https://gold-api.com/llms.txt). Le taux BCE est publié les jours ouvrés ; sa date est affichée dans **Paramètres → Taux de change**. Le bouton **Actualiser les cours et le taux** lance une lecture immédiate. Une actualisation en ligne de commande est aussi disponible avec `pnpm market:sync`.
+Le cron quotidien de marché interroge le [taux de référence EUR/USD de la BCE](https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml) et les cours publics [XAU/XAG de Gold API](https://gold-api.com/llms.txt). Le taux BCE est publié les jours ouvrés ; sa date est affichée dans **Paramètres → Taux de change**. Le bouton **Actualiser les cours et le taux** lance une lecture immédiate. Une actualisation en ligne de commande est aussi disponible avec `pnpm market:sync`.
 
 Les sept pièces importées utilisent le cours spot en USD par once troy, converti en EUR par gramme avec le taux BCE, puis multiplié par le poids et la pureté de chaque pièce. L’once troy vaut 31,1034768 g. Les cotations et leurs sources sont conservées dans l’historique ; les quantités et l’absence de coût d’achat restent inchangées. La valeur calculée est celle du métal fin avec la prime enregistrée sur la fiche (zéro pour l’import actuel) : une éventuelle valeur numismatique n’est pas estimée. Si un fournisseur est indisponible, le dernier cours enregistré reste visible avec sa date, sans créer de cotation fictive.
 
@@ -99,7 +99,7 @@ Ouvrir **Wallets & DeFi**, coller une adresse EVM ou son URL de profil DeBank, p
 
 Le serveur ouvre un navigateur invisible et lit les données rendues du profil public. Il attend la fin du chargement, déplie les petits soldes et protocoles, et ferme le navigateur. Il ne clique sur aucun bouton de retrait ou de transaction et n’utilise ni cookies personnels ni signatures d’API internes.
 
-La première lecture démarre automatiquement, puis toutes les heures par défaut. Dans **Paramètres → Connexion DeBank**, choisir 15 minutes, 1 heure ou 4 heures, ou mettre en pause. Le serveur et PostgreSQL doivent rester démarrés ; fermer le navigateur de consultation n’arrête pas le job. Un serveur Node permanent est requis : un environnement serverless qui suspend le processus ne garantit pas le planificateur. `WALLET_WORKER_DISABLED=1` désactive les jobs, notamment dans les tests.
+La première lecture et le bouton **Actualiser** déclenchent le même service que le cron, via `after()` dans l’invocation HTTP authentifiée. Sur Vercel, le cron automatique passe une fois par jour. Dans **Paramètres → Connexion DeBank**, les délais de 15 minutes, 1 heure ou 4 heures sont des délais minimaux d’éligibilité, pas des fréquences de cron. Une pause conserve la dernière observation. Aucun worker permanent n’est nécessaire.
 
 Les données ont la couverture, les arrondis et la fraîcheur affichés par DeBank. Une modification du site ou un blocage peut interrompre la lecture ; l’application conserve alors la dernière observation et affiche l’erreur. Le total net n’est ajouté qu’une fois au patrimoine ; les détails de staking et les récompenses ne sont pas additionnés une seconde fois. Les fiches manuelles restent comptées : exclure le wallet du total si elles représentent déjà les mêmes positions.
 
@@ -141,11 +141,11 @@ Un bouton crée une capture manuelle. Pour la commande quotidienne, récupérer 
 pnpm snapshot --portfolio <uuid-du-portefeuille> --daily
 ```
 
-Les snapshots quotidiens sont automatiques dès le démarrage du serveur. Le planificateur vérifie chaque minute tous les portefeuilles : la première vérification après minuit dans le fuseau du portefeuille enregistre la capture du jour. Au démarrage, il capture immédiatement la journée en cours si elle manque. Une journée ne produit qu’un snapshot quotidien, même après redémarrage ou avec plusieurs serveurs ; les captures manuelles restent possibles.
+Le cron quotidien `/api/cron/snapshot` crée les captures manquantes du jour local de chaque portefeuille. La contrainte unique existante conserve au plus un snapshot quotidien par journée locale, même avec plusieurs invocations ; les captures manuelles restent possibles. Le démarrage de Next.js ne lance plus de planificateur.
 
-Garder l’application et PostgreSQL démarrés ; le navigateur peut être fermé. Si la machine ou le serveur est arrêté, les journées manquées ne sont pas reconstruites. Une erreur est journalisée et retentée à la minute suivante sans bloquer les autres portefeuilles. Un serveur Node permanent est requis ; un hébergement serverless qui suspend le processus ne garantit pas ce planificateur. `SNAPSHOT_WORKER_DISABLED=1` le désactive pour les tests ou la maintenance. La commande ci-dessus reste disponible pour un déclenchement externe. Les captures figent les dernières données enregistrées, sans forcer leur synchronisation. Les captures anciennes restent inchangées après une correction rétroactive, et l’estimation de performance après flux est alors désactivée.
+Les journées manquées ne sont pas reconstruites. Une erreur est isolée par portefeuille et signalée en HTTP 503 ; Vercel ne retente pas automatiquement les crons échoués. Une relance authentifiée le même jour peut compléter les captures manquantes. La commande ci-dessus reste disponible. Les captures figent les dernières données enregistrées, sans forcer leur synchronisation. Les captures anciennes restent inchangées après une correction rétroactive, et l’estimation de performance après flux est alors désactivée.
 
-Les synchronisations DeBank (15 min, 1 h ou 4 h) conservent leurs observations et actualisent les valeurs courantes sans créer de snapshot complet. Les captures supplémentaires concernent les demandes manuelles et les changements d’inclusion des wallets. Mettre la synchronisation en pause conserve la dernière valeur dans le patrimoine. Voir [les règles de fréquence et de périmètre](docs/implementation.md#fréquences-et-changements-de-périmètre).
+Les synchronisations DeBank (cron quotidien ou demande manuelle) conservent leurs observations et actualisent les valeurs courantes sans créer de snapshot complet. Les captures supplémentaires concernent les demandes manuelles et les changements d’inclusion des wallets. Mettre la synchronisation en pause conserve la dernière valeur dans le patrimoine. Voir [les règles de fréquence et de périmètre](docs/implementation.md#fréquences-et-changements-de-périmètre).
 
 L’import se trouve dans Paramètres. Télécharger le modèle, remplacer les exemples, créer préalablement les actifs et utiliser leurs symboles ou asset_id. CSV UTF-8 avec virgules, décimaux avec point, dates ISO 8601 et décalage horaire, types BUY/SELL/DEPOSIT/WITHDRAWAL/TRANSFER/FEE/DIVIDEND/REWARD/ADJUSTMENT. Une external_reference unique est obligatoire par ligne. Limites : 200 Ko, 500 lignes, aperçu valable 30 minutes. Toute modification du portefeuille impose un nouvel aperçu. Voir [l’API actuelle](docs/implementation.md).
 
@@ -201,7 +201,7 @@ L’analyse résout les ISIN vers une cotation action/ETF Yahoo Finance, récup�
 
 Les doublons de produit au sein du même compte sont signalés. Un fichier déjà confirmé ne peut pas être importé deux fois. Une position déjà présente avec la même quantité et le même coût est ignorée ; une position différente bloque la confirmation et doit être mise à jour via les transactions. Les titres absents du fichier ne sont jamais supprimés automatiquement. Ce parcours ne reconstruit pas les ventes, dividendes ni autres mouvements depuis un relevé de positions.
 
-Les actifs créés par cet import utilisent `pricingMode: SECURITIES_MARKET` et un ticker de cotation vérifié. Le worker de marché existant actualise leurs cours toutes les 15 minutes lorsque le serveur tourne ; le bouton **Actualiser les cours Bourse** permet une relance immédiate. La date du fournisseur est conservée, les observations identiques ne sont pas dupliquées, et un échec conserve le dernier cours connu. La récupération Bourse et celle des métaux sont indépendantes ; une panne des métaux ne bloque pas les titres. Le taux BCE peut également être actualisé si un fournisseur de métaux ne répond pas.
+Les actifs créés par cet import utilisent `pricingMode: SECURITIES_MARKET` et un ticker de cotation vérifié. Le job de marché actualise leurs cours via le cron quotidien ; le bouton **Actualiser les cours Bourse** permet une relance immédiate. La date du fournisseur est conservée, les observations identiques ne sont pas dupliquées, et un échec conserve le dernier cours connu. La récupération Bourse et celle des métaux sont indépendantes ; une panne des métaux ne bloque pas les titres. Le taux BCE peut également être actualisé si un fournisseur de métaux ne répond pas.
 
 La récupération utilise les endpoints publics Yahoo Finance sans clé API. Leur disponibilité n’est pas garantie et les cours peuvent être différés selon la place ; voir [les sources et délais Yahoo Finance](https://help.yahoo.com/kb/SLN2310.html). Le fournisseur est isolé dans `src/modules/prices/securities.ts` pour pouvoir le remplacer sans modifier l’import ou l’interface.
 
@@ -214,11 +214,11 @@ Vercel utilise le preset **Next.js** et `pnpm build` (voir `vercel.json`). Laiss
 
 Configurer côté Vercel `DATABASE_URL` (PostgreSQL accessible depuis Vercel), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` et `APP_ORIGIN` (ces deux URL doivent correspondre au domaine utilisé). Conserver `BETTER_AUTH_SECRET` : ce secret sert aussi au chiffrement des clés DeBank. Appliquer les migrations avec `pnpm db:deploy` dans un job séparé et contrôlé, jamais au build des previews. Aucun secret ne doit être commité.
 
-### Workers et wallets : serveur permanent nécessaire
+### Jobs quotidiens et wallets serverless
 
-Les trois workers sont automatiquement désactivés **dans les fonctions Vercel** : leurs timers ne survivent pas de manière fiable aux requêtes. Les synchronisations de wallets, y compris le bouton manuel, passent par une file en base. Sans worker séparé, elles restent en attente ; les cours et snapshots automatiques ne sont pas actualisés non plus.
+Les trois anciens workers et l’instrumentation de démarrage ont été supprimés. `vercel.json` programme `/api/cron/market` à 02 h UTC, `/api/cron/wallets` à 04 h UTC et `/api/cron/snapshot` à 06 h UTC, une fois par jour : compatible Hobby, avec déclenchement possible pendant l’heure prévue. Les routes exigent `Authorization: Bearer <CRON_SECRET>` ; Vercel fournit cet en-tête à partir de la variable Production `CRON_SECRET`. Générer un secret aléatoire d’au moins 32 octets, sans le commiter. Activer **Fluid Compute** et utiliser Node.js 24 : les routes déclarent `maxDuration = 300`.
 
-Sur un serveur Node 24 permanent, utiliser le même code et la même base que l’application, puis :
+Hors Vercel, un ordonnanceur externe peut lancer les mêmes jobs ponctuels (la commande se termine naturellement) :
 
 ```sh
 pnpm install --frozen-lockfile
@@ -227,9 +227,9 @@ pnpm wallet:install
 pnpm workers
 ```
 
-Le processus doit être supervisé par l’hébergeur et rester actif. Sous Linux, les bibliothèques système Chromium doivent aussi être présentes (voir la section Docker). Fournir `DATABASE_URL` et, pour les clés DeBank chiffrées, le même `BETTER_AUTH_SECRET` que l’application. Ne pas définir `VERCEL=1` sur ce serveur. Les variables `SNAPSHOT_WORKER_DISABLED`, `MARKET_WORKER_DISABLED` et `WALLET_WORKER_DISABLED` restent prises en charge. Ne pas démarrer en parallèle une seconde application Node avec ses workers activés : choisir un seul hébergement pour les tâches planifiées.
+`pnpm workers [market|wallets|snapshot|all]` exécute une passe puis déconnecte Prisma. Sur Node/Docker, fournir les bibliothèques Chromium et planifier la commande extérieurement. Les variables historiques `*_WORKER_DISABLED` n’ont plus d’effet : aucun timer serveur ne démarre. Aucun appel fournisseur n’est effectué au build.
 
-Chromium s’exécute sur ce serveur, pas dans Vercel. Aucun service navigateur distant ni abonnement n’est activé. Pour un déploiement sur une seule machine, conserver Docker/Node avec les workers intégrés, sans lancer `pnpm workers` en plus.
+Sur Vercel, Chromium provient de `@sparticuz/chromium`, inclus dans les traces des routes wallet/API, lancé en runtime Node et fermé après la lecture. Hors Vercel, Playwright utilise le navigateur installé localement. Aucun service navigateur distant ni abonnement n’est activé. Le cron traite les wallets séquentiellement (maximum 20 et budget de temps) ; les réponses partielles signalent `hasMore` et HTTP 503. Voir [l’audit et la validation serverless](docs/cron-validation.md) pour les limites et les contrôles avant/après déploiement.
 
 Le build local ne valide pas l’empaquetage final des fonctions Vercel : un redéploiement reste nécessaire pour confirmer la disparition de l’erreur initiale.
 

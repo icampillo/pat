@@ -241,13 +241,23 @@ export async function fetchDeBankPublic(address: string): Promise<WalletData> {
   const id = addressSchema.parse(address);
   let browser: Browser;
   try {
-    browser = await chromium.launch({ headless: true, timeout: 20_000 });
+    if (process.env.VERCEL === '1') {
+      const { default: serverless } = await import('@sparticuz/chromium');
+      browser = await chromium.launch({
+        args: serverless.args,
+        executablePath: await serverless.executablePath(),
+        headless: true,
+        timeout: 20_000,
+      });
+    } else {
+      browser = await chromium.launch({ headless: true, timeout: 20_000 });
+    }
   } catch {
     throw new DeBankError('BROWSER');
   }
   const deadline = setTimeout(() => {
     void browser.close().catch(() => {});
-  }, 120_000);
+  }, 90_000);
   try {
     const page = await browser.newPage({
       viewport: { width: 1440, height: 1000 },
@@ -294,6 +304,6 @@ export async function fetchDeBankPublic(address: string): Promise<WalletData> {
     throw error instanceof DeBankError ? error : new DeBankError('PUBLIC_BLOCKED');
   } finally {
     clearTimeout(deadline);
-    await browser.close();
+    await browser.close().catch(() => {});
   }
 }

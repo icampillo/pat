@@ -1,4 +1,5 @@
 import { db } from './db';
+import { providerFetch } from './provider-fetch';
 import { decimal as d, metalValue, precise } from '@/domain/money';
 import { metadataSchema } from '@/shared/schemas';
 import { syncSecuritiesPrices } from './securities-market';
@@ -60,7 +61,7 @@ export function coinSpotValue(
 }
 
 async function fetchText(url: string) {
-  const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(12_000) });
+  const response = await providerFetch(url);
   if (!response.ok) throw new Error(`MARKET_HTTP_${response.status}`);
   return response.text();
 }
@@ -71,93 +72,143 @@ export async function fetchEcbRate() {
 
 async function syncMetalMarketData(portfolioId?: string) {
   const now = new Date();
+  const started = Date.now();
   const portfolios = await db().portfolio.findMany({
     where: portfolioId ? { id: portfolioId } : {},
-    select: { id: true },
-  });
-  if (!portfolios.length) return { rates: 0, prices: 0 };
-
-  const rate = parseEcbRate(await fetchText(ECB_URL), now);
-  const spotResults = await Promise.allSettled([
-    fetchText(`${METAL_URL}XAU`).then((body) => parseMetalSpot(JSON.parse(body), 'GOLD', now)),
-    fetchText(`${METAL_URL}XAG`).then((body) => parseMetalSpot(JSON.parse(body), 'SILVER', now)),
-  ]);
-  const gold = spotResults[0].status === 'fulfilled' ? spotResults[0].value : null;
-  const silver = spotResults[1].status === 'fulfilled' ? spotResults[1].value : null;
-  const spots = { GOLD: gold, SILVER: silver };
-  let rates = 0;
-  let prices = 0;
-  for (const portfolio of portfolios) {
-    const result = await db().$transaction(
-      async (tx) => {
-        let newRate = 0;
-        let newPrices = 0;
-        const existingRate = await tx.fxRate.findFirst({
-          where: { portfolioId: portfolio.id, source: 'ecb', observedAt: rate.observedAt },
-        });
-        if (!existingRate) {
-          await tx.fxRate.create({ data: { portfolioId: portfolio.id, ...rate, source: 'ecb' } });
-          newRate = 1;
-        }
-        const assets = await tx.asset.findMany({
-          where: { portfolioId: portfolio.id, deletedAt: null, category: { key: 'METALS' } },
-        });
-        for (const asset of assets) {
-          if (asset.currency !== 'EUR') continue;
-          const parsed = metadataSchema.safeParse(asset.metadata);
-          if (!parsed.success) continue;
-          const meta = parsed.data;
-          if (
-            meta.pricingMode !== 'METAL_MARKET' ||
-            !meta.metalType ||
-            !meta.weightGrams ||
-            !meta.purity
-          )
-            continue;
-          const spot = spots[meta.metalType];
-          if (!spot) continue;
-          const latest = await tx.priceHistory.findFirst({
-            where: { assetId: asset.id },
-            orderBy: [{ observedAt: 'desc' }, { createdAt: 'desc' }],
-          });
-          if (
-            latest?.source === `gold-api:${meta.metalType}:ecb` &&
-            latest.observedAt >= spot.observedAt
-          )
-            continue;
-          await tx.priceHistory.create({
-            data: {
-              portfolioId: portfolio.id,
-              assetId: asset.id,
-              currency: 'EUR',
-              source: `gold-api:${meta.metalType}:ecb`,
-              observedAt: spot.observedAt,
-              price: coinSpotValue(
-                meta.weightGrams,
-                meta.purity,
-                spot.usdPerOunce,
-                rate.eurUsd,
-                meta.premium || '0',
-              ),
-            },
-          });
-          newPrices++;
-        }
-        return { newRate, newPrices };
+    orderBy: { id: 'asc' },
+    take: 101,
+    select: {
+      id: true,
+      rates: { where: { source: 'ecb' }, orderBy: { observedAt: 'desc' }, take: 1 },
+      assets: {
+        where: { deletedAt: null, status: 'ACTIVE', category: { key: 'METALS' } },
+        select: {
+          id: true,
+          currency: true,
+          metadata: true,
+          prices: { orderBy: [{ observedAt: 'desc' }, { createdAt: 'desc' }], take: 1 },
+        },
       },
-      { timeout: 20_000 },
-    );
-    rates += result.newRate;
-    prices += result.newPrices;
+    },
+  });
+  const result = { rates: 0, prices: 0, failed: 0, hasMore: portfolios.length > 100 };
+  if (!portfolios.length) return result;
+  const configured = portfolios.slice(0, 100).map((portfolio) => ({
+    ...portfolio,
+    assets: portfolio.assets.flatMap((asset) => {
+      const parsed = metadataSchema.safeParse(asset.metadata);
+      const meta = parsed.success ? parsed.data : null;
+      if (
+        asset.currency !== 'EUR' ||
+        meta?.pricingMode !== 'METAL_MARKET' ||
+        !meta.metalType ||
+        !meta.weightGrams ||
+        !meta.purity ||
+        (asset.prices[0]?.source.startsWith('gold-api:') &&
+          now.getTime() - asset.prices[0].createdAt.getTime() < 60_000)
+      )
+        return [];
+      return [{ ...asset, meta }];
+    }),
+  }));
+  // The ECB publishes one fixing per working day; reuse today's persisted fixing.
+  const cached = portfolios
+    .flatMap((p) => p.rates)
+    .find((r) => r.observedAt.toISOString().slice(0, 10) === now.toISOString().slice(0, 10));
+  const rate = cached
+    ? { eurUsd: String(cached.eurUsd), observedAt: cached.observedAt }
+    : await fetchEcbRate();
+  const metals = [...new Set(configured.flatMap((p) => p.assets.map((a) => a.meta.metalType!)))];
+  const spots = new Map<Metal, Spot>();
+  await Promise.all(
+    metals.map(async (metal) => {
+      try {
+        const spot = parseMetalSpot(
+          JSON.parse(await fetchText(`${METAL_URL}${metal === 'GOLD' ? 'XAU' : 'XAG'}`)),
+          metal,
+          new Date(),
+        );
+        spots.set(metal, spot);
+      } catch {
+        result.failed++;
+        console.warn(JSON.stringify({ job: 'market', code: 'METAL_QUOTE_UNAVAILABLE' }));
+      }
+    }),
+  );
+  for (const portfolio of configured) {
+    if (Date.now() - started >= 180_000) {
+      result.hasMore = true;
+      break;
+    }
+    try {
+      const changes = await db().$transaction(
+        async (tx) => {
+          // Serialize quote writers, including overlapping cron/manual invocations. No remote I/O here.
+          await tx.$queryRaw`SELECT id FROM "Portfolio" WHERE id = ${portfolio.id}::uuid FOR UPDATE`;
+          let rates = 0,
+            prices = 0;
+          const existingRate = await tx.fxRate.findFirst({
+            where: { portfolioId: portfolio.id, source: 'ecb', observedAt: rate.observedAt },
+          });
+          if (!existingRate) {
+            await tx.fxRate.create({ data: { portfolioId: portfolio.id, ...rate, source: 'ecb' } });
+            rates++;
+          }
+          for (const candidate of portfolio.assets) {
+            const asset = await tx.asset.findFirst({
+              where: { id: candidate.id, deletedAt: null, status: 'ACTIVE' },
+            });
+            const parsed = metadataSchema.safeParse(asset?.metadata);
+            if (!asset || asset.currency !== 'EUR' || !parsed.success) continue;
+            const meta = parsed.data;
+            if (
+              meta.pricingMode !== 'METAL_MARKET' ||
+              !meta.metalType ||
+              !meta.weightGrams ||
+              !meta.purity
+            )
+              continue;
+            const spot = spots.get(meta.metalType);
+            if (!spot) continue;
+            const latest = await tx.priceHistory.findFirst({
+              where: { assetId: asset.id },
+              orderBy: [{ observedAt: 'desc' }, { createdAt: 'desc' }],
+            });
+            if (latest && latest.observedAt >= spot.observedAt) continue;
+            await tx.priceHistory.create({
+              data: {
+                portfolioId: portfolio.id,
+                assetId: asset.id,
+                currency: 'EUR',
+                source: `gold-api:${meta.metalType}:ecb`,
+                observedAt: spot.observedAt,
+                price: coinSpotValue(
+                  meta.weightGrams,
+                  meta.purity,
+                  spot.usdPerOunce,
+                  rate.eurUsd,
+                  meta.premium || '0',
+                ),
+              },
+            });
+            prices++;
+          }
+          return { rates, prices };
+        },
+        { timeout: 20_000 },
+      );
+      result.rates += changes.rates;
+      result.prices += changes.prices;
+    } catch {
+      result.failed++;
+      console.warn(JSON.stringify({ job: 'market', code: 'METAL_WRITE_FAILED' }));
+    }
   }
   return {
-    rates,
-    prices,
+    ...result,
     rateDate: rate.observedAt.toISOString(),
-    goldAt: gold?.observedAt.toISOString() ?? null,
-    silverAt: silver?.observedAt.toISOString() ?? null,
-    ...(!gold || !silver
-      ? { warning: 'Certains cours de métaux sont indisponibles ; dernières valeurs conservées.' }
+    ...(result.failed
+      ? { warning: 'Certains cours sont indisponibles ; dernières valeurs conservées.' }
       : {}),
   };
 }
@@ -168,18 +219,29 @@ export async function syncMarketData(portfolioId?: string) {
     syncSecuritiesPrices(portfolioId),
   ]);
   if (metals.status === 'rejected')
-    console.warn(JSON.stringify({ code: 'METAL_MARKET_UNAVAILABLE' }));
+    console.warn(JSON.stringify({ job: 'market', code: 'METAL_MARKET_UNAVAILABLE' }));
+  const metalResult =
+    metals.status === 'fulfilled'
+      ? metals.value
+      : {
+          rates: 0,
+          prices: 0,
+          failed: 1,
+          hasMore: false,
+          warning: 'Métaux ou taux indisponibles ; dernières valeurs conservées.',
+        };
+  const securitiesResult =
+    securities.status === 'fulfilled'
+      ? securities.value
+      : {
+          prices: 0,
+          failures: [{ symbol: '', message: 'Actualisation boursière indisponible.' }],
+          hasMore: false,
+        };
   return {
-    ...(metals.status === 'fulfilled' ? metals.value : { rates: 0, prices: 0 }),
-    securities:
-      securities.status === 'fulfilled'
-        ? securities.value
-        : {
-            prices: 0,
-            failures: [{ symbol: '', message: 'Actualisation boursière indisponible.' }],
-          },
-    ...(metals.status === 'rejected'
-      ? { warning: 'Métaux ou taux indisponibles ; dernières valeurs conservées.' }
-      : {}),
+    ...metalResult,
+    securities: securitiesResult,
+    failed: metalResult.failed + securitiesResult.failures.length,
+    hasMore: metalResult.hasMore || securitiesResult.hasMore,
   };
 }

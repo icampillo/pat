@@ -9,11 +9,13 @@ import { db } from '@/server/db';
 import { exportData } from '@/server/exports';
 import { importCommand } from '@/server/imports';
 import { getImage, saveImage } from '@/server/images';
-import { walletCommand } from '@/server/wallets';
+import { walletCommand, syncWallet } from '@/server/wallets';
 import { syncMarketData } from '@/server/market';
 import { previewSecurities, confirmSecurities } from '@/server/securities-import';
 import { syncSecuritiesPrices } from '@/server/securities-market';
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const maxDuration = 300;
 async function handle(request: Request, context: { params: Promise<{ path: string[] }> }) {
   try {
     const session = await auth().api.getSession({ headers: request.headers });
@@ -78,16 +80,40 @@ async function handle(request: Request, context: { params: Promise<{ path: strin
       const portfolio = await owned(session.user.id);
       return response(await syncMarketData(portfolio.id));
     }
-    if (['wallets', 'debank'].includes(path[0]))
-      return response(
-        await walletCommand(
-          session.user.id,
-          request.method,
-          path,
-          await body(request),
-          request.headers.get('idempotency-key'),
-        ),
+    if (['wallets', 'debank'].includes(path[0])) {
+      const input = await body(request);
+      const result = await walletCommand(
+        session.user.id,
+        request.method,
+        path,
+        input,
+        request.headers.get('idempotency-key'),
       );
+      // walletCommand has already checked ownership inside its transaction. No network under lock.
+      if (
+        path[0] === 'wallets' &&
+        result &&
+        typeof result === 'object' &&
+        'id' in result &&
+        typeof result.id === 'string' &&
+        (request.method === 'POST' ||
+          (request.method === 'PATCH' &&
+            input &&
+            typeof input === 'object' &&
+            'enabled' in input &&
+            input.enabled === true))
+      ) {
+        const id = result.id;
+        after(async () => {
+          try {
+            await syncWallet(id);
+          } catch {
+            console.warn(JSON.stringify({ job: 'wallets', code: 'MANUAL_SYNC_FAILED' }));
+          }
+        });
+      }
+      return response(result);
+    }
     if (
       path.length === 3 &&
       path[0] === 'assets' &&

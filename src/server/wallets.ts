@@ -177,10 +177,17 @@ export async function walletCommand(
 
 // A database lease prevents parallel Next instances or manual refreshes from paying twice.
 export async function syncWallet(id: string, provider?: typeof fetchDeBank) {
+  return (await syncWalletResult(id, provider)) === 'succeeded';
+}
+
+async function syncWalletResult(
+  id: string,
+  provider?: typeof fetchDeBank,
+): Promise<'succeeded' | 'failed' | 'skipped'> {
   const wallet = await db().walletConnection.findUnique({ where: { id } });
-  if (!wallet) return false;
+  if (!wallet) return 'skipped';
   const config = await db().deBankConfig.findUnique({ where: { portfolioId: wallet.portfolioId } });
-  if (!config?.enabled) return false;
+  if (!config?.enabled) return 'skipped';
   const now = new Date(),
     leaseToken = randomUUID();
   const claimed = await db().walletConnection.updateMany({
@@ -198,7 +205,7 @@ export async function syncWallet(id: string, provider?: typeof fetchDeBank) {
       status: 'SYNCING',
     },
   });
-  if (!claimed.count) return false;
+  if (!claimed.count) return 'skipped';
   try {
     const accessKey =
       config.mode === 'API'
@@ -229,7 +236,7 @@ export async function syncWallet(id: string, provider?: typeof fetchDeBank) {
           current.deletedAt ||
           current.leaseToken !== leaseToken
         )
-          return false;
+          return 'skipped';
         await tx.walletObservation.create({
           data: { walletId: id, fetchedAt, totalUsd: data.totalUsd, data: json(data) },
         });
@@ -247,7 +254,7 @@ export async function syncWallet(id: string, provider?: typeof fetchDeBank) {
         });
         // High-frequency observations feed live valuation. Portfolio captures are scheduled
         // separately (daily/manual) or triggered by a change in the included wallet perimeter.
-        return true;
+        return 'succeeded';
       },
       { timeout: 30_000 },
     );
@@ -268,20 +275,40 @@ export async function syncWallet(id: string, provider?: typeof fetchDeBank) {
         nextSyncAt: new Date(Date.now() + retryMinutes * 60_000),
       },
     });
-    return false;
+    console.warn(JSON.stringify({ job: 'wallets', code }));
+    return 'failed';
   }
 }
 export async function syncDueWallets(provider?: typeof fetchDeBank) {
+  const started = Date.now();
+  const now = new Date();
   const due = await db().walletConnection.findMany({
     where: {
       deletedAt: null,
       enabled: true,
-      nextSyncAt: { lte: new Date() },
+      nextSyncAt: { lte: now },
+      OR: [{ leaseUntil: null }, { leaseUntil: { lt: now } }],
       portfolio: { debank: { is: { enabled: true } } },
     },
-    orderBy: { nextSyncAt: 'asc' },
-    take: 20,
+    orderBy: [{ nextSyncAt: 'asc' }, { id: 'asc' }],
+    take: 21,
     select: { id: true },
   });
-  for (const wallet of due) await syncWallet(wallet.id, provider);
+  const result = { processed: 0, succeeded: 0, failed: 0, skipped: 0, hasMore: due.length > 20 };
+  // ponytail: sequential (one browser at a time); use bounded parallelism if API-only volume grows.
+  for (const wallet of due.slice(0, 20)) {
+    // Reserve up to 150 s for one public browser read + DB commit, below maxDuration=300.
+    if (Date.now() - started >= 120_000) {
+      result.hasMore = true;
+      break;
+    }
+    result.processed++;
+    try {
+      result[await syncWalletResult(wallet.id, provider)]++;
+    } catch {
+      result.failed++;
+      console.warn(JSON.stringify({ job: 'wallets', code: 'WALLET_SYNC_FAILED' }));
+    }
+  }
+  return result;
 }

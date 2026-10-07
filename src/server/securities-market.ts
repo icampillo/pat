@@ -30,6 +30,7 @@ export async function saveSecurityQuote(
 }
 
 export async function syncSecuritiesPrices(portfolioId?: string) {
+  const started = Date.now();
   const assets = await db().asset.findMany({
     where: {
       ...(portfolioId ? { portfolioId } : {}),
@@ -37,8 +38,17 @@ export async function syncSecuritiesPrices(portfolioId?: string) {
       status: 'ACTIVE',
       category: { key: 'SECURITIES' },
     },
+    orderBy: { id: 'asc' },
+    take: 501,
+    include: { prices: { orderBy: [{ observedAt: 'desc' }, { createdAt: 'desc' }], take: 1 } },
   });
-  const configured = assets.flatMap((asset) => {
+  let hasMore = assets.length > 500;
+  const configured = assets.slice(0, 500).flatMap((asset) => {
+    if (
+      asset.prices[0]?.source.startsWith('yahoo:') &&
+      Date.now() - asset.prices[0].createdAt.getTime() < 60_000
+    )
+      return [];
     const parsed = metadataSchema.safeParse(asset.metadata);
     return parsed.success && parsed.data.pricingMode === 'SECURITIES_MARKET' && parsed.data.ticker
       ? [{ asset, ticker: parsed.data.ticker }]
@@ -49,26 +59,43 @@ export async function syncSecuritiesPrices(portfolioId?: string) {
   const failures: { symbol: string; message: string }[] = [];
   // Bounded concurrency and one remote request per listing, even across multiple portfolios.
   for (let offset = 0; offset < tickers.length; offset += 4) {
+    if (Date.now() - started >= 150_000) {
+      hasMore = true;
+      break;
+    }
     await Promise.all(
       tickers.slice(offset, offset + 4).map(async (ticker) => {
         try {
           const quote = await fetchSecurityQuote(ticker);
           for (const { asset } of configured.filter((item) => item.ticker === ticker)) {
-            prices += await db().$transaction(async (tx) => {
-              const current = await tx.asset.findFirst({
-                where: { id: asset.id, version: asset.version, deletedAt: null, status: 'ACTIVE' },
-              });
-              return current ? saveSecurityQuote(tx, current, quote) : 0;
-            });
+            if (Date.now() - started >= 180_000) {
+              hasMore = true;
+              break;
+            }
+            prices += await db().$transaction(
+              async (tx) => {
+                await tx.$queryRaw`SELECT id FROM "Portfolio" WHERE id = ${asset.portfolioId}::uuid FOR UPDATE`;
+                const current = await tx.asset.findFirst({
+                  where: {
+                    id: asset.id,
+                    version: asset.version,
+                    deletedAt: null,
+                    status: 'ACTIVE',
+                  },
+                });
+                return current ? saveSecurityQuote(tx, current, quote) : 0;
+              },
+              { timeout: 10_000 },
+            );
           }
-        } catch (error) {
+        } catch {
           failures.push({
             symbol: ticker,
-            message: error instanceof Error ? error.message : 'Cours indisponible.',
+            message: 'Cours indisponible ; dernière valeur conservée.',
           });
         }
       }),
     );
   }
-  return { prices, failures };
+  return { prices, failures, hasMore };
 }

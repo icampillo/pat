@@ -76,11 +76,11 @@ export function DeBankSettings({ state, save }: { state: AppState; save: SaveAct
           </label>
         )}
         <label>
-          Fréquence de synchronisation
+          Délai minimal entre deux synchronisations automatiques
           <select name="interval" defaultValue={config.intervalMinutes}>
-            <option value="15">Toutes les 15 minutes</option>
-            <option value="60">Toutes les heures</option>
-            <option value="240">Toutes les 4 heures</option>
+            <option value="15">15 minutes</option>
+            <option value="60">1 heure</option>
+            <option value="240">4 heures</option>
           </select>
         </label>
         <label className="wallet-check">
@@ -95,8 +95,8 @@ export function DeBankSettings({ state, save }: { state: AppState; save: SaveAct
           {mode === 'PUBLIC'
             ? 'Une lecture du profil par synchronisation, sans frais API. La précision et la fraîcheur sont celles affichées par DeBank.'
             : '3 requêtes API par adresse et par synchronisation ; crédits DeBank Cloud nécessaires.'}{' '}
-          La synchronisation continue tant que le serveur de l’application fonctionne, même avec le
-          navigateur fermé.
+          La synchronisation automatique est quotidienne. Le bouton Actualiser permet une lecture à
+          la demande, même entre deux passages quotidiens.
         </p>
         <div className="wallet-actions">
           <button className="btn primary" disabled={busy}>

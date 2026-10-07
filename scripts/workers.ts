@@ -1,16 +1,25 @@
 import 'dotenv/config';
-import { setInterval } from 'node:timers/promises';
-import { startSnapshotWorker } from '../src/server/snapshot-worker';
-import { startMarketWorker } from '../src/server/market-worker';
-import { startWalletWorker } from '../src/server/wallet-worker';
+import { db } from '../src/server/db';
+import { syncMarketData } from '../src/server/market';
+import { syncDueWallets } from '../src/server/wallets';
+import { createPortfolioSnapshots } from '../src/server/jobs/portfolio-snapshot';
 
-if (process.env.VERCEL === '1')
-  throw new Error('Les workers nécessitent un serveur Node permanent.');
-if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL non configurée');
-
-if (process.env.SNAPSHOT_WORKER_DISABLED !== '1') startSnapshotWorker();
-if (process.env.MARKET_WORKER_DISABLED !== '1') startMarketWorker();
-if (process.env.WALLET_WORKER_DISABLED !== '1') startWalletWorker();
-
-// Existing worker timers are unref'ed because they normally share the Next server.
-for await (const tick of setInterval(60_000)) void tick;
+const jobs = {
+  market: syncMarketData,
+  wallets: syncDueWallets,
+  snapshot: createPortfolioSnapshots,
+};
+const name = process.argv[2] ?? 'all';
+if (name !== 'all' && !(name in jobs))
+  throw new Error('Usage : pnpm workers [market|wallets|snapshot|all]');
+try {
+  for (const [job, run] of Object.entries(jobs)) {
+    if (name !== 'all' && name !== job) continue;
+    const started = Date.now();
+    const result = await run();
+    console.log(JSON.stringify({ job, ...result, durationMs: Date.now() - started }));
+    if (result.failed || result.hasMore) process.exitCode = 1;
+  }
+} finally {
+  await db().$disconnect();
+}

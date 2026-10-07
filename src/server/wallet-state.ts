@@ -36,9 +36,7 @@ export async function walletState(
       errorCode: w.errorCode,
       lastSuccessAt: last?.fetchedAt.toISOString() || null,
       nextSyncAt: w.nextSyncAt.toISOString(),
-      stale:
-        !last ||
-        at.getTime() - last.fetchedAt.getTime() > (config?.intervalMinutes || 60) * 120_000,
+      stale: !last || at.getTime() - last.fetchedAt.getTime() > 48 * 60 * 60_000,
       data: last ? (last.data as unknown as WalletData) : null,
     };
   });

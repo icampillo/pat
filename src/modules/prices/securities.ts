@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { providerFetch } from '@/server/provider-fetch';
 import { decimal as d } from '@/domain/money';
 
 export const marketSymbolSchema = z
@@ -77,7 +78,7 @@ export function parseSecurityQuote(
 
 async function yahooJson(path: string) {
   // Fixed host: CSV values are never treated as arbitrary URLs.
-  const response = await fetch(`https://query1.finance.yahoo.com/${path}`, {
+  const response = await providerFetch(`https://query1.finance.yahoo.com/${path}`, {
     cache: 'no-store',
     signal: AbortSignal.timeout(10_000),
     headers: { Accept: 'application/json' },

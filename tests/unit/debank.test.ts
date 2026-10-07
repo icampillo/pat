@@ -75,7 +75,7 @@ describe('Contrat DeBank', () => {
       code,
       message: `DeBank: ${code}`,
     });
-    expect(mock).toHaveBeenCalledTimes(1);
+    expect(mock).toHaveBeenCalledTimes([429, 500].includes(Number(status)) ? 2 : 1);
   });
   it('refuse les JSON incomplets et isole les erreurs réseau', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ error: 'secret' })));

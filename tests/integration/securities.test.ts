@@ -209,9 +209,18 @@ it('updates prices automatically, deduplicates observations and preserves the la
   mockQuotes();
   const preview = await previewSecurities(user.userId, { csv }, randomUUID());
   await confirmSecurities(user.userId, preview.id, { confirmed: true }, randomUUID());
+  // Expire the 60-second refresh window without sleeping or changing observation dates.
+  await db().priceHistory.updateMany({
+    where: { portfolioId: user.portfolioId },
+    data: { createdAt: new Date(Date.now() - 61_000) },
+  });
   mockQuotes(15, Math.floor(Date.now() / 1000));
   expect(await syncSecuritiesPrices(user.portfolioId)).toMatchObject({ prices: 1, failures: [] });
   expect(await syncSecuritiesPrices(user.portfolioId)).toMatchObject({ prices: 0, failures: [] });
+  await db().priceHistory.updateMany({
+    where: { portfolioId: user.portfolioId },
+    data: { createdAt: new Date(Date.now() - 61_000) },
+  });
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => new Response('', { status: 503 })),
@@ -232,7 +241,7 @@ it('does not block stocks when the metals provider is unavailable', async () => 
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) =>
-      url.includes('gold-api') ? new Response('', { status: 503 }) : fn(url),
+      url.includes('ecb.europa.eu') ? new Response('', { status: 503 }) : fn(url),
     ),
   );
   expect(await syncMarketData(user.portfolioId)).toMatchObject({
