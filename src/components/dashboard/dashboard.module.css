@@ -1,0 +1,23 @@
+/* Local tokens: never change the shell or other routes. */
+.root {
+  --background: #f6f7f9;
+  --surface: #ffffff;
+  --surface-secondary: #f5f7fa;
+  --ink: #172033;
+  --muted: #626f83;
+  --line: #e6eaf0;
+  --accent: #246bfd;
+  --accent-hover: #1854ce;
+  --accent-soft: #edf3ff;
+  --green: #08715c;
+  --red: #b73550;
+  --positive-soft: #edf7f2;
+  --negative-soft: #fceff2;
+  --warning: #846326;
+  --warning-soft: #faf4e7;
+  --cash: #a0adbd;
+  --purple: var(--accent);
+  --focus: #246bfd;
+  --shadow-float: 0 4px 16px #1720330d;
+  color: var(--ink);
+}

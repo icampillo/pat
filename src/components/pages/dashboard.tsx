@@ -1,19 +1,34 @@
 'use client';
+import { useState } from 'react';
+import {
+  ArrowUpRight,
+  ChartNoAxesCombined,
+  CircleDollarSign,
+  Layers3,
+  Plus,
+  Sparkles,
+  Wallet,
+} from 'lucide-react';
 import { AssetCategoryCard } from '@/components/asset-category-card';
 import { AllocationChart, EvolutionChart } from '@/components/charts';
-import { buildCategoryDetails } from '@/domain/categories';
-import { dietz } from '@/domain/ledger';
-import { canCalculatePortfolioPerformance } from '@/domain/portfolio-performance';
+import { DashboardHeader } from '@/components/dashboard/header';
+import {
+  DashboardCard,
+  DashboardKpi,
+  PerformanceBadge,
+  dashboardPrimaryAction,
+} from '@/components/dashboard/primitives';
+import { PeriodSelector } from '@/components/dashboard/period-selector';
+import styles from '@/components/dashboard/dashboard.module.css';
 import { PortfolioAnalysisDialog } from '@/components/portfolio-analysis-dialog';
-import { decimal as d } from '@/domain/money';
-import type { AppState } from '@/shared/types';
-import { ArrowDownRight, ArrowUpRight, Coins } from 'lucide-react';
-import Link from '@/components/workspace/link';
-import { useState } from 'react';
-
 import { useWorkspace } from '@/components/workspace/context';
-import { date, Empty, money } from '@/components/workspace/display';
-import { PageHeading } from '@/components/workspace/page-heading';
+import { date, money } from '@/components/workspace/display';
+import Link from '@/components/workspace/link';
+import { buildCategoryDetails, calculateCategoryValue } from '@/domain/categories';
+import { dietz } from '@/domain/ledger';
+import { decimal as d } from '@/domain/money';
+import { canCalculatePortfolioPerformance } from '@/domain/portfolio-performance';
+import type { AppState } from '@/shared/types';
 
 export function DashboardPage({ state }: { state: AppState }) {
   const { currency } = useWorkspace();
@@ -21,6 +36,20 @@ export function DashboardPage({ state }: { state: AppState }) {
   const total = currency === 'EUR' ? state.totals.valueEur : state.totals.valueUsd;
   const categoryDetails = state.categories.map((item) =>
     buildCategoryDetails(state, item, currency),
+  );
+  const held = categoryDetails.filter((item) => item.category.assetCount > 0);
+  const positionCount = held.reduce((sum, item) => sum + item.category.assetCount, 0);
+  const hasRealEstate = state.rows.some((asset) => asset.category.key === 'REAL_ESTATE');
+  // A portfolio-wide acquisition cost cannot be inferred for wallets or net property equity.
+  const costUnavailable =
+    state.totals.incompleteCostBasis || state.onchain.includedCount > 0 || hasRealEstate;
+  const cost = costUnavailable
+    ? null
+    : currency === 'EUR'
+      ? state.totals.costEur
+      : state.totals.costUsd;
+  const cashValue = calculateCategoryValue(
+    state.cash.map((cash) => (currency === 'EUR' ? cash.valueEur : cash.valueUsd)),
   );
   const days = (
     { '24h': 1, '7d': 7, '30d': 30, '90d': 90, '180d': 180, '1y': 365, all: 10000 } as Record<
@@ -49,155 +78,228 @@ export function DashboardPage({ state }: { state: AppState }) {
       color: category.color,
       value: category.totalValue!,
     }));
-  const cashTotal = state.cash.reduce(
-    (sum, c) => sum.add((currency === 'EUR' ? c.valueEur : c.valueUsd) || 0),
+  // Preserve the allocation's known-cash perimeter, without presenting a partial sum as a KPI total.
+  const knownCash = state.cash.reduce(
+    (sum, cash) => sum.add((currency === 'EUR' ? cash.valueEur : cash.valueUsd) || 0),
     d(0),
   );
-  if (cashTotal.gt(0))
-    slices.push({ name: 'Liquidités', color: '#a0adbd', value: Number(cashTotal) });
+  if (knownCash.gt(0))
+    slices.push({
+      name: cashValue === null ? 'Liquidités connues' : 'Liquidités',
+      color: 'var(--cash)',
+      value: Number(knownCash),
+    });
   const first = visibleSnapshots[0];
   const adjusted =
     canCalculatePortfolioPerformance(state, currency) && first?.totalEur && state.totals.valueEur
       ? dietz(first.totalEur, state.totals.valueEur, first.capturedAt, state.asOf, state.flows)
       : null;
+
   return (
-    <>
-      <PageHeading view="dashboard" title="Vue d’ensemble" />
-      <>
-        <div className="charts-grid">
-          <section className="panel evolution wealth-panel">
-            <div className="section-title">
-              <div>
-                <h2>Évolution du patrimoine</h2>
-                <p>
-                  {first
-                    ? `Depuis le ${date(first.capturedAt)}`
-                    : 'Vos prochaines captures apparaîtront ici'}
-                </p>
-              </div>
-              <div className="periods" role="group" aria-label="Période du graphique">
-                {[
-                  ['24h', '24 h'],
-                  ['7d', '7 j'],
-                  ['30d', '1 mois'],
-                  ['90d', '3 mois'],
-                  ['180d', '6 mois'],
-                  ['1y', '1 an'],
-                  ['all', 'Tout'],
-                ].map(([v, l]) => (
-                  <button
-                    aria-pressed={period === v}
-                    key={v}
-                    className={period === v ? 'selected' : ''}
-                    onClick={() => setPeriod(v)}
-                  >
-                    {l}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="wealth-label">
-              Patrimoine total <span>Actifs et liquidités · {currency}</span>
-            </div>
-            <div className="chart-summary wealth-summary">
-              <strong>{money(total, currency)}</strong>
-              {adjusted !== null && (
-                <span
-                  className={d(adjusted).gte(0) ? 'trend-pill positive' : 'trend-pill negative'}
-                >
-                  {d(adjusted).gte(0) ? <ArrowUpRight size={15} /> : <ArrowDownRight size={15} />}{' '}
-                  {Number(adjusted).toFixed(2)} % <span>après flux · estimé</span>
-                </span>
-              )}
-            </div>
-            <p className="wealth-meta">
-              {total === null
-                ? 'Valorisation incomplète · certains prix sont indisponibles'
-                : `Situation au ${date(state.asOf)}`}
-              {adjusted === null && ' · Performance ajustée indisponible'}
+    <div className={`${styles.root} flex min-w-0 flex-col gap-5`}>
+      <DashboardHeader />
+      <div
+        className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
+        role="group"
+        aria-label="Indicateurs du patrimoine"
+      >
+        <DashboardKpi
+          label="Patrimoine total"
+          value={money(total, currency)}
+          note={total === null ? 'Valorisation incomplète' : 'Actifs et liquidités inclus'}
+          icon={<Wallet size={17} />}
+        />
+        <DashboardKpi
+          label="Capital investi"
+          value={money(cost, currency)}
+          note={cost === null ? 'Coût global non disponible' : 'Coût d’acquisition des positions'}
+          icon={<ChartNoAxesCombined size={17} />}
+        />
+        <DashboardKpi
+          label="Liquidités"
+          value={money(cashValue, currency)}
+          note={cashValue === null ? 'Conversion incomplète' : 'Soldes des comptes suivis'}
+          icon={<CircleDollarSign size={17} />}
+        />
+        <DashboardKpi
+          label="Positions suivies"
+          value={String(positionCount)}
+          note={`${held.length} catégorie${held.length > 1 ? 's' : ''} détenue${held.length > 1 ? 's' : ''}${state.onchain.includedCount ? ' · wallets inclus' : ''}`}
+          icon={<Layers3 size={17} />}
+        />
+      </div>
+
+      <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_300px] 2xl:grid-cols-[minmax(0,1fr)_320px]">
+        <DashboardCard aria-labelledby="wealth-heading" className="overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 sm:px-6">
+            <h2 id="wealth-heading" className="text-sm!">
+              Évolution du patrimoine
+            </h2>
+            <PeriodSelector value={period} onChange={setPeriod} />
+          </div>
+          <div className="flex flex-col gap-2 px-5 pt-6 sm:px-6">
+            <p className="text-xs font-medium text-(--muted)">
+              Patrimoine total <span className="ml-1">· {currency}</span>
             </p>
-            <EvolutionChart points={points} currency={currency} />
-            <div className="chart-foot">
-              <span className="dot purple" /> Valeur totale du portefeuille
-              <Link href="/activity?view=history">
-                Voir l’historique <ArrowUpRight size={14} />
-              </Link>
+            <strong
+              data-testid="wealth-total"
+              className="text-[clamp(1.8rem,3.5vw,3.25rem)] leading-tight tracking-[-0.045em] tabular-nums [overflow-wrap:anywhere]"
+            >
+              {money(total, currency)}
+            </strong>
+            <div className="flex min-h-7 flex-wrap items-center gap-2 text-xs text-(--muted)">
+              {adjusted !== null ? (
+                <>
+                  <PerformanceBadge value={Number(adjusted)}>
+                    {Number(adjusted) > 0 ? '+' : ''}
+                    {Number(adjusted).toFixed(2)} %
+                  </PerformanceBadge>
+                  <span>après flux · estimé</span>
+                </>
+              ) : (
+                <span>Performance ajustée indisponible</span>
+              )}
+              {first && <span>Depuis le {date(first.capturedAt)}</span>}
             </div>
-            {state.rows.some((asset) => asset.category.key === 'REAL_ESTATE') && (
-              <p className="small muted">
-                L’évolution inclut le remboursement du capital immobilier. Le rendement global après
-                flux est indisponible tant que ces flux ne sont pas suivis.
+            <p className="text-xs text-(--muted)">Situation au {date(state.asOf)}</p>
+            {total === null && (
+              <p className="text-xs text-(--warning)">
+                Valorisation incomplète · certains prix ou taux de change sont indisponibles
               </p>
             )}
-          </section>
-          <section className="panel allocation">
-            <div className="section-title">
-              <div>
-                <h2>Répartition</h2>
-                <p>
-                  {total === null
-                    ? 'Valorisation incomplète · valeurs connues'
-                    : 'Par catégorie d’actifs'}
-                </p>
-              </div>
-              <Coins size={19} className="muted" />
-            </div>
-            {slices.length ? (
-              <>
-                <AllocationChart slices={slices} />
-                <div className="legend">
-                  {slices.map((s) => (
-                    <div key={s.name}>
-                      <span className="dot" style={{ background: s.color }} />
-                      <span>{s.name}</span>
-                      <strong>
-                        {total && d(total).gt(0)
-                          ? `${d(s.value).div(total).mul(100).toFixed(1)} %`
-                          : '—'}
-                      </strong>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <p className="chart-empty">Votre répartition apparaîtra après un premier achat.</p>
-            )}
-          </section>
-        </div>
-        <div className="holdings-heading">
-          <div>
-            <p className="eyebrow">VOTRE ALLOCATION</p>
-            <h2>Vos investissements</h2>
           </div>
-          <div className="heading-actions">
-            <PortfolioAnalysisDialog state={state} />
-            <Link className="text-link" href="/portfolio">
-              Voir le portefeuille <ArrowUpRight size={16} />
+          <EvolutionChart points={points} currency={currency} variant="dashboard" />
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-(--line) px-5 py-3 text-xs sm:px-6">
+            <span className="flex items-center gap-2 text-(--muted)">
+              <span className="h-0.5 w-4 rounded-full bg-(--accent)" aria-hidden="true" />
+              Valeur du portefeuille
+            </span>
+            <Link
+              className="inline-flex min-h-8 items-center gap-1 font-medium text-(--accent)!"
+              href="/activity?view=history"
+            >
+              Voir l’historique <ArrowUpRight size={14} aria-hidden="true" />
             </Link>
           </div>
+          {hasRealEstate && (
+            <p className="border-t border-(--line) bg-(--surface-secondary) px-5 py-3 text-xs text-(--muted) sm:px-6">
+              L’évolution inclut le remboursement du capital immobilier. Le rendement global après
+              flux est indisponible tant que ces flux ne sont pas suivis.
+            </p>
+          )}
+        </DashboardCard>
+
+        <DashboardCard aria-labelledby="allocation-heading" className="overflow-hidden">
+          <div className="px-5 pt-5">
+            <h2 id="allocation-heading" className="text-sm!">
+              Répartition
+            </h2>
+            <p className="mt-1! text-xs text-(--muted)">
+              {total === null
+                ? 'Valorisation incomplète · valeurs connues'
+                : 'Le poids de chaque catégorie'}
+            </p>
+          </div>
+          {slices.length ? (
+            <>
+              <div className="grid items-center sm:grid-cols-[210px_minmax(0,1fr)] xl:grid-cols-1">
+                <AllocationChart slices={slices} variant="dashboard" />
+                <ul className="flex flex-col gap-3 px-5 pb-5" aria-label="Poids des catégories">
+                  {slices.map((slice) => (
+                    <li className="flex items-center gap-2.5 text-xs" key={slice.name}>
+                      <span
+                        className="size-2 shrink-0 rounded-full"
+                        style={{ background: slice.color }}
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0 flex-1 text-(--muted) [overflow-wrap:anywhere]">
+                        {slice.name}
+                      </span>
+                      <strong className="shrink-0 tabular-nums">
+                        {total && d(total).gt(0)
+                          ? `${d(slice.value).div(total).mul(100).toFixed(1)} %`
+                          : '—'}
+                      </strong>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <p className="border-t border-(--line) bg-(--surface-secondary) px-5 py-3 text-xs text-(--muted)">
+                Valeurs positives · liquidités incluses
+              </p>
+            </>
+          ) : (
+            <div className="flex min-h-64 flex-col items-center justify-center gap-3 p-6 text-center text-xs text-(--muted)">
+              <Layers3 size={28} aria-hidden="true" />
+              <p>Votre répartition apparaîtra après un premier achat valorisé.</p>
+            </div>
+          )}
+        </DashboardCard>
+      </div>
+
+      <section aria-labelledby="investments-heading" className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h2 id="investments-heading" className="text-lg!">
+              Vos investissements
+            </h2>
+            <span className="rounded-md border border-(--line) bg-(--surface) px-2 py-0.5 text-xs text-(--muted)">
+              {held.length}
+            </span>
+          </div>
+          <Link
+            className="inline-flex min-h-9 items-center gap-1 text-xs font-medium text-(--muted)! hover:text-(--accent)!"
+            href="/portfolio"
+          >
+            Voir le portefeuille <ArrowUpRight size={14} aria-hidden="true" />
+          </Link>
         </div>
-        <section aria-label="Catégories détenues" className="category-grid">
-          {categoryDetails
-            .filter((item) => item.category.assetCount > 0)
-            .map((item) => (
+        {held.length ? (
+          <div
+            aria-label="Catégories détenues"
+            role="group"
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 min-[1440px]:grid-cols-3 min-[1700px]:grid-cols-4"
+          >
+            {held.map((item) => (
               <AssetCategoryCard
                 key={item.category.id}
                 category={item.category}
                 currency={currency}
               />
             ))}
-        </section>
-        {!categoryDetails.some((item) => item.category.assetCount > 0) && (
-          <section className="panel">
-            <Empty
-              title="Aucune catégorie détenue"
-              text="Ajoutez votre premier actif pour suivre vos investissements."
-              href="/assets/new"
-              label="Ajouter un actif"
-            />
-          </section>
+          </div>
+        ) : (
+          <DashboardCard className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+            <span className="grid size-11 place-items-center rounded-xl bg-(--accent-soft) text-(--accent)">
+              <Layers3 size={22} aria-hidden="true" />
+            </span>
+            <h3>Aucune catégorie détenue</h3>
+            <p className="text-sm text-(--muted)">
+              Ajoutez votre premier actif pour suivre vos investissements.
+            </p>
+            <Link className={dashboardPrimaryAction} href="/assets/new">
+              <Plus size={16} aria-hidden="true" />
+              Ajouter un actif
+            </Link>
+          </DashboardCard>
         )}
-      </>
-    </>
+      </section>
+
+      <DashboardCard
+        className="flex flex-wrap items-center gap-4 p-4 sm:p-5"
+        aria-label="Analyse du portefeuille"
+      >
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-(--accent-soft) text-(--accent)">
+          <Sparkles size={20} aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1 basis-48">
+          <h2 className="text-sm!">Un autre regard sur votre patrimoine</h2>
+          <p className="mt-1! text-xs text-(--muted)">
+            Préparez un résumé à analyser avec votre IA. Vous gardez le contrôle du partage.
+          </p>
+        </div>
+        <PortfolioAnalysisDialog state={state} triggerClassName={dashboardPrimaryAction} />
+      </DashboardCard>
+    </div>
   );
 }

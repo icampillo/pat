@@ -68,7 +68,7 @@ test('creates and edits a rental property, shows net wealth and paginated amorti
     page.getByRole('heading', { name: 'Location · estimation avant fiscalité' }),
   ).toHaveCount(0);
   await page.goto('/dashboard');
-  const card = page.locator('a.category-card[href="/categories/real-estate"]');
+  const card = page.locator('a[data-testid="investment-card"][href="/categories/real-estate"]');
   await expect(card).toContainText('130 000');
   await expect(card).toContainText('310 000');
   await expect(card).toContainText('180 000');

@@ -43,8 +43,10 @@ test('dashboard simplifié, catégories, devises, historique et mobile', async (
   }
   await post('snapshots', {});
   await page.reload();
-  await expect(page.locator('.category-card')).toHaveCount(2);
-  await expect(page.locator('main .metrics')).toHaveCount(0);
+  await expect(page.getByTestId('investment-card')).toHaveCount(2);
+  await expect(
+    page.getByRole('group', { name: 'Indicateurs du patrimoine' }).getByRole('region'),
+  ).toHaveCount(4);
   await expect(page.locator('main table')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Évolution du patrimoine' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Répartition', exact: true })).toBeVisible();
@@ -53,7 +55,7 @@ test('dashboard simplifié, catégories, devises, historique et mobile', async (
     path: '.local/screenshots/categories-dashboard-desktop.png',
     fullPage: true,
   });
-  await page.locator('a.category-card[href="/categories/crypto"]').click();
+  await page.locator('a[data-testid="investment-card"][href="/categories/crypto"]').click();
   await expect(page.locator('h1')).toHaveText('Cryptomonnaies');
   await expect(page.locator('.category-metrics .metric').first()).toContainText('100,00');
   await expect(page.locator('.category-metrics .metric').nth(2)).toContainText('80,00');

@@ -7,7 +7,13 @@ import { buildPortfolioAnalysisPrompt } from '@/domain/portfolio-analysis-prompt
 import type { AppState } from '@/shared/types';
 import { useWorkspace } from '@/components/workspace/context';
 
-export function PortfolioAnalysisDialog({ state }: { state: AppState }) {
+export function PortfolioAnalysisDialog({
+  state,
+  triggerClassName = 'btn',
+}: {
+  state: AppState;
+  triggerClassName?: string;
+}) {
   const { currency, setFlash } = useWorkspace();
   const [prompt, setPrompt] = useState('');
   const [error, setError] = useState('');
@@ -47,7 +53,7 @@ export function PortfolioAnalysisDialog({ state }: { state: AppState }) {
   return (
     <Dialog.Root onOpenChange={openChange}>
       <Dialog.Trigger asChild>
-        <button className="btn" type="button">
+        <button className={triggerClassName} type="button">
           <Sparkles size={16} aria-hidden="true" />
           Analyser avec une IA
         </button>
