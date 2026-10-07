@@ -10,7 +10,7 @@ function initializeAuth() {
     secret,
     baseURL: process.env.BETTER_AUTH_URL,
     trustedOrigins: [process.env.APP_ORIGIN || 'http://localhost:3000'],
-    emailAndPassword: { enabled: true, disableSignUp: true, minPasswordLength: 12 },
+    emailAndPassword: { enabled: true, disableSignUp: false, minPasswordLength: 12 },
     session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24 },
     rateLimit: {
       enabled: true,
