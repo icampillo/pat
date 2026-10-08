@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { capture, getState } from './portfolio-query';
+import { getState } from './portfolio-query';
 import { insertTransaction, validateLedger } from './portfolio';
 import { json, mutate, UnchangedMutation } from './portfolio-store';
 import { fetchEcbRate } from './market';
@@ -294,7 +294,6 @@ export async function confirmSecurities(
         await saveSecurityQuote(tx, asset, quote);
       }
       await validateLedger(tx, portfolio.id);
-      if (result.created) await capture(tx, portfolio.id, portfolio.version + 1);
       await tx.importBatch.update({ where: { id: batch.id }, data: { status: 'COMMITTED' } });
       return result;
     },

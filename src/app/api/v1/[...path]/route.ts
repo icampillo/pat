@@ -49,6 +49,7 @@ async function handle(request: Request, context: { params: Promise<{ path: strin
     }
     if (request.headers.get('origin') !== process.env.APP_ORIGIN)
       throw new AppError('ORIGIN_REJECTED', 'Origine de la requête refusée.', 403);
+    if (path[0] === 'snapshots') throw new AppError('NOT_FOUND', 'Route introuvable.', 404);
     if (path[0] === 'securities' && request.method === 'POST') {
       if (path.length === 2 && path[1] === 'refresh')
         return response(await syncSecuritiesPrices((await owned(session.user.id)).id));

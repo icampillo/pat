@@ -1,4 +1,5 @@
 'use client';
+import { SNAPSHOT_TIMEZONE, snapshotChartPoints } from '@/domain/snapshot-day';
 import { useId, useState } from 'react';
 import { ChartNoAxesCombined } from 'lucide-react';
 import { money } from '@/components/workspace/display';
@@ -23,16 +24,16 @@ export function EvolutionChart({
   currency,
   label = 'Patrimoine',
   variant = 'default',
+  daily = true,
 }: {
   points: { date: string; value: number | null }[];
   currency: string;
   label?: string;
   variant?: 'default' | 'dashboard';
+  daily?: boolean;
 }) {
   const fillId = useId();
   const dashboard = variant === 'dashboard';
-  const intraday =
-    points.length > 1 && Date.parse(points.at(-1)!.date) - Date.parse(points[0].date) <= 86400000;
   if (points.filter((point) => point.value !== null).length < 2)
     return (
       <div
@@ -45,7 +46,7 @@ export function EvolutionChart({
         <ChartNoAxesCombined size={28} aria-hidden="true" />
         <strong>Votre historique se construit ici</strong>
         <span>Deux captures valorisées sont nécessaires sur cette période.</span>
-        <span className="small">Élargissez la période ou enregistrez un snapshot.</span>
+        <span className="small">Les relevés sont automatiques chaque jour (Europe/Paris).</span>
       </div>
     );
   return (
@@ -56,7 +57,7 @@ export function EvolutionChart({
     >
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
-          data={points}
+          data={daily ? snapshotChartPoints(points) : points}
           margin={{ top: 12, right: 12, left: 0, bottom: dashboard ? 6 : 0 }}
         >
           <defs>
@@ -69,9 +70,11 @@ export function EvolutionChart({
           <XAxis
             dataKey="date"
             tickFormatter={(v) =>
-              dashboard && intraday
-                ? new Date(v).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-                : new Date(v).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+              new Date(v).toLocaleDateString('fr-FR', {
+                timeZone: SNAPSHOT_TIMEZONE,
+                day: 'numeric',
+                month: 'short',
+              })
             }
             minTickGap={50}
             tickLine={false}
@@ -95,13 +98,14 @@ export function EvolutionChart({
             labelFormatter={(v) =>
               dashboard
                 ? new Date(String(v)).toLocaleString('fr-FR', {
+                    timeZone: SNAPSHOT_TIMEZONE,
                     day: 'numeric',
                     month: 'short',
                     year: 'numeric',
                     hour: '2-digit',
                     minute: '2-digit',
                   })
-                : new Date(String(v)).toLocaleDateString('fr-FR')
+                : new Date(String(v)).toLocaleDateString('fr-FR', { timeZone: SNAPSHOT_TIMEZONE })
             }
             formatter={(v) => [
               new Intl.NumberFormat('fr-FR', { style: 'currency', currency }).format(Number(v)),

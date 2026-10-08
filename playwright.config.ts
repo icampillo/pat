@@ -29,6 +29,7 @@ export default defineConfig({
       APP_ORIGIN: 'http://localhost:3001',
       NEXT_TELEMETRY_DISABLED: '1',
       NEXT_E2E: '1',
+      CRON_SECRET: 'isolated-e2e-cron-not-production',
       WALLET_WORKER_DISABLED: '1',
       MARKET_WORKER_DISABLED: '1',
       SNAPSHOT_WORKER_DISABLED: '1',

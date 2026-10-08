@@ -123,16 +123,14 @@ describe('Synchronisation Zerion persistante et isolée', () => {
       unrealizedEur: null,
     });
     expect(state.transactions).toHaveLength(0);
-    expect(state.snapshots).toHaveLength(1);
-    // The only capture records inclusion, before any observation: its value stays unknown.
-    expect(state.snapshots[0]).toMatchObject({ kind: 'WALLET', totalUsd: null });
+    expect(state.snapshots).toHaveLength(0);
     expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(1);
     const provider = vi.fn();
     expect(await syncWallet(s.id, provider)).toBe(false);
     expect(provider).not.toHaveBeenCalled();
   });
   it.each([1440])(
-    'sépare les observations à %i min des captures manuelles et quotidiennes immuables',
+    'sépare les observations à %i min des captures quotidiennes immuables',
     async () => {
       const s = await setup();
       await s.call('PATCH', 'zerion/config', {
@@ -150,46 +148,42 @@ describe('Synchronisation Zerion persistante et isolée', () => {
         null,
       );
       expect(await syncWallet(s.id, async () => sample)).toBe(true);
-      const manual = await runSnapshot(s.portfolioId);
-      expect(String(manual!.totalUsd)).toBe('905');
+      const firstDaily = await runSnapshot(s.portfolioId);
+      expect(String(firstDaily!.totalUsd)).toBe('905');
       const before = await getState(s.userId);
       await s.due();
       expect(await syncWallet(s.id, async () => ({ ...sample, totalUsd: '1000' }))).toBe(true);
       const dailyAt = new Date();
       const [daily, concurrent] = await Promise.all([
-        runSnapshot(s.portfolioId, true, dailyAt),
-        runSnapshot(s.portfolioId, true, dailyAt),
+        runSnapshot(s.portfolioId, dailyAt),
+        runSnapshot(s.portfolioId, dailyAt),
       ]);
       expect(concurrent!.id).toBe(daily!.id);
-      expect(String(daily!.totalUsd)).toBe('1000');
+      expect(String(daily!.totalUsd)).toBe('905');
       await s.due();
       expect(await syncWallet(s.id, async () => ({ ...sample, totalUsd: '1100' }))).toBe(true);
-      expect(await runSnapshot(s.portfolioId, true, dailyAt)).toEqual(daily);
+      expect(await runSnapshot(s.portfolioId, dailyAt)).toEqual(daily);
       const state: AppState = await getState(s.userId);
       expect(state.totals).toMatchObject({ valueUsd: '1100', valueEur: '880', netFlowsEur: '0' });
       expect(state.portfolio.version).toBeGreaterThan(before.portfolio.version);
       expect(state.transactions).toHaveLength(0);
-      expect(state.snapshots).toHaveLength(3); // inclusion + manual + daily, not three syncs
+      expect(state.snapshots).toHaveLength(1); // first daily value is immutable despite three syncs
       expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(3);
-      expect(await db().portfolioSnapshot.findUnique({ where: { id: manual!.id } })).toEqual(
-        manual,
+      expect(await db().portfolioSnapshot.findUnique({ where: { id: firstDaily!.id } })).toEqual(
+        firstDaily,
       );
       const crypto = state.categories.find((c) => c.key === 'CRYPTO')!;
       const details = buildCategoryDetails(state, crypto, 'USD');
       expect(details.category.totalValue).toBe(1100);
       expect(
-        state.snapshots.find((snap) => snap.id === manual!.id)?.categoryValues?.[crypto.id],
+        state.snapshots.find((snap) => snap.id === firstDaily!.id)?.categoryValues?.[crypto.id],
       ).toEqual({ valueEur: '724', valueUsd: '905' });
-      expect(details.history.map((point) => point.value)).toEqual([null, 905, 1000, 1100]);
+      expect(details.history.map((point) => point.value)).toEqual([905]);
       expect(details.unrealizedPnL).toBeNull();
-      const nextDay = await runSnapshot(
-        s.portfolioId,
-        true,
-        new Date(dailyAt.getTime() + 86400000),
-      );
+      const nextDay = await runSnapshot(s.portfolioId, new Date(dailyAt.getTime() + 86400000));
       expect(nextDay!.id).not.toBe(daily!.id);
       expect(String(nextDay!.totalUsd)).toBe('1100');
-      expect(await db().portfolioSnapshot.count({ where: { portfolioId: s.portfolioId } })).toBe(4);
+      expect(await db().portfolioSnapshot.count({ where: { portfolioId: s.portfolioId } })).toBe(2);
     },
   );
   it('pause, reprise, renommage et configuration ne changent ni périmètre ni captures', async () => {
@@ -205,12 +199,12 @@ describe('Synchronisation Zerion persistante et isolée', () => {
       await s.call('PATCH', `wallets/${s.id}`, input);
       const state = await getState(s.userId);
       expect(state.totals.valueUsd).toBe('905');
-      expect(state.snapshots).toHaveLength(2);
+      expect(state.snapshots).toHaveLength(1);
     }
     await s.call('DELETE', 'zerion/config', {});
     expect(await syncWallet(s.id, async () => sample)).toBe(false);
     expect((await getState(s.userId)).totals.valueUsd).toBe('905');
-    expect(await db().portfolioSnapshot.count({ where: { portfolioId: s.portfolioId } })).toBe(2);
+    expect(await db().portfolioSnapshot.count({ where: { portfolioId: s.portfolioId } })).toBe(1);
     expect(await db().portfolioSnapshot.findUnique({ where: { id: saved!.id } })).toEqual(saved);
   });
   it('fige les dernières observations valides de chaque wallet à la date de capture', async () => {
@@ -240,7 +234,7 @@ describe('Synchronisation Zerion persistante et isolée', () => {
         },
       ],
     });
-    const snapshot = await runSnapshot(s.portfolioId, false, at);
+    const snapshot = await runSnapshot(s.portfolioId, at);
     expect(String(snapshot!.totalUsd)).toBe('1000');
     expect(snapshot!.data).toMatchObject({
       onchain: {
@@ -259,9 +253,9 @@ describe('Synchronisation Zerion persistante et isolée', () => {
     expect(
       await db().walletObservation.count({ where: { walletId: { in: [s.id, second.id] } } }),
     ).toBe(4);
-    expect(await db().portfolioSnapshot.count({ where: { portfolioId: s.portfolioId } })).toBe(3);
+    expect(await db().portfolioSnapshot.count({ where: { portfolioId: s.portfolioId } })).toBe(1);
   });
-  it('capture seulement les changements réels de périmètre, y compris retrait et restauration', async () => {
+  it('ne capture pas les changements de périmètre et conserve les observations', async () => {
     const s = await setup(false);
     await syncWallet(s.id, async () => sample);
     expect((await getState(s.userId)).snapshots).toHaveLength(0);
@@ -271,24 +265,20 @@ describe('Synchronisation Zerion persistante et isolée', () => {
     await s.call('PATCH', `wallets/${s.id}`, { included: true }, key);
     await s.call('PATCH', `wallets/${s.id}`, { included: true });
     const included = (await getState(s.userId)).snapshots;
-    expect(included).toHaveLength(1);
-    expect(included[0]).toMatchObject({ kind: 'WALLET', totalUsd: '905' });
+    expect(included).toHaveLength(0);
     await s.call('DELETE', `wallets/${s.id}`, {});
     const removed = await getState(s.userId);
     expect(removed.onchain.wallets).toHaveLength(0);
     expect(removed.totals.valueUsd).toBe('0');
-    expect(removed.snapshots).toHaveLength(2);
-    expect(removed.snapshots.at(-1)).toMatchObject({ kind: 'WALLET', totalUsd: '0' });
-    // Keep the structural marker used to suppress Dietz even after the wallet disappears.
-    expect(removed.snapshots.some((snap: { kind: string }) => snap.kind === 'WALLET')).toBe(true);
+    expect(removed.snapshots).toHaveLength(0);
+    // Persistent wallet history suppresses Dietz after removal without another snapshot.
+    expect(removed.historyRevised).toBe(true);
     const restoreKey = randomUUID();
     const restored = await s.call('POST', 'wallets', { address }, restoreKey);
     expect(restored).toEqual({ id: s.id });
     expect(await s.call('POST', 'wallets', { address }, restoreKey)).toEqual(restored);
     const state = await getState(s.userId);
-    expect(state.snapshots).toHaveLength(3);
-    expect(state.snapshots[0]).toEqual(included[0]);
-    expect(state.snapshots.at(-1)).toMatchObject({ kind: 'WALLET', totalUsd: '905' });
+    expect(state.snapshots).toHaveLength(0);
     expect(state.onchain.wallets[0].data.totalUsd).toBe('905');
     expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(1);
   });
@@ -303,7 +293,7 @@ describe('Synchronisation Zerion persistante et isolée', () => {
     expect(results.filter(Boolean)).toHaveLength(1);
     expect(provider).toHaveBeenCalledTimes(1);
     expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(1);
-    expect((await getState(s.userId)).snapshots).toHaveLength(1);
+    expect((await getState(s.userId)).snapshots).toHaveLength(0);
   });
   it('conserve la réussite précédente et sa date sur erreur puis programme une reprise', async () => {
     const s = await setup();
@@ -322,7 +312,7 @@ describe('Synchronisation Zerion persistante et isolée', () => {
     expect(after.errorCode).toBe('RATE_LIMIT');
     expect(Date.parse(after.nextSyncAt)).toBeGreaterThan(Date.now());
     expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(1);
-    expect((await getState(s.userId)).snapshots).toHaveLength(1);
+    expect((await getState(s.userId)).snapshots).toHaveLength(0);
   });
   it('une pause ou une suppression pendant un appel empêche la publication tardive', async () => {
     const s = await setup();
@@ -334,7 +324,7 @@ describe('Synchronisation Zerion persistante et isolée', () => {
       }),
     ).toBe(false);
     expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(0);
-    expect((await getState(s.userId)).snapshots).toHaveLength(1);
+    expect((await getState(s.userId)).snapshots).toHaveLength(0);
     await s.call('PATCH', `wallets/${s.id}`, { enabled: true });
     await s.due();
     expect(
@@ -344,7 +334,7 @@ describe('Synchronisation Zerion persistante et isolée', () => {
       }),
     ).toBe(false);
     expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(0);
-    expect((await getState(s.userId)).snapshots).toHaveLength(1);
+    expect((await getState(s.userId)).snapshots).toHaveLength(0);
   });
   it('isole les propriétaires et les clés idempotentes', async () => {
     const a = await setup(),
@@ -389,7 +379,7 @@ describe('Synchronisation Zerion persistante et isolée', () => {
     await s.call('PATCH', `wallets/${s.id}`, { included: false });
     expect((await getState(s.userId)).totals.valueUsd).toBe('0');
     const captures = (await getState(s.userId)).snapshots;
-    expect(captures.at(-1)).toMatchObject({ kind: 'WALLET', totalUsd: '0' });
+    expect(captures.at(-1)).toMatchObject({ id: saved.id, kind: 'DAILY', totalUsd: '905' });
     await s.call('DELETE', `wallets/${s.id}`, {});
     expect((await getState(s.userId)).onchain.wallets).toHaveLength(0);
     expect((await getState(s.userId)).snapshots).toEqual(captures);

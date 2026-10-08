@@ -71,7 +71,7 @@ export function CategoryPage({
           <Performance30d category={category} currency={currency} />
           <p>
             {category.baselineDate
-              ? `Snapshot du ${new Date(category.baselineDate).toLocaleDateString('fr-FR')}`
+              ? `Snapshot du ${new Date(category.baselineDate).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`
               : 'Historique indisponible'}
           </p>
         </section>
@@ -133,7 +133,7 @@ export function CategoryPage({
             </div>
           </div>
           <EvolutionChart points={points} currency={currency} label={category.name} />
-          <p className="chart-foot">Snapshots conservés et valeur actuelle · {currency}</p>
+          <p className="chart-foot">Historique quotidien · {currency}</p>
         </section>
         <section className="panel allocation">
           <div className="section-title">

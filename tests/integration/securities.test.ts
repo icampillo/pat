@@ -102,7 +102,7 @@ it('refuse un import Bourse correspondant à une fiche archivée sans en créer 
   expect(await db().transaction.count({ where: { portfolioId: user.portfolioId } })).toBe(0);
 });
 
-it('imports Bourso atomically with precise cost, live quote, snapshot and no duplicate on retry', async () => {
+it('imports Bourso atomically with precise cost, live quote, no action-triggered snapshot and no duplicate on retry', async () => {
   const user = await owner();
   mockQuotes();
   const preview = await previewSecurities(
@@ -128,7 +128,7 @@ it('imports Bourso atomically with precise cost, live quote, snapshot and no dup
     metadata: { ticker: 'TEST.PA', pricingMode: 'SECURITIES_MARKET', costBasis: 'KNOWN' },
   });
   expect(Number(state.rows[0].costEur)).toBeCloseTo(20.01, 10);
-  expect(state.snapshots).toHaveLength(1);
+  expect(state.snapshots).toHaveLength(0);
   const before = await getState(user.userId);
   for (let i = 0; i < 10; i++) {
     const again = await previewSecurities(

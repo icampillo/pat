@@ -10,7 +10,7 @@ Spécification cible conservée depuis la conception. Pour appeler la version 0.
 - Schémas Zod stricts côté client et serveur. Les champs inattendus sont rejetés ; champs calculés comme `averageCost`, `ownerId` ou `currentValue` interdits en entrée.
 - Pagination par curseur opaque, taille 25 par défaut et 100 maximum. Les filtres et tris sont sur liste blanche.
 - Mutations de ressources : `If-Match` contenant la version connue. Version absente : 428 ; obsolète : 412. Création : `Idempotency-Key` requise.
-- Idempotence également requise pour import, snapshot, rafraîchissement et mutations financières répétables. Même clé et même payload normalisé : même résultat ; contenu différent : 409.
+- Idempotence également requise pour import, rafraîchissement et mutations financières répétables. Même clé et même payload normalisé : même résultat ; contenu différent : 409.
 - Pour une requête rejouée, l'autorisation est vérifiée puis l'idempotence résolue avant de réappliquer le contrôle de version d'une mutation déjà réussie.
 - POST/PATCH/DELETE authentifiés par cookie vérifient origine et protection CSRF. Les appels du job utilisent un secret dédié, jamais la session d'un utilisateur.
 
@@ -128,10 +128,9 @@ Un DELETE financier comporte `{ "confirmed": true, "reason": "…" }`, la versio
 | GET | `/price-providers?portfolioId=…` | Configuration, capacités et état ; aucune clé |
 | POST | `/prices/refresh` | Liste d'actifs limitée ou portefeuille ; résultat par actif, fallback explicite |
 | GET | `/prices/refresh-runs?portfolioId=…` | Historique des actualisations et erreurs nettoyées |
-| POST | `/portfolios/{id}/snapshots` | Capture MANUAL de l'état présent, idempotente |
+| GET | `/api/cron/snapshot` | Capture quotidienne automatique protégée par CRON_SECRET |
 | GET | `/portfolios/{id}/snapshots` | Plage et granularité jour/mois/année ; captures observées |
 | GET | `/snapshots/{id}` | Lignes figées, prix, taux, frais/coûts et qualité |
-| POST | `/jobs/snapshots/daily` | Jeton de job, capture quotidienne des portefeuilles éligibles |
 
 Le job n'accepte pas un `userId` arbitraire du navigateur. Secret vérifié en temps constant ; token absent des URLs et logs. Le script local et le handler appellent le même service. Le scheduler de production adaptera la méthode HTTP à la plateforme sans changer l'idempotence.
 

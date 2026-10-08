@@ -122,7 +122,7 @@ pnpm test:e2e
 pnpm build
 ```
 
-Les tests d’intégration et de navigateur utilisent exclusivement DATABASE_URL_TEST, remplacent aussi DIRECT_URL avant Prisma et refusent une base dont le nom ne se termine pas par _test. Ils créent des comptes isolés de test ; ils ne vident pas la base. Playwright lance son serveur sur 3001 et utilise .next-e2e afin de cohabiter avec le développement sur 3000.
+Les tests d’intégration et de navigateur utilisent exclusivement DATABASE_URL_TEST, remplacent aussi DIRECT_URL avant Prisma et refusent une base dont le nom ne se termine pas par \_test. Ils créent des comptes isolés de test ; ils ne vident pas la base. Playwright lance son serveur sur 3001 et utilise .next-e2e afin de cohabiter avec le développement sur 3000.
 
 Les parcours vérifient connexion, actif, image, transactions, snapshot, export/import, ajout gratuit d’adresse et positions synchronisées. Les autres scénarios couvrent le mobile à 375 px et l’accessibilité sur neuf écrans. Les tests utilisent des réponses Zerion et des historiques DeBank synthétiques, sans appel externe. La couverture Zerion réelle n’est pas attestée par ces fixtures. Ces contrôles ne constituent pas un audit exhaustif avec lecteurs d’écran.
 
@@ -130,17 +130,13 @@ Les parcours vérifient connexion, actif, image, transactions, snapshot, export/
 
 À la création d’un actif, saisir la quantité détenue et, si vous le connaissez, le coût d’acquisition total en euros. Une opération d’inventaire est créée automatiquement pour enregistrer cette quantité ; elle ne prétend pas dater l’achat. Si le coût reste vide, les quantités et la valorisation s’affichent, mais les gains qui dépendent du prix d’achat restent indisponibles. Le coût peut ensuite être renseigné depuis la fiche tant qu’elle ne contient qu’une opération initiale. Pour une pièce d’or ou d’argent, indiquer le métal, le poids brut et la pureté : sa valeur est calculée automatiquement à partir du cours spot et du taux de change. Les prix repris d’un classeur conservent leur date d’observation : l’import ne les transforme pas en cours de marché actuels.
 
-Un bouton crée une capture manuelle. Pour la commande quotidienne, récupérer portfolio.id dans l’export JSON :
+L’historique est automatique : le cron protégé `/api/cron/snapshot` s’exécute chaque jour à 06 h UTC (07 h en hiver / 08 h en été à Paris). Aucun bouton, endpoint POST ou script de capture manuelle ne subsiste. Imports et changements de wallets ne créent pas de captures supplémentaires.
 
-```powershell
-pnpm snapshot --portfolio <uuid-du-portefeuille> --daily
-```
+La migration `20261009120000_automatic_snapshots` conserve toutes les captures anciennes et marque une référence par utilisateur et journée **Europe/Paris**. La contrainte unique SQL protège les exécutions concurrentes. L’interface affiche ces références ; l’export conserve aussi les anciennes captures non retenues. Les valeurs déjà enregistrées ne sont jamais écrasées.
 
-Le cron quotidien `/api/cron/snapshot` crée les captures manquantes du jour local de chaque portefeuille. La contrainte unique existante conserve au plus un snapshot quotidien par journée locale, même avec plusieurs invocations ; les captures manuelles restent possibles. Le démarrage de Next.js ne lance plus de planificateur.
+Les jours manqués restent absents ; les graphiques interrompent la courbe sans inventer de valeur. Les erreurs transitoires de connexion et conflits SQL sont retentés jusqu’à trois fois. Les erreurs persistantes et traitements incomplets renvoient HTTP 503 avec des logs structurés. Vercel ne relance pas automatiquement un cron échoué : une relance opérateur authentifiée le même jour (ou `pnpm workers snapshot` en environnement administré) est idempotente. Aucun rattrapage antidaté n’est effectué.
 
-Les journées manquées ne sont pas reconstruites. Une erreur est isolée par portefeuille et signalée en HTTP 503 ; Vercel ne retente pas automatiquement les crons échoués. Une relance authentifiée le même jour peut compléter les captures manquantes. La commande ci-dessus reste disponible. Les captures figent les dernières données enregistrées, sans forcer leur synchronisation. Les captures anciennes restent inchangées après une correction rétroactive, et l’estimation de performance après flux est alors désactivée.
-
-Les synchronisations Zerion (cron quotidien ou demande manuelle) conservent leurs observations et actualisent les valeurs courantes sans créer de snapshot complet. Les captures supplémentaires concernent les demandes manuelles et les changements d’inclusion des wallets. Mettre la synchronisation en pause conserve la dernière valeur dans le patrimoine. Voir [les règles de fréquence et de périmètre](docs/implementation.md#fréquences-et-changements-de-périmètre).
+Voir [migration, audit SQL et validation production](docs/automatic-snapshots.md).
 
 L’import de nouvelles opérations se trouve dans Paramètres et dans la catégorie Bourse. Identifier les actifs par `asset_id` ou par symbole et compte ; un ISIN et un nom permettent aussi de créer une fiche Bourse (prix manuel, sans cotation inventée). CSV UTF-8, séparateur virgule, point-virgule ou tabulation, nombres français acceptés, dates ISO 8601 avec fuseau ou dates seules ISO / JJ/MM/AAAA. Types BUY/SELL/DEPOSIT/WITHDRAWAL/TRANSFER/FEE/DIVIDEND/REWARD/ADJUSTMENT, avec alias français pour achat, vente, dividende, frais, dépôt et retrait. La référence du courtier est recommandée ; sans référence, le rapprochement compare les données et leur nombre d’occurrences. Limites : 200 Ko, 500 lignes, aperçu valable 30 minutes. Les opérations connues sont ignorées ; les différences sont présentées sans modifier l’historique. Le journal est revérifié à la confirmation, qui reste atomique. Voir [l’API actuelle](docs/implementation.md).
 
@@ -159,7 +155,7 @@ pnpm db:backup
 pnpm db:restore --file backups/nom-du-fichier.dump --database patrimoine_restore_verification
 ```
 
-La restauration crée une **nouvelle base** ; elle refuse une cible existante ou un nom ne commençant pas par patrimoine_restore_. Vérifier ensuite ses données, puis modifier DATABASE_URL et redémarrer l’application pour l’utiliser. La commande ne remplace jamais la base courante. Un dump existant n’est pas écrasé.
+La restauration crée une **nouvelle base** ; elle refuse une cible existante ou un nom ne commençant pas par patrimoine*restore*. Vérifier ensuite ses données, puis modifier DATABASE_URL et redémarrer l’application pour l’utiliser. La commande ne remplace jamais la base courante. Un dump existant n’est pas écrasé.
 
 Avec Docker, créer le dump dans le conteneur pour éviter la redirection binaire PowerShell :
 
@@ -188,13 +184,14 @@ Renseigner DATABASE_URL, BETTER_AUTH_SECRET, BETTER_AUTH_URL et APP_ORIGIN. Les 
 - scripts et tests : exploitation locale et vérifications automatisées.
 
 La [documentation d’implémentation](docs/implementation.md) décrit les choix effectifs et les écarts par rapport aux documents de conception initiaux : [architecture](docs/architecture.md), [modèle](docs/data-model.md), [calculs](docs/calculations.md), [API cible](docs/api.md).
+
 # Import de positions Bourse (BoursoBank)
 
 Depuis le tableau de bord, cliquer sur **Importer un CSV Bourse**, ou ouvrir la catégorie **Bourse**. Le fichier BoursoBank « export-positions-instantanees » est accepté directement : `name;isin;quantity;buyingPrice;lastPrice;intradayVariation;amount;amountVariation;variation`. Les nombres français et les espaces de milliers sont reconnus. Préciser le compte (pour distinguer PEA et CTO) et la devise du relevé, absente de cet export ; EUR est proposé par défaut. Un modèle générique est disponible dans `public/import-bourse.csv`.
 
 L’analyse résout les ISIN vers une cotation action/ETF Yahoo Finance, récupère son cours daté et affiche le résultat avant confirmation. Les correspondances ambiguës sont refusées : ajouter le ticker complet dans le CSV pour choisir la cotation. Seules EUR et USD sont prises en charge, conformément au modèle de l’application. Aucune quantité ni aucun montant personnel n’est envoyé au fournisseur de cours ; seules les identifications de produits le sont.
 
-À la confirmation, l’import crée les actifs, leurs positions initiales, leurs coûts connus, les prix et un snapshot dans une même transaction. Pour l’export Bourso, le coût est reconstitué par `amount - amountVariation` lorsque ces valeurs sont disponibles, après contrôle de cohérence avec le PRU arrondi ; sinon, le PRU renseigné est multiplié par la quantité. Un coût absent reste inconnu. Le fichier est un inventaire actuel, pas un historique d’achats : aucune date d’achat n’est inventée, et les éventuelles conversions du coût utilisent le taux disponible à l’import. Les prix `lastPrice` et variations du CSV ne sont pas utilisés comme des cotations en direct.
+À la confirmation, l’import crée les actifs, leurs positions initiales, leurs coûts connus et les prix dans une même transaction, sans capture supplémentaire. Pour l’export Bourso, le coût est reconstitué par `amount - amountVariation` lorsque ces valeurs sont disponibles, après contrôle de cohérence avec le PRU arrondi ; sinon, le PRU renseigné est multiplié par la quantité. Un coût absent reste inconnu. Le fichier est un inventaire actuel, pas un historique d’achats : aucune date d’achat n’est inventée, et les éventuelles conversions du coût utilisent le taux disponible à l’import. Les prix `lastPrice` et variations du CSV ne sont pas utilisés comme des cotations en direct.
 
 Les doublons de produit au sein du même compte sont signalés. Un relevé inchangé affiche « déjà à jour », sans écriture en base. Une position déjà présente avec la même quantité et le même coût est ignorée ; une position différente bloque la confirmation et doit être mise à jour via les transactions ou les nouveaux avis d’opéré. Les titres absents du fichier ne sont jamais supprimés automatiquement. Ce parcours ne reconstruit pas les ventes, dividendes ni autres mouvements depuis un relevé de positions.
 
@@ -203,7 +200,6 @@ Les actifs créés par cet import utilisent `pricingMode: SECURITIES_MARKET` et 
 La récupération utilise les endpoints publics Yahoo Finance sans clé API. Leur disponibilité n’est pas garantie et les cours peuvent être différés selon la place ; voir [les sources et délais Yahoo Finance](https://help.yahoo.com/kb/SLN2310.html). Le fournisseur est isolé dans `src/modules/prices/securities.ts` pour pouvoir le remplacer sans modifier l’import ou l’interface.
 
 La migration `20260923160000_bourse_label` renomme le libellé existant « Actions & ETF » en « Bourse ». La clé technique `SECURITIES` et la route `/categories/stocks` restent compatibles avec les données et les liens existants.
-
 
 ## Déploiement Vercel
 

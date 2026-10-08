@@ -53,7 +53,7 @@ it('exposes historical category valuations and price performance from stored obs
     settlement: 'EXTERNAL',
   });
   await run(`assets/${asset.id}/prices`, { price: '100', observedAt: ago(31).toISOString() });
-  await runSnapshot(owner.portfolioId, false, ago(31));
+  await runSnapshot(owner.portfolioId, ago(31));
   await run('fx-rates', { eurUsd: '1.25', observedAt: ago(2).toISOString() });
   await run(`assets/${asset.id}/prices`, { price: '150', observedAt: ago(1).toISOString() });
   const state = await getState(owner.userId);

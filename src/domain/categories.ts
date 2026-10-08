@@ -246,8 +246,6 @@ export function buildCategoryDetails(
     .filter((point) => Date.parse(point.date) <= Date.parse(state.asOf))
     .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
   const performance = performance30d(totalValue, history, state.asOf);
-  const currentHistory = history.filter((point) => point.date !== state.asOf);
-  currentHistory.push({ date: state.asOf, value: totalValue });
   return {
     category: {
       ...(category.key === 'REAL_ESTATE'
@@ -278,7 +276,7 @@ export function buildCategoryDetails(
       totalValue,
       assets.map((asset) => asset.cost),
     ),
-    history: currentHistory,
+    history,
     assets,
   };
 }

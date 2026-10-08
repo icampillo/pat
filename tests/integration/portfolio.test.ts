@@ -86,7 +86,7 @@ describe('Persistance PostgreSQL et mutations atomiques', () => {
   });
   it('refuse une position détenue puis archive sans altérer son histoire financière', async () => {
     const untouched = await createAsset();
-    const before = await runSnapshot(portfolioId);
+    const before = await runSnapshot(portfolioId, new Date(Date.now() - 86400000));
     const asset = await createAsset();
     const buy = await commandFor('POST', 'transactions', purchase(asset.id));
     await commandFor(
@@ -305,7 +305,7 @@ describe('Persistance PostgreSQL et mutations atomiques', () => {
     );
   });
   it('conserve un snapshot inchangé après une nouvelle cotation', async () => {
-    const snapshot = (await commandFor('POST', 'snapshots', {})) as { id: string };
+    const snapshot = await runSnapshot(portfolioId);
     const before = await db().portfolioSnapshot.findUniqueOrThrow({ where: { id: snapshot.id } });
     const asset = await createAsset();
     await commandFor('POST', `assets/${asset.id}/prices`, {
@@ -748,14 +748,39 @@ describe('Snapshots quotidiens', () => {
   it('crée une seule capture même avec deux jobs concurrents, au jour du portefeuille', async () => {
     const instant = new Date('2025-01-01T23:30:00Z');
     const [first, second] = await Promise.all([
-      runSnapshot(portfolioId, true, instant),
-      runSnapshot(portfolioId, true, instant),
+      runSnapshot(portfolioId, instant),
+      runSnapshot(portfolioId, instant),
     ]);
     expect(first!.id).toBe(second!.id);
-    expect(first!.dailyKey).toBe('2025-01-02');
+    expect(first!.referenceDay).toBe('2025-01-02');
     expect(
-      await db().portfolioSnapshot.count({ where: { portfolioId, dailyKey: '2025-01-02' } }),
+      await db().portfolioSnapshot.count({ where: { portfolioId, referenceDay: '2025-01-02' } }),
     ).toBe(1);
+  });
+});
+describe('Historique automatique', () => {
+  it('refuse la commande manuelle sans changer version, audit ou captures', async () => {
+    const before = await db().portfolio.findUniqueOrThrow({ where: { id: portfolioId } });
+    const count = await db().portfolioSnapshot.count({ where: { portfolioId } });
+    await expect(commandFor('POST', 'snapshots', {})).rejects.toMatchObject({ status: 404 });
+    expect(await db().portfolioSnapshot.count({ where: { portfolioId } })).toBe(count);
+    expect(await db().portfolio.findUniqueOrThrow({ where: { id: portfolioId } })).toEqual(before);
+  });
+  it('enforces one reference across concurrent portfolios of the same owner', async () => {
+    const other = await db().portfolio.create({ data: { ownerId: userId } });
+    const at = new Date('2026-03-29T22:30:00Z');
+    const [first, second] = await Promise.all([
+      runSnapshot(portfolioId, at),
+      runSnapshot(other.id, at),
+    ]);
+    expect(first.id).toBe(second.id);
+    expect(first.referenceDay).toBe('2026-03-30');
+    expect(
+      await db().portfolioSnapshot.count({
+        where: { referenceOwnerId: userId, referenceDay: '2026-03-30' },
+      }),
+    ).toBe(1);
+    expect(await runSnapshot(other.id, at)).toEqual(first);
   });
 });
 describe('Routes API privées', () => {
@@ -787,6 +812,22 @@ describe('Routes API privées', () => {
       context(['snapshots']),
     );
     expect(result.status).toBe(403);
+  });
+  it('retourne 404 pour la capture manuelle même avec session et origine valides', async () => {
+    const result = await POST(
+      new Request('http://localhost:3000/api/v1/snapshots', {
+        method: 'POST',
+        headers: {
+          cookie: sessionCookie,
+          origin: process.env.APP_ORIGIN!,
+          'content-type': 'application/json',
+          'idempotency-key': randomUUID(),
+        },
+        body: '{}',
+      }),
+      context(['snapshots']),
+    );
+    expect(result.status).toBe(404);
   });
   it('exporte seulement les données du propriétaire et jamais les sessions', async () => {
     const result = await GET(

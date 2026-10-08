@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { db } from './db';
 import { AppError } from './errors';
-import { capture } from './portfolio-query';
 import { json, mutate } from './portfolio-store';
 import { addressSchema, fetchZerion, ZerionError } from './zerion';
 import type { WalletData } from '@/shared/wallets';
@@ -75,8 +74,6 @@ export async function walletCommand(
       const row = previous
         ? await tx.walletConnection.update({ where: { id: previous.id }, data: fields })
         : await tx.walletConnection.create({ data: { ...fields, portfolioId: p.id } });
-      // Inclusion is a structural change, even before the first observation (unknown value).
-      if (row.included) await capture(tx, p.id, p.version + 1, 'WALLET');
       return { id: row.id };
     }
     if (!path[1] || !z.uuid().safeParse(path[1]).success)
@@ -115,8 +112,6 @@ export async function walletCommand(
             : {}),
         },
       });
-      if (data.included !== undefined && data.included !== wallet.included)
-        await capture(tx, p.id, p.version + 1, 'WALLET');
       return { id: wallet.id };
     }
     if (path.length === 2 && method === 'DELETE') {
@@ -130,7 +125,6 @@ export async function walletCommand(
           leaseUntil: null,
         },
       });
-      if (wallet.included) await capture(tx, p.id, p.version + 1, 'WALLET');
       return { id: wallet.id };
     }
     throw new AppError('NOT_FOUND', 'Action introuvable.', 404);

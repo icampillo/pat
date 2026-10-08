@@ -1,4 +1,5 @@
 'use client';
+import { snapshotDay, SNAPSHOT_TIMEZONE } from '@/domain/snapshot-day';
 import { sortByValue } from '@/domain/value-sort';
 import { useState } from 'react';
 import { Download } from 'lucide-react';
@@ -9,9 +10,7 @@ export function HistoryView({ state, currency }: { state: AppState; currency: 'E
   const [group, setGroup] = useState('all');
   const buckets = new Map<string, SnapshotView>();
   for (const snapshot of state.snapshots) {
-    const local = new Intl.DateTimeFormat('sv-SE', { timeZone: state.portfolio.timezone }).format(
-      new Date(snapshot.capturedAt),
-    );
+    const local = snapshot.referenceDay ?? snapshotDay(snapshot.capturedAt);
     const key =
       group === 'all'
         ? snapshot.id
@@ -45,7 +44,10 @@ export function HistoryView({ state, currency }: { state: AppState; currency: 'E
       <div className="section-title">
         <div>
           <h2>Valeurs enregistrées</h2>
-          <p>{state.snapshots.length} captures affichées · les anciennes valeurs sont conservées</p>
+          <p>
+            {state.snapshots.length} références quotidiennes · Europe/Paris · toutes les anciennes
+            captures restent exportables
+          </p>
         </div>
         <a className="btn" href="/api/v1/exports/history.csv">
           <Download size={16} />
@@ -60,7 +62,7 @@ export function HistoryView({ state, currency }: { state: AppState; currency: 'E
             value={group}
             onChange={(e) => setGroup(e.target.value)}
           >
-            <option value="all">Toutes les captures</option>
+            <option value="all">Références quotidiennes</option>
             <option value="day">Par jour</option>
             <option value="month">Par mois</option>
             <option value="year">Par année</option>
@@ -73,11 +75,13 @@ export function HistoryView({ state, currency }: { state: AppState; currency: 'E
       </div>
       {state.historyRevised && (
         <p className="error-note">
-          Le journal contient des opérations rétroactives ou corrigées. Les anciennes captures
-          restent inchangées ; la performance après flux n’est pas calculée sur cet historique.
+          Le périmètre ou le journal a changé (wallets, opérations rétroactives ou corrigées). Les
+          anciennes captures restent inchangées ; la performance après flux n’est pas calculée sur
+          cet historique.
         </p>
       )}
       <EvolutionChart
+        daily={group === 'all' || group === 'day'}
         points={rows.map((s) => ({
           date: s.capturedAt,
           value: value(s) === null ? null : Number(value(s)),
@@ -102,7 +106,7 @@ export function HistoryView({ state, currency }: { state: AppState; currency: 'E
                 <tr key={s.id}>
                   <td>
                     {new Date(s.capturedAt).toLocaleString('fr-FR', {
-                      timeZone: state.portfolio.timezone,
+                      timeZone: SNAPSHOT_TIMEZONE,
                       dateStyle: 'medium',
                       timeStyle: 'short',
                     })}

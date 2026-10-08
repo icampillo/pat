@@ -52,9 +52,9 @@ it('captures dated equity immutably, without generating ledger transactions or m
   expect(await db().transaction.count({ where: { portfolioId: owner.portfolioId } })).toBe(0);
   const firstDate = new Date('2020-01-31'),
     secondDate = new Date('2021-01-31');
-  const first = await runSnapshot(owner.portfolioId, false, firstDate);
+  const first = await runSnapshot(owner.portfolioId, firstDate);
   const before = JSON.stringify(first);
-  const second = await runSnapshot(owner.portfolioId, false, secondDate);
+  const second = await runSnapshot(owner.portfolioId, secondDate);
   expect(String(first!.totalEur)).toBe('100000');
   expect(String(second!.totalEur)).toBe(
     realEstateAt(owner.input.metadata.realEstate, secondDate).equity,

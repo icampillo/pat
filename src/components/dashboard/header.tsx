@@ -1,10 +1,10 @@
-import { Camera, FileUp, Plus, X } from 'lucide-react';
+import { FileUp, Plus, X } from 'lucide-react';
 import Link from '@/components/workspace/link';
 import { useWorkspace } from '@/components/workspace/context';
 import { dashboardAction, dashboardPrimaryAction } from './primitives';
 
 export function DashboardHeader() {
-  const { save, run, busy, flash, setFlash } = useWorkspace();
+  const { flash, setFlash } = useWorkspace();
   return (
     <>
       <header className="flex flex-wrap items-center justify-between gap-4">
@@ -17,15 +17,6 @@ export function DashboardHeader() {
             <FileUp size={15} aria-hidden="true" />
             Importer un CSV Bourse
           </Link>
-          <button
-            className={dashboardAction}
-            disabled={busy}
-            aria-busy={busy}
-            onClick={() => void run(() => save('snapshots', 'POST', {}))}
-          >
-            <Camera size={15} aria-hidden="true" />
-            Enregistrer un snapshot
-          </button>
           <Link className={dashboardPrimaryAction} href="/assets/new">
             <Plus size={16} aria-hidden="true" />
             Ajouter un actif

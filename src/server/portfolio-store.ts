@@ -21,7 +21,7 @@ export function toLedger(t: Transaction): LedgerTransaction {
 export async function owned(userId: string, client: TxDb = db()) {
   const p = await client.portfolio.findFirst({
     where: { ownerId: userId },
-    orderBy: { createdAt: 'asc' },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   });
   if (!p)
     throw new AppError(

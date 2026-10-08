@@ -41,7 +41,13 @@ test('dashboard simplifié, catégories, devises, historique et mobile', async (
     });
     await post(`assets/${asset.id}/prices`, { price: '50', observedAt: new Date().toISOString() });
   }
-  await post('snapshots', {});
+  expect(
+    (
+      await page.request.get('/api/cron/snapshot', {
+        headers: { authorization: 'Bearer isolated-e2e-cron-not-production' },
+      })
+    ).ok(),
+  ).toBe(true);
   await page.reload();
   await expect(page.getByTestId('investment-card')).toHaveCount(2);
   await expect(

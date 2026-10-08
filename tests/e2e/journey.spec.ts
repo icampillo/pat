@@ -66,10 +66,17 @@ test('parcours complet : connexion, actif, achat, prix, vente, snapshot et expor
     '37',
   );
   await page.getByRole('link', { name: 'Tableau de bord', exact: true }).click();
-  await page.getByRole('button', { name: 'Enregistrer un snapshot' }).click();
-  await expect(page.getByRole('status')).toContainText('Enregistrement effectué');
+  await expect(page.getByRole('button', { name: 'Enregistrer un snapshot' })).toHaveCount(0);
+  expect(
+    (
+      await page.request.get('/api/cron/snapshot', {
+        headers: { authorization: 'Bearer isolated-e2e-cron-not-production' },
+      })
+    ).ok(),
+  ).toBe(true);
+  await page.reload();
   await page.getByRole('link', { name: 'Historique', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'Manuel', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Quotidien', exact: true })).toBeVisible();
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('link', { name: 'Exporter l’historique' }).click();
   expect((await downloadPromise).suggestedFilename()).toBe('patrimoine-history.csv');
@@ -110,8 +117,14 @@ test('refuse l’archivage détenu, conserve l’historique soldé et permet la 
     ).quantity,
   ).toBe('2');
   await page.getByRole('link', { name: 'Tableau de bord', exact: true }).click();
-  await page.getByRole('button', { name: 'Enregistrer un snapshot' }).click();
-  await expect(page.getByRole('status')).toContainText('Enregistrement effectué');
+  await expect(page.getByRole('button', { name: 'Enregistrer un snapshot' })).toHaveCount(0);
+  expect(
+    (
+      await page.request.get('/api/cron/snapshot', {
+        headers: { authorization: 'Bearer isolated-e2e-cron-not-production' },
+      })
+    ).ok(),
+  ).toBe(true);
   const before = (await (await page.request.get('/api/v1/state')).json()).data;
   const snapshotId = before.snapshots.at(-1).id;
   const snapshot = await (await page.request.get(`/api/v1/snapshots/${snapshotId}`)).json();
@@ -280,8 +293,7 @@ test('wallet synchronisé : tokens, dettes, DeFi et affichage mobile', async ({ 
   expect(state.data.onchain.valueUsd).toBe('905');
   expect(state.data.totals.unrealizedEur).toBeNull();
   // The current wallet value is available even though synchronization made no full capture.
-  expect(state.data.snapshots).toHaveLength(1);
-  expect(state.data.snapshots[0]).toMatchObject({ kind: 'WALLET', totalUsd: null });
+  expect(state.data.snapshots).toHaveLength(0);
   mkdirSync('.local/screenshots', { recursive: true });
   await page.screenshot({ path: '.local/screenshots/wallets-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 375, height: 812 });
@@ -301,16 +313,23 @@ test('wallet synchronisé : tokens, dettes, DeFi et affichage mobile', async ({ 
   await expect(page.getByRole('heading', { name: 'Protocol fixture', exact: true })).toHaveCount(0);
   await page.goto('/dashboard');
   await expect(page.getByText('après flux · estimé')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Enregistrer un snapshot' }).click();
+  await expect(page.getByRole('button', { name: 'Enregistrer un snapshot' })).toHaveCount(0);
+  expect(
+    (
+      await page.request.get('/api/cron/snapshot', {
+        headers: { authorization: 'Bearer isolated-e2e-cron-not-production' },
+      })
+    ).ok(),
+  ).toBe(true);
   await expect
     .poll(async () => {
       const response = await (await page.request.get('/api/v1/state')).json();
       return response.data.snapshots.length;
     })
-    .toBe(2);
+    .toBe(1);
   const savedState = await (await page.request.get('/api/v1/state')).json();
   const saved = savedState.data.snapshots.at(-1);
-  expect(saved).toMatchObject({ kind: 'MANUAL', totalUsd: '905', totalEur: '724' });
+  expect(saved).toMatchObject({ kind: 'DAILY', totalUsd: '905', totalEur: '724' });
   const walletId = savedState.data.onchain.wallets[0].id;
   const excluded = await page.request.patch(`/api/v1/wallets/${walletId}`, {
     headers: { origin: 'http://localhost:3001', 'idempotency-key': crypto.randomUUID() },
@@ -321,13 +340,13 @@ test('wallet synchronisé : tokens, dettes, DeFi et affichage mobile', async ({ 
   await expect(page.getByText('après flux · estimé')).toHaveCount(0);
   const excludedState = await (await page.request.get('/api/v1/state')).json();
   expect(excludedState.data.totals.valueUsd).toBe('0');
-  expect(excludedState.data.snapshots).toHaveLength(3);
+  expect(excludedState.data.snapshots).toHaveLength(1);
   expect(excludedState.data.snapshots.find((snap: { id: string }) => snap.id === saved.id)).toEqual(
     saved,
   );
   await page.goto('/history');
-  await expect(page.getByText('3 captures affichées', { exact: false })).toBeVisible();
-  await expect(page.getByRole('row').filter({ hasText: 'Manuel' })).toContainText('724,00');
+  await expect(page.getByText('1 références quotidiennes', { exact: false })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Quotidien' })).toContainText('724,00');
 });
 
 test('routes explicites : layout partagé, liens profonds, retour et session expirée', async ({

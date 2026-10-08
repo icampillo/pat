@@ -211,13 +211,15 @@ model FxRate {
   @@index([portfolioId, observedAt(sort: Desc)])
 }
 model PortfolioSnapshot {
-  // Low-frequency immutable valuation: manual, daily or structural perimeter change.
+  // Immutable daily references; legacy captures remain available in exports.
   id String @id @default(uuid()) @db.Uuid
   portfolioId String @db.Uuid
   portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Restrict)
   capturedAt DateTime @default(now()) @db.Timestamptz(3)
   kind String @default("MANUAL")
-  dailyKey String?
+  dailyKey String? // Legacy metadata, preserved.
+  referenceOwnerId String?
+  referenceDay String?
   ledgerVersion Int
   totalEur Decimal? @db.Decimal(38,18)
   totalUsd Decimal? @db.Decimal(38,18)
@@ -225,6 +227,7 @@ model PortfolioSnapshot {
   netFlowsEur Decimal @db.Decimal(38,18)
   data Json
   @@unique([portfolioId, dailyKey])
+  @@unique([referenceOwnerId, referenceDay])
   @@index([portfolioId, capturedAt(sort: Desc)])
 }
 model IdempotencyRecord {

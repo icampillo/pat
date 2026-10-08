@@ -1,3 +1,4 @@
+import { snapshotDay } from '@/domain/snapshot-day';
 import { db } from './db';
 import type { Transaction } from '@/generated/prisma/client';
 import { replay } from '@/domain/ledger';
@@ -248,27 +249,32 @@ export async function valuation(tx: TxDb, portfolioId: string, at = new Date()) 
     flows: ledger.flows,
   };
 }
+// Only the daily job and isolated demo seeder create captures.
 export async function capture(
   tx: TxDb,
   portfolioId: string,
   version: number,
-  kind = 'MANUAL',
-  at = new Date(),
-  dailyKey?: string,
+  kind: 'DAILY' | 'SEED',
+  at: Date,
 ) {
-  if (dailyKey) {
-    const existing = await tx.portfolioSnapshot.findUnique({
-      where: { portfolioId_dailyKey: { portfolioId, dailyKey } },
-    });
-    if (existing) return existing;
-  }
+  const portfolio = await tx.portfolio.findUniqueOrThrow({ where: { id: portfolioId } });
+  const referenceDay = snapshotDay(at);
+  const referenceOwnerId = portfolio.ownerId;
+  const existing = await tx.portfolioSnapshot.findUnique({
+    where: { referenceOwnerId_referenceDay: { referenceOwnerId, referenceDay } },
+  });
+  if (existing) return existing;
+  if (kind === 'SEED' && !portfolio.isDemo)
+    throw new AppError('DEMO_ONLY', 'Capture de démonstration interdite.');
   const state = await valuation(tx, portfolioId, at);
+  // Missing valuations stay null, never an invented zero. References are never updated.
   return tx.portfolioSnapshot.create({
     data: {
       portfolioId,
       capturedAt: at,
       kind,
-      dailyKey,
+      referenceOwnerId,
+      referenceDay,
       ledgerVersion: version,
       totalEur: state.totals.valueEur,
       totalUsd: state.totals.valueUsd,
@@ -278,51 +284,59 @@ export async function capture(
     },
   });
 }
-export async function runSnapshot(portfolioId: string, daily = false, at = new Date()) {
+export async function runSnapshot(portfolioId: string, at = new Date()) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       return await db().$transaction(
         async (tx) => {
           const portfolio = await tx.portfolio.findUniqueOrThrow({ where: { id: portfolioId } });
-          const dailyKey = daily
-            ? new Intl.DateTimeFormat('sv-SE', { timeZone: portfolio.timezone }).format(at)
-            : undefined;
-          return capture(
-            tx,
-            portfolio.id,
-            portfolio.version,
-            daily ? 'DAILY' : 'MANUAL',
-            at,
-            dailyKey,
-          );
+          return capture(tx, portfolio.id, portfolio.version, 'DAILY', at);
         },
         { isolationLevel: 'RepeatableRead', timeout: 30_000 },
       );
     } catch (error) {
       const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
-      if (daily && attempt < 2 && (code === 'P2002' || code === 'P2034')) continue;
+      if (
+        attempt < 2 &&
+        typeof code === 'string' &&
+        ['P2002', 'P2034', 'P1001', 'P1002', 'P1008', 'P1017', 'P2024'].includes(code)
+      ) {
+        console.warn(
+          JSON.stringify({
+            job: 'snapshot',
+            event: 'retry',
+            portfolioId,
+            day: snapshotDay(at),
+            attempt: attempt + 1,
+            code,
+          }),
+        );
+        continue;
+      }
       throw error;
     }
   }
+  throw new Error('Snapshot retry exhausted');
 }
 export async function getState(userId: string) {
   return db().$transaction(
     async (tx) => {
       const portfolio = await owned(userId, tx);
       const asOf = new Date();
-      const [state, categories, snapshots] = await Promise.all([
+      const [state, categories, snapshots, walletHistory] = await Promise.all([
         valuation(tx, portfolio.id, asOf),
         tx.assetCategory.findMany({
           where: { portfolioId: portfolio.id },
           orderBy: { key: 'asc' },
         }),
         tx.portfolioSnapshot.findMany({
-          where: { portfolioId: portfolio.id },
+          where: { referenceOwnerId: userId, referenceDay: { not: null } },
           orderBy: { capturedAt: 'desc' },
           take: 600,
           select: {
             id: true,
             capturedAt: true,
+            referenceDay: true,
             kind: true,
             totalEur: true,
             totalUsd: true,
@@ -331,6 +345,7 @@ export async function getState(userId: string) {
             data: true,
           },
         }),
+        tx.walletConnection.count({ where: { portfolioId: portfolio.id } }),
       ]);
       const target = new Date(asOf.getTime() - 30 * 86400000);
       const quoted = state.rows.filter((row) => row.priceDate && d(row.quantity).gt(0));
@@ -393,7 +408,7 @@ export async function getState(userId: string) {
           categoryValues: snapshotCategoryValues(data, categories),
         })),
         asOf: asOf.toISOString(),
-        historyRevised: revisions > 0 || retrospective,
+        historyRevised: revisions > 0 || retrospective || walletHistory > 0,
       });
     },
     { isolationLevel: 'RepeatableRead', timeout: 20_000 },

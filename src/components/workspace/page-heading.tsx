@@ -1,5 +1,5 @@
 'use client';
-import { Camera, Download, Plus, X } from 'lucide-react';
+import { Download, Plus, X } from 'lucide-react';
 import Link from '@/components/workspace/link';
 
 import { useWorkspace } from '@/components/workspace/context';
@@ -15,7 +15,7 @@ export function PageHeading({
   detail?: boolean;
   actions?: React.ReactNode;
 }) {
-  const { save, run, busy, flash, setFlash } = useWorkspace();
+  const { flash, setFlash } = useWorkspace();
   return (
     <>
       {' '}
@@ -47,16 +47,7 @@ export function PageHeading({
                 Importer un CSV Bourse
               </Link>
             )}
-            {view === 'dashboard' || view === 'history' ? (
-              <button
-                className="btn"
-                disabled={busy}
-                onClick={() => run(() => save('snapshots', 'POST', {}))}
-              >
-                <Camera size={16} />
-                Enregistrer un snapshot
-              </button>
-            ) : (
+            {!['dashboard', 'history'].includes(view) && (
               <a
                 className="btn"
                 href={`/api/v1/exports/${view === 'transactions' ? 'transactions' : 'assets'}.csv`}

@@ -32,29 +32,29 @@ Des clés étrangères composites empêchent de rattacher une transaction, un pr
 
 Toutes les routes ci-dessous exigent une session. Les mutations exigent aussi une origine exactement égale à APP_ORIGIN et un en-tête Idempotency-Key de 8 à 150 caractères. Le portefeuille est déduit de la session. Les réponses métier portent Cache-Control: private, no-store.
 
-| Méthode | Route après /api/v1 | Fonction |
-| --- | --- | --- |
-| GET | /state | Portefeuille, positions, journal, catégories, taux, 600 captures les plus récentes et `userName` de la session |
-| POST | /assets | Création d’une fiche |
-| PATCH | /assets/:id | Remplacement validé de la fiche, If-Match obligatoire |
-| DELETE | /assets/:id | Alias d’archivage confirmé, position soldée, If-Match ; aucune destruction |
-| POST | /assets/:id/prices | Prix manuel, ou calcul de métal à partir de gramPrice et premium |
-| GET | /assets/:id/prices | 500 observations de prix les plus récentes |
-| POST | /assets/:id/refresh | Vérification de la source et fallback vers la dernière observation |
-| GET / POST | /assets/:id/image | Lecture privée ou chargement d’une image encodée en base64 |
-| POST | /transactions | Création et validation du journal |
-| PATCH | /transactions/:id | Corps transaction + reason, révision et If-Match |
-| DELETE | /transactions/:id | Corps confirmed + reason, annulation avec révision et If-Match |
-| POST | /fx-rates | Taux EUR/USD daté |
-| PATCH | /settings | Nom du portefeuille, devise par défaut et fuseau |
-| POST | /snapshots | Capture manuelle |
-| GET | /snapshots/:id | Détail immuable d’une capture |
-| POST | /imports/preview | CSV ou avis PDF Bourso borné, rapprochement sans écriture financière |
-| POST | /imports/:id/confirm | Ajout atomique des nouvelles lignes et des ambiguïtés explicitement choisies |
-| GET | /exports/assets.csv | Fiches et valorisation courante |
-| GET | /exports/transactions.csv | Journal, y compris les transactions annulées |
-| GET | /exports/history.csv | Toutes les captures et leurs détails JSON |
-| GET | /exports/portfolio.json | Données métier complètes ; comptes, secrets et sessions exclus |
+| Méthode    | Route après /api/v1       | Fonction                                                                                                       |
+| ---------- | ------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| GET        | /state                    | Portefeuille, positions, journal, catégories, taux, 600 captures les plus récentes et `userName` de la session |
+| POST       | /assets                   | Création d’une fiche                                                                                           |
+| PATCH      | /assets/:id               | Remplacement validé de la fiche, If-Match obligatoire                                                          |
+| DELETE     | /assets/:id               | Alias d’archivage confirmé, position soldée, If-Match ; aucune destruction                                     |
+| POST       | /assets/:id/prices        | Prix manuel, ou calcul de métal à partir de gramPrice et premium                                               |
+| GET        | /assets/:id/prices        | 500 observations de prix les plus récentes                                                                     |
+| POST       | /assets/:id/refresh       | Vérification de la source et fallback vers la dernière observation                                             |
+| GET / POST | /assets/:id/image         | Lecture privée ou chargement d’une image encodée en base64                                                     |
+| POST       | /transactions             | Création et validation du journal                                                                              |
+| PATCH      | /transactions/:id         | Corps transaction + reason, révision et If-Match                                                               |
+| DELETE     | /transactions/:id         | Corps confirmed + reason, annulation avec révision et If-Match                                                 |
+| POST       | /fx-rates                 | Taux EUR/USD daté                                                                                              |
+| PATCH      | /settings                 | Nom du portefeuille, devise par défaut et fuseau                                                               |
+| GET        | /api/cron/snapshot        | Job quotidien protégé par CRON_SECRET (hors API v1)                                                            |
+| GET        | /snapshots/:id            | Détail immuable d’une capture                                                                                  |
+| POST       | /imports/preview          | CSV ou avis PDF Bourso borné, rapprochement sans écriture financière                                           |
+| POST       | /imports/:id/confirm      | Ajout atomique des nouvelles lignes et des ambiguïtés explicitement choisies                                   |
+| GET        | /exports/assets.csv       | Fiches et valorisation courante                                                                                |
+| GET        | /exports/transactions.csv | Journal, y compris les transactions annulées                                                                   |
+| GET        | /exports/history.csv      | Toutes les captures et leurs détails JSON                                                                      |
+| GET        | /exports/portfolio.json   | Données métier complètes ; comptes, secrets et sessions exclus                                                 |
 
 Les routes de connexion et déconnexion sont gérées par Better Auth sous /api/auth. Les sessions expirent après sept jours ; les tentatives de connexion sont limitées à cinq par minute. Les mots de passe sont hachés. Les erreurs serveur journalisent un type d’erreur et un identifiant de requête, sans corps financier ni secret.
 
@@ -77,7 +77,6 @@ L’import accepte soit `csv`, soit `pdfBase64`, avec `platform`, `currency` et 
 Les actifs sont identifiés par `asset_id`, ou par compte et ISIN/symbole. Un ISIN inconnu avec nom produit une fiche Bourse au prix manuel, créée uniquement à la confirmation. `import-matching.ts` privilégie les références courtier isolées par source et compte, puis compare les empreintes normalisées en conservant les occurrences multiples. Les statuts sont `EXISTING`, `NEW`, `CHANGED`, `AMBIGUOUS`. Une référence conflictuelle ou annulée n’est jamais recréée ; une opération sans référence fiable peut être ajoutée comme distincte après choix explicite. Les inventaires restent intacts, et les avis potentiellement antérieurs sont signalés.
 
 L’aperçu conserve les données normalisées (pas le PDF), erreurs et version du portefeuille pendant 30 minutes. Un réimport entièrement connu renvoie `id: unchanged` sans persistance, audit ni incrément de version. La confirmation `{ confirmed: true, decisions?: [{ line, action: 'CREATE' | 'IGNORE' }] }` refait le rapprochement sous le verrou de mutation existant, ajoute les nouvelles lignes, ignore les ambiguïtés par défaut et valide le journal entier. Les choix explicites imposent une version inchangée ; les doublons concurrents peuvent être ignorés automatiquement. Le lot confirmé est rejouable sans écriture. Aucune migration n’est nécessaire. Le brut BUY/SELL conserve l’arrondi courtier (écart maximal de 0,01 avec quantité × cours) dans le coût et les flux ; les anciens montants à zéro restent calculés depuis quantité × cours.
-
 
 ### Validation de l’import (7 octobre 2026)
 
@@ -104,27 +103,28 @@ Les providers crypto, titres, métaux et cartes sont des adaptateurs expliciteme
 
 WalletConnection conserve une adresse EVM normalisée et unique par portefeuille, son inclusion dans le patrimoine, sa pause, les dates de synchronisation et un verrou temporaire. WalletObservation conserve chaque réussite ; invalidatedAt permet d’écarter une capture reconnue incomplète sans en effacer la trace. DeBankConfig choisit PUBLIC (gratuit par défaut) ou API, la fréquence et une éventuelle clé chiffrée. Les sessions et l’origine protègent ces mutations comme les autres routes.
 
-| Méthode | Route après /api/v1 | Fonction |
-| --- | --- | --- |
-| POST | /wallets | Ajouter une adresse ou un profil DeBank ; label, included et referenceUsd facultatifs |
-| PATCH | /wallets/:id | Nom, activation et inclusion dans le patrimoine |
-| DELETE | /wallets/:id | Retrait logique ; observations conservées |
-| POST | /wallets/:id/sync | Programmer une lecture ; délai minimum d’une minute |
-| PATCH | /debank/config | mode PUBLIC/API, enabled, intervalMinutes 15/60/240, accessKey facultative |
-| DELETE | /debank/config | Supprimer la clé et mettre la synchronisation en pause |
+| Méthode | Route après /api/v1 | Fonction                                                                              |
+| ------- | ------------------- | ------------------------------------------------------------------------------------- |
+| POST    | /wallets            | Ajouter une adresse ou un profil DeBank ; label, included et referenceUsd facultatifs |
+| PATCH   | /wallets/:id        | Nom, activation et inclusion dans le patrimoine                                       |
+| DELETE  | /wallets/:id        | Retrait logique ; observations conservées                                             |
+| POST    | /wallets/:id/sync   | Programmer une lecture ; délai minimum d’une minute                                   |
+| PATCH   | /debank/config      | mode PUBLIC/API, enabled, intervalMinutes 15/60/240, accessKey facultative            |
+| DELETE  | /debank/config      | Supprimer la clé et mettre la synchronisation en pause                                |
 
 Le cron Vercel quotidien appelle `syncDueWallets()`, qui recherche au plus 20 adresses échues et les traite séquentiellement, dans un budget de temps borné. Aucun planificateur ne démarre avec Next.js. Le refresh authentifié appelle le même cœur métier via `syncWallet()` dans `after()`. Un verrou SQL de 180 secondes évite les lectures concurrentes d’une adresse. Une pause ou une modification de configuration invalide les résultats déjà en vol. Le réseau est lu hors transaction ; l’observation et l’état de synchronisation sont publiés ensemble après vérification du verrou et de la révision de configuration. L’écriture de version du portefeuille reste conservée. Les erreurs produisent un recul progressif et conservent la dernière réussite. Les données sont automatiquement rafraîchies à l’écran.
 
 ### Fréquences et changements de périmètre
 
 - Chaque synchronisation réussie, automatique ou demandée par l’utilisateur, ajoute une `WalletObservation`. Elle ne crée aucun `PortfolioSnapshot`, même au premier succès. Les intervalles de 15, 60 ou 240 minutes déterminent l’éligibilité au prochain passage quotidien, pas la fréquence du cron.
-- Les captures patrimoniales viennent de la commande manuelle ou du job `createPortfolioSnapshots()` appelé par `/api/cron/snapshot` à 06 h UTC chaque jour. Il parcourt les portefeuilles par pages et réutilise `runSnapshot(id, true)`. Une capture quotidienne reste unique par journée locale ; les captures existantes sont ignorées. Les erreurs restent isolées et les passages incomplets sont signalés ; Vercel ne les retente pas automatiquement. Aucune capture passée n’est inventée. `pnpm snapshot --portfolio <uuid> --daily` reste disponible. Voir [la validation des crons](cron-validation.md).
-- Le type existant `WALLET` est désormais réservé aux changements de périmètre : ajout/restauration d’un wallet inclus, changement effectif de `included`, retrait logique d’un wallet inclus. Une capture enregistre l’état **après** la mutation, dans la même transaction sérialisable et idempotente. L’ajout avant toute observation conserve une valeur inconnue, jamais un zéro inventé.
-- Renommer, mettre en pause/reprendre, modifier la configuration, demander une synchronisation ou retirer un wallet déjà exclu ne crée pas de capture. `enabled` pilote les lectures ; seul `included` pilote les totaux. Une pause garde donc la dernière observation et sa date, avec les indicateurs de fraîcheur existants.
-- Le dashboard et les positions de catégorie utilisent la dernière observation valide. La courbe du dashboard et l’historique utilisent les snapshots enregistrés ; la courbe de catégorie ajoute son point courant en mémoire. Aucune de ces lectures ne fabrique une capture en base. Une capture fige les dernières observations valides disponibles à sa date, leurs dates de réussite, les indicateurs de fraîcheur et le taux utilisé, dans une lecture cohérente du portefeuille.
-- Les changements de périmètre ne sont ni des achats ni des flux reconstitués. Modified Dietz reste masqué si un wallet est inclus ou si une capture `WALLET` est présente dans l’historique chargé, y compris après exclusion ou retrait. Les variations brutes peuvent inclure ces changements de périmètre.
+- Seul le job `createPortfolioSnapshots()` appelé à 06 h UTC crée des captures de production. Il traite le portefeuille principal de chaque utilisateur, comme `owned()`, par pages de 25. Les propriétaires ayant déjà une référence du jour sont exclus des pages pour permettre une reprise après interruption.
+- `runSnapshot(id, at)` calcule le jour en Europe/Paris, lit une transaction RepeatableRead, puis insère une capture DAILY immuable. Les conflits et erreurs transitoires SQL sont retentés jusqu’à trois fois. Une capture existante est retournée sans réévaluation ni remplacement. Les données manquantes restent null.
+- La clé unique `referenceOwnerId/referenceDay` protège même les exécutions concurrentes sur plusieurs portefeuilles d’un utilisateur. `dailyKey` est conservé comme métadonnée historique, mais n’est plus écrit.
+- Imports, inclusion/exclusion, retrait/restauration et synchronisation de wallets ne créent pas de snapshots. Les totaux courants et observations continuent de fonctionner. L’existence persistante d’un wallet, même retiré, masque la performance après flux qui serait trompeuse après un changement de périmètre.
+- Dashboard, historique et courbes de catégories utilisent les références quotidiennes ; aucune valeur courante n’est ajoutée à la courbe historique. Un jour manquant interrompt la ligne, sans extrapolation. Les dates de capture sont affichées en Europe/Paris.
+- La migration conserve tous les enregistrements historiques et leurs valeurs. Les références anciennes peuvent être de type MANUAL, WALLET ou SEED : leur provenance reste honnête. L’export CSV/JSON inclut aussi les captures non retenues.
 
-Les anciennes observations et captures `WALLET` issues de synchronisations restent intactes et consultables/exportables. Aucune migration, suppression, agrégation rétroactive ou politique de rétention n’est appliquée. Le job wallet ne remplace pas le job quotidien : sans planification de ce dernier, l’historique ne reçoit que les captures manuelles et structurelles.
+Voir [le contrat et la validation des snapshots automatiques](automatic-snapshots.md). Le seul autre producteur est le seeder de démonstration, explicitement limité aux portefeuilles `isDemo`.
 
 Le lecteur PUBLIC lance Chromium sans session personnelle, sur un hôte fixe et une adresse validée, attend « Data updated », développe les petites positions et lit le DOM rendu. Il interprète les petits nombres en indices et conserve les bornes inférieures à un centime. Il signale les protocoles dont le détail est inconnu. Le total public arrondi reste la référence ; les sous-totaux servent au détail et ne le remplacent pas. Les CAPTCHA, blocages et changements de format ne sont pas contournés. Le lecteur API utilise total_balance, all_token_list?is_all=false et all_complex_protocol_list avec la clé du propriétaire, sans réessai réseau immédiat. Les budgets et délais sont bornés.
 
@@ -138,4 +138,4 @@ Le [workflow CI GitHub](ci.md) est défini pour les pushes et pull requests vers
 
 Les points suivants restent des évolutions : administration des catégories/plateformes, pagination serveur du journal, sélection de plusieurs portefeuilles, import de fiches d’actifs, intégrations de marché, conversion du rendement ajusté en USD, règles fiscales et rétention automatique des lots/idempotences. La comparaison après flux reste une estimation Modified Dietz en EUR ; elle est masquée lorsque le journal a des révisions ou des ajouts rétroactifs par rapport aux captures. Les variations brutes de l’historique incluent les apports et retraits.
 
-L’écran historique affiche les 600 captures les plus récentes ; son export contient l’intégralité. Le filtre « Tout » concerne les captures chargées. Les snapshots quotidiens fonctionnent tant que le serveur Node et PostgreSQL sont démarrés, même avec le navigateur fermé. La version locale n’installe pas de tâche planifiée système. Aucun hébergement, compte financier ou service payant n’a été créé.
+L’écran historique affiche les 600 références quotidiennes les plus récentes ; son export contient l’intégralité. Le filtre « Tout » concerne les captures chargées. Les snapshots quotidiens nécessitent le cron Vercel ou une planification externe de `pnpm workers snapshot`, indépendamment du navigateur. La version locale n’installe pas de tâche planifiée système. Aucun hébergement, compte financier ou service payant n’a été créé.

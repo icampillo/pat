@@ -40,7 +40,7 @@ export function Performance30d({
       className={`category-performance ${trendClass(category.change30dAbsolute)}`}
       title={
         category.baselineDate
-          ? `Comparaison au snapshot du ${new Date(category.baselineDate).toLocaleDateString('fr-FR')}`
+          ? `Comparaison au snapshot du ${new Date(category.baselineDate).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`
           : 'Historique indisponible'
       }
     >
@@ -88,7 +88,7 @@ export function AssetCategoryCard({
           className="flex flex-wrap items-center gap-2"
           title={
             category.baselineDate
-              ? `Comparaison au snapshot du ${new Date(category.baselineDate).toLocaleDateString('fr-FR')}`
+              ? `Comparaison au snapshot du ${new Date(category.baselineDate).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`
               : 'Historique indisponible'
           }
         >

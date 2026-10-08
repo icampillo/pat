@@ -21,7 +21,6 @@ import {
   settingsSchema,
 } from '@/shared/schemas';
 import { checkVersion, json, mutate, toLedger, type TxDb } from './portfolio-store';
-import { capture } from './portfolio-query';
 
 async function requireActiveAsset(tx: TxDb, portfolioId: string, assetId: string) {
   const asset = await tx.asset.findFirst({
@@ -201,6 +200,7 @@ export async function command(
   version: string | null,
 ) {
   const [resource, id, child] = segments;
+  if (resource === 'snapshots') throw new AppError('NOT_FOUND', 'Action introuvable.', 404);
   return mutate(
     userId,
     key,
@@ -536,7 +536,6 @@ export async function command(
       if (resource === 'settings' && method === 'PATCH') {
         return tx.portfolio.update({ where: { id: p.id }, data: settingsSchema.parse(input) });
       }
-      if (resource === 'snapshots' && method === 'POST') return capture(tx, p.id, p.version + 1);
       throw new AppError('NOT_FOUND', 'Action introuvable.', 404);
     },
   );

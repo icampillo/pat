@@ -80,6 +80,8 @@ export async function exportData(userId: string, file: string) {
             id: s.id,
             captured_at: s.capturedAt.toISOString(),
             kind: s.kind,
+            reference_day: s.referenceDay,
+            daily_reference: s.referenceDay !== null,
             total_eur: s.totalEur,
             total_usd: s.totalUsd,
             invested_eur: s.investedEur,
