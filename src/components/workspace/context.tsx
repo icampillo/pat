@@ -50,6 +50,8 @@ export function WorkspaceProvider({
   } = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const [selectedCurrency, setCurrency] = useState<'EUR' | 'USD' | null>(null);
   const [flash, setFlash] = useState('');
+  const [marketWarning, setMarketWarning] = useState('');
+  const hasState = Boolean(state);
   const [busy, setBusy] = useState(false);
   const pending = useRef(new Map<string, string>());
   const syncing =
@@ -83,6 +85,29 @@ export function WorkspaceProvider({
       document.removeEventListener('visibilitychange', revalidate);
     };
   }, [store, syncing]);
+  useEffect(() => {
+    if (!hasState) return;
+    let active = true;
+    void (async () => {
+      try {
+        const result = await store.syncMarketOnOpen();
+        if (active && (result.failed || result.hasMore))
+          setMarketWarning(
+            'Certains cours sont indisponibles ; dernières valeurs et dates conservées.',
+          );
+      } catch {
+        if (active)
+          setMarketWarning(
+            'Actualisation des cours indisponible ; dernières valeurs et dates conservées.',
+          );
+      } finally {
+        if (active) await store.refresh(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [hasState, store]);
   useEffect(() => () => store.cancel(), [store]);
 
   const save: SaveAction = async (route, method, data, version) => {
@@ -164,6 +189,11 @@ export function WorkspaceProvider({
           <button className="text-link" onClick={() => void store.refresh(true)}>
             Réessayer
           </button>
+        </div>
+      )}
+      {marketWarning && (
+        <div className="workspace-refresh refresh-error" role="status">
+          {marketWarning}
         </div>
       )}
       {children}

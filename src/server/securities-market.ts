@@ -1,4 +1,5 @@
 import { db } from './db';
+import { marketQuote } from './market-cache';
 import { metadataSchema } from '@/shared/schemas';
 import { fetchSecurityQuote, type SecurityQuote } from '@/modules/prices/securities';
 import type { TxDb } from './portfolio-store';
@@ -40,15 +41,9 @@ export async function syncSecuritiesPrices(portfolioId?: string) {
     },
     orderBy: { id: 'asc' },
     take: 501,
-    include: { prices: { orderBy: [{ observedAt: 'desc' }, { createdAt: 'desc' }], take: 1 } },
   });
   let hasMore = assets.length > 500;
   const configured = assets.slice(0, 500).flatMap((asset) => {
-    if (
-      asset.prices[0]?.source.startsWith('yahoo:') &&
-      Date.now() - asset.prices[0].createdAt.getTime() < 60_000
-    )
-      return [];
     const parsed = metadataSchema.safeParse(asset.metadata);
     return parsed.success && parsed.data.pricingMode === 'SECURITIES_MARKET' && parsed.data.ticker
       ? [{ asset, ticker: parsed.data.ticker }]
@@ -66,7 +61,7 @@ export async function syncSecuritiesPrices(portfolioId?: string) {
     await Promise.all(
       tickers.slice(offset, offset + 4).map(async (ticker) => {
         try {
-          const quote = await fetchSecurityQuote(ticker);
+          const quote = await marketQuote(`yahoo:${ticker}`, () => fetchSecurityQuote(ticker));
           for (const { asset } of configured.filter((item) => item.ticker === ticker)) {
             if (Date.now() - started >= 180_000) {
               hasMore = true;

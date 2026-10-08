@@ -138,3 +138,33 @@ it('keeps saved data when revalidation receives a hosting error instead of JSON'
     error: 'Actualisation indisponible. Réessayez. (HTTP 504)',
   });
 });
+
+it('starts market sync only once per opening without blocking the cached state or its reads', async () => {
+  const market = deferred();
+  const fetcher = vi.fn((url: string) =>
+    url.endsWith('market/refresh') ? market.promise : Promise.resolve(response(data(2))),
+  );
+  vi.stubGlobal('fetch', fetcher);
+  const store = createWorkspaceStore(data());
+  const sync = store.syncMarketOnOpen();
+  expect(store.syncMarketOnOpen()).toBe(sync);
+  expect(store.getSnapshot()).toMatchObject({
+    loading: false,
+    data: { portfolio: { version: 1 } },
+  });
+  await store.refresh(true);
+  expect(store.getSnapshot().data?.portfolio.version).toBe(2);
+  market.resolve(Response.json({ data: { failed: 0, hasMore: false } }));
+  await sync;
+  expect(store.syncMarketOnOpen()).toBe(sync);
+  expect(fetcher.mock.calls.filter(([url]) => url.endsWith('market/refresh'))).toHaveLength(1);
+});
+
+it('does not retry a failed opening sync on subsequent calls and preserves displayed values', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Unavailable', { status: 504 })));
+  const store = createWorkspaceStore(data());
+  await expect(store.syncMarketOnOpen()).rejects.toThrow('HTTP 504');
+  await expect(store.syncMarketOnOpen()).rejects.toThrow('HTTP 504');
+  expect(fetch).toHaveBeenCalledOnce();
+  expect(store.getSnapshot().data?.portfolio.version).toBe(1);
+});

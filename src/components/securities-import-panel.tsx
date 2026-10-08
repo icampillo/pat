@@ -264,10 +264,10 @@ export function SecuritiesImportPanel({
         </>
       )}
       <p className="small muted">
-        Cours Yahoo Finance, actualisés toutes les 15 minutes tant que le serveur fonctionne. Ils
-        peuvent être différés selon la place ; le dernier cours connu est conservé en cas
-        d’indisponibilité. L’import ajoute les positions absentes sans remplacer celles déjà
-        suivies.
+        Cours Yahoo Finance, actualisés à l’ouverture et quotidiennement (délai minimal de 5 minutes
+        entre les tentatives par cotation). Ils peuvent être différés selon la place ; le dernier
+        cours connu est conservé en cas d’indisponibilité. L’import ajoute les positions absentes
+        sans remplacer celles déjà suivies.
       </p>
     </section>
   );

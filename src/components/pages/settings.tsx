@@ -86,9 +86,9 @@ function SettingsContent({
           Actualiser les cours et le taux
         </button>
         <p className="small muted">
-          Mise à jour automatique toutes les 15 minutes lorsque le serveur fonctionne. La valeur des
-          pièces repose sur leur métal fin ; elle ne comprend pas de prime numismatique non
-          renseignée.
+          Mise à jour à l’ouverture et par le cron quotidien, avec un délai minimal de 5 minutes
+          entre les tentatives par cotation. La valeur des pièces repose sur leur métal fin ; elle
+          ne comprend pas de prime numismatique non renseignée.
         </p>
         <form
           onSubmit={(e) => {
@@ -166,7 +166,8 @@ function SettingsContent({
           </div>
         ))}
         <p className="small muted">
-          Les cours Bourse importés et les métaux sont actualisés toutes les 15 minutes. Zerion
+          Les cours Bourse, les métaux et le taux de change sont actualisés à l’ouverture et
+          quotidiennement (délai minimal de 5 minutes entre les tentatives par cotation). Zerion
           actualise les adresses ajoutées dans Wallets & DeFi.
         </p>
       </section>

@@ -2,6 +2,13 @@ import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { workspaceFixture } from '../fixtures/workspace';
 
+// These scenarios isolate state/navigation; market completion is covered in market-opening.spec.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/v1/market/refresh', () => {
+    /* leave the background sync pending */
+  });
+});
+
 function gate() {
   let release!: () => void;
   const promise = new Promise<void>((resolve) => {

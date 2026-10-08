@@ -145,7 +145,8 @@ export function AssetDetailPage({ state, asset }: { state: AppState; asset: Asse
                       {asset.priceDate
                         ? `Dernier cours du ${date(asset.priceDate)}${asset.stale ? ' · cours ancien' : ''}`
                         : 'En attente de cotation.'}{' '}
-                      Actualisation toutes les 15 minutes lorsque le serveur fonctionne.
+                      Actualisation à l’ouverture et quotidienne ; délai minimal de 5 minutes entre
+                      les tentatives par cotation.
                     </p>
                     <PriceHistoryList
                       key={asset.priceDate}

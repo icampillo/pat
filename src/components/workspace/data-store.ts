@@ -15,6 +15,7 @@ export function createWorkspaceStore(initialData?: WorkspaceData) {
   let receivedAt = initialData ? Date.parse(initialData.asOf) : 0;
   let controller: AbortController | undefined;
   let pending: Promise<void> | undefined;
+  let openingSync: Promise<{ failed: number; hasMore: boolean }> | undefined;
   const listeners = new Set<() => void>();
   function publish(update: Partial<typeof snapshot>) {
     snapshot = { ...snapshot, ...update };
@@ -80,6 +81,16 @@ export function createWorkspaceStore(initialData?: WorkspaceData) {
       };
     },
     refresh,
+    syncMarketOnOpen() {
+      // The layout store survives navigation, focus and React Strict Mode effect replay.
+      openingSync ??= fetch('/api/v1/market/refresh', {
+        method: 'POST',
+        signal: AbortSignal.timeout(240_000),
+      }).then((response) =>
+        readApiResponse<{ failed: number; hasMore: boolean }>(response, 'Cours indisponibles.'),
+      );
+      return openingSync;
+    },
     cancel() {
       controller?.abort();
       controller = undefined;

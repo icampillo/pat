@@ -334,3 +334,13 @@ model ZerionAddressCache {
   fetchedAt DateTime? @db.Timestamptz(3)
   data Json?
 }
+
+// Public quotes only; shared attempts and leases across users, tabs and cron.
+model MarketQuoteCache {
+  key String @id
+  lastAttemptAt DateTime @db.Timestamptz(3)
+  leaseToken String?
+  leaseUntil DateTime? @db.Timestamptz(3)
+  failed Boolean @default(false)
+  data Json?
+}

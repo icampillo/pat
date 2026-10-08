@@ -20,6 +20,9 @@ vi.mock('@/server/db', () => ({
   }),
 }));
 vi.mock('@/server/securities-market', () => ({ syncSecuritiesPrices: mocks.securitySync }));
+vi.mock('@/server/market-cache', () => ({
+  marketQuote: (_key: string, fetcher: () => Promise<unknown>) => fetcher(),
+}));
 vi.mock('@/server/provider-fetch', () => ({ providerFetch: mocks.provider }));
 import { ensurePortfolioFxRate, syncMarketData } from '@/server/market';
 const metadata = {
@@ -82,7 +85,7 @@ it('preserves historical prices on provider failure while still writing the avai
   expect(mocks.priceCreate).not.toHaveBeenCalled();
   expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain('private-token');
 });
-it('skips external reads for recent prices and today’s persisted ECB fixing', async () => {
+it('reuses today’s ECB fixing but does not use price creation dates as attempt cooldown', async () => {
   mocks.portfolios.mockResolvedValue([
     {
       id: 'owner',
@@ -93,8 +96,9 @@ it('skips external reads for recent prices and today’s persisted ECB fixing', 
     },
   ]);
   await syncMarketData('owner');
-  expect(mocks.provider).not.toHaveBeenCalled();
-  expect(mocks.priceCreate).not.toHaveBeenCalled();
+  expect(mocks.provider).toHaveBeenCalledOnce();
+  expect(mocks.provider.mock.calls[0][0]).toContain('XAU');
+  expect(mocks.priceCreate).toHaveBeenCalledOnce();
 });
 it('isolates an unavailable metals provider from the securities service', async () => {
   mocks.provider.mockRejectedValue(new Error('private URL'));

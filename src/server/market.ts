@@ -1,4 +1,5 @@
 import { db } from './db';
+import { marketQuote } from './market-cache';
 import { providerFetch } from './provider-fetch';
 import { decimal as d, metalValue, precise } from '@/domain/money';
 import { metadataSchema } from '@/shared/schemas';
@@ -67,7 +68,11 @@ async function fetchText(url: string) {
 }
 
 export async function fetchEcbRate() {
-  return parseEcbRate(await fetchText(ECB_URL));
+  const rate = await marketQuote('ecb:EURUSD', async () => {
+    const value = parseEcbRate(await fetchText(ECB_URL));
+    return { ...value, observedAt: value.observedAt.toISOString() };
+  });
+  return { ...rate, observedAt: new Date(rate.observedAt) };
 }
 
 // Bootstrap conversion for fresh portfolios without waiting for the market cron.
@@ -99,7 +104,6 @@ async function syncMetalMarketData(portfolioId?: string) {
           id: true,
           currency: true,
           metadata: true,
-          prices: { orderBy: [{ observedAt: 'desc' }, { createdAt: 'desc' }], take: 1 },
         },
       },
     },
@@ -116,9 +120,7 @@ async function syncMetalMarketData(portfolioId?: string) {
         meta?.pricingMode !== 'METAL_MARKET' ||
         !meta.metalType ||
         !meta.weightGrams ||
-        !meta.purity ||
-        (asset.prices[0]?.source.startsWith('gold-api:') &&
-          now.getTime() - asset.prices[0].createdAt.getTime() < 60_000)
+        !meta.purity
       )
         return [];
       return [{ ...asset, meta }];
@@ -136,12 +138,14 @@ async function syncMetalMarketData(portfolioId?: string) {
   await Promise.all(
     metals.map(async (metal) => {
       try {
-        const spot = parseMetalSpot(
-          JSON.parse(await fetchText(`${METAL_URL}${metal === 'GOLD' ? 'XAU' : 'XAG'}`)),
-          metal,
-          new Date(),
-        );
-        spots.set(metal, spot);
+        const spot = await marketQuote(`gold-api:${metal}`, async () => {
+          const value = parseMetalSpot(
+            JSON.parse(await fetchText(`${METAL_URL}${metal === 'GOLD' ? 'XAU' : 'XAG'}`)),
+            metal,
+          );
+          return { ...value, observedAt: value.observedAt.toISOString() };
+        });
+        spots.set(metal, { ...spot, observedAt: new Date(spot.observedAt) });
       } catch {
         result.failed++;
         console.warn(JSON.stringify({ job: 'market', code: 'METAL_QUOTE_UNAVAILABLE' }));

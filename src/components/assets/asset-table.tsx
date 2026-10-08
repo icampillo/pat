@@ -4,7 +4,7 @@ import type { AssetView } from '@/shared/types';
 import { ChevronRight } from 'lucide-react';
 import Link from '@/components/workspace/link';
 
-import { AssetAvatar, Empty, money, qty, Signed } from '@/components/workspace/display';
+import { AssetAvatar, Empty, money, qty, Signed, date } from '@/components/workspace/display';
 export function AssetTable({ rows, currency }: { rows: AssetView[]; currency: 'EUR' | 'USD' }) {
   const val = (a: AssetView) => (currency === 'EUR' ? a.valueEur : a.valueUsd);
   const gain = (a: AssetView) => (currency === 'EUR' ? a.gainEur : a.gainUsd);
@@ -54,6 +54,7 @@ export function AssetTable({ rows, currency }: { rows: AssetView[]; currency: 'E
               <td className="num">{qty(a.quantity)}</td>
               <td className="num">
                 {money(a.price, a.currency)}
+                {a.priceDate && <small className="muted">Cours du {date(a.priceDate)}</small>}
                 {a.stale && a.price && <small className="muted">Prix ancien</small>}
               </td>
               <td className="num strong">

@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { configureTestDatabase } from '../database-env';
-import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { db } from '../../src/server/db';
@@ -19,6 +19,9 @@ beforeAll(() => {
     stdio: 'pipe',
     windowsHide: true,
   });
+});
+beforeEach(async () => {
+  await db().marketQuoteCache.deleteMany({});
 });
 afterEach(() => vi.unstubAllGlobals());
 afterAll(async () => {
@@ -215,17 +218,15 @@ it('updates prices automatically, deduplicates observations and preserves the la
   mockQuotes();
   const preview = await previewSecurities(user.userId, { csv }, randomUUID());
   await confirmSecurities(user.userId, preview.id, { confirmed: true }, randomUUID());
-  // Expire the 60-second refresh window without sleeping or changing observation dates.
-  await db().priceHistory.updateMany({
-    where: { portfolioId: user.portfolioId },
-    data: { createdAt: new Date(Date.now() - 61_000) },
+  // Attempts, not observation dates, control the shared cooldown.
+  await db().marketQuoteCache.updateMany({
+    data: { lastAttemptAt: new Date(Date.now() - 301_000) },
   });
   mockQuotes(15, Math.floor(Date.now() / 1000));
   expect(await syncSecuritiesPrices(user.portfolioId)).toMatchObject({ prices: 1, failures: [] });
   expect(await syncSecuritiesPrices(user.portfolioId)).toMatchObject({ prices: 0, failures: [] });
-  await db().priceHistory.updateMany({
-    where: { portfolioId: user.portfolioId },
-    data: { createdAt: new Date(Date.now() - 61_000) },
+  await db().marketQuoteCache.updateMany({
+    data: { lastAttemptAt: new Date(Date.now() - 301_000) },
   });
   vi.stubGlobal(
     'fetch',
