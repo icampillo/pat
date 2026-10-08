@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ZerionError } from '@/server/zerion';
 import type { WalletData } from '@/shared/wallets';
 const mocks = vi.hoisted(() => ({
+  fx: vi.fn(),
   findMany: vi.fn(),
   findUnique: vi.fn(),
   claim: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock('@/server/db', () => ({
     zerionAddressCache: { upsert: mocks.cache, updateMany: mocks.addressClaim },
   }),
 }));
+vi.mock('@/server/market', () => ({ ensurePortfolioFxRate: mocks.fx }));
 import { syncDueWallets, syncWallet } from '@/server/wallets';
 const data = { totalUsd: '905' } as WalletData;
 beforeEach(() => {
@@ -123,4 +125,18 @@ it('reuses a recent normalized response without another API call', async () => {
   const provider = vi.fn();
   expect(await syncWallet('a', provider)).toBe(true);
   expect(provider).not.toHaveBeenCalled();
+});
+
+it('initializes conversion on wallet sync and preserves wallet data when FX is unavailable', async () => {
+  expect(await syncWallet('a', async () => data)).toBe(true);
+  expect(mocks.fx).toHaveBeenCalledWith('owner');
+  mocks.fx.mockRejectedValueOnce(new Error('private provider detail'));
+  expect(await syncWallet('b', async () => data)).toBe(true);
+  expect(mocks.transaction).toHaveBeenCalledTimes(2);
+  expect(console.warn).toHaveBeenCalledWith(
+    JSON.stringify({ job: 'wallets', code: 'FX_RATE_UNAVAILABLE' }),
+  );
+  expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain(
+    'private provider detail',
+  );
 });

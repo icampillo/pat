@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
+  existingFx: vi.fn(),
   portfolios: vi.fn(),
   transaction: vi.fn(),
   securitySync: vi.fn(),
@@ -12,11 +13,15 @@ const mocks = vi.hoisted(() => ({
   priceCreate: vi.fn(),
 }));
 vi.mock('@/server/db', () => ({
-  db: () => ({ portfolio: { findMany: mocks.portfolios }, $transaction: mocks.transaction }),
+  db: () => ({
+    portfolio: { findMany: mocks.portfolios },
+    fxRate: { findFirst: mocks.existingFx },
+    $transaction: mocks.transaction,
+  }),
 }));
 vi.mock('@/server/securities-market', () => ({ syncSecuritiesPrices: mocks.securitySync }));
 vi.mock('@/server/provider-fetch', () => ({ providerFetch: mocks.provider }));
-import { syncMarketData } from '@/server/market';
+import { ensurePortfolioFxRate, syncMarketData } from '@/server/market';
 const metadata = {
   pricingMode: 'METAL_MARKET',
   metalType: 'GOLD',
@@ -100,4 +105,24 @@ it('isolates an unavailable metals provider from the securities service', async 
     failed: 1,
   });
   expect(mocks.transaction).not.toHaveBeenCalled();
+});
+
+it('bootstraps the ECB rate for a fresh wallet-only portfolio without fetching asset prices', async () => {
+  await ensurePortfolioFxRate('owner');
+  expect(mocks.provider).toHaveBeenCalledTimes(1);
+  expect(mocks.provider.mock.calls[0][0]).toContain('ecb.europa.eu');
+  expect(mocks.lock).toHaveBeenCalledOnce();
+  expect(mocks.rateCreate).toHaveBeenCalledWith({
+    data: expect.objectContaining({ portfolioId: 'owner', eurUsd: '1', source: 'ecb' }),
+  });
+  expect(mocks.securitySync).not.toHaveBeenCalled();
+});
+it('preserves existing FX rates and rechecks under the portfolio lock to avoid duplicate inserts', async () => {
+  mocks.existingFx.mockResolvedValueOnce({ eurUsd: '1.2', source: 'manual' });
+  await ensurePortfolioFxRate('owner');
+  expect(mocks.provider).not.toHaveBeenCalled();
+  mocks.rateFind.mockResolvedValueOnce({ eurUsd: '1.2' });
+  await ensurePortfolioFxRate('owner');
+  expect(mocks.lock).toHaveBeenCalledOnce();
+  expect(mocks.rateCreate).not.toHaveBeenCalled();
 });

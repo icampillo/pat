@@ -6,6 +6,7 @@ import { json, mutate } from './portfolio-store';
 import { addressSchema, fetchZerion, ZerionError } from './zerion';
 import type { WalletData } from '@/shared/wallets';
 import { compareWalletCoverage } from './wallet-coverage';
+import { ensurePortfolioFxRate } from './market';
 
 const createSchema = z.object({
   address: addressSchema,
@@ -177,6 +178,12 @@ async function syncWalletResult(
         },
       });
       return 'skipped';
+    }
+    // FX is independent of Zerion: an ECB outage must not discard a valid wallet read.
+    try {
+      await ensurePortfolioFxRate(wallet.portfolioId);
+    } catch {
+      console.warn(JSON.stringify({ job: 'wallets', code: 'FX_RATE_UNAVAILABLE' }));
     }
     const data = fetched.data;
     const fetchedAt = fetched.fetchedAt;

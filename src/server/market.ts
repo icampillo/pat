@@ -70,6 +70,19 @@ export async function fetchEcbRate() {
   return parseEcbRate(await fetchText(ECB_URL));
 }
 
+// Bootstrap conversion for fresh portfolios without waiting for the market cron.
+// Existing (including manual) rates remain owned by the normal market refresh.
+export async function ensurePortfolioFxRate(portfolioId: string) {
+  const where = { portfolioId, observedAt: { lte: new Date() } };
+  if (await db().fxRate.findFirst({ where })) return;
+  const rate = await fetchEcbRate();
+  await db().$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Portfolio" WHERE id = ${portfolioId}::uuid FOR UPDATE`;
+    if (!(await tx.fxRate.findFirst({ where })))
+      await tx.fxRate.create({ data: { portfolioId, ...rate, source: 'ecb' } });
+  });
+}
+
 async function syncMetalMarketData(portfolioId?: string) {
   const now = new Date();
   const started = Date.now();
