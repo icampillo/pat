@@ -2,7 +2,7 @@
 import type { SaveAction } from '@/components/forms';
 import { Confirm } from '@/components/ui/confirm';
 import { decimal as d } from '@/domain/money';
-import { walletErrors } from '@/shared/wallets';
+import { walletErrors, walletSource } from '@/shared/wallets';
 import { ExternalLink, Pause, Play, RefreshCw, Trash2 } from 'lucide-react';
 
 import type { OnchainState, WalletView } from '@/shared/wallets';
@@ -27,11 +27,11 @@ export function WalletConnectionCard({
         <strong>{w.label}</strong>
         <a
           className="wallet-address"
-          href={`https://debank.com/profile/${w.address}`}
+          href="https://app.zerion.io/"
           target="_blank"
           rel="noreferrer"
           title={w.address}
-          aria-label={`Voir ${w.label} sur DeBank : ${w.address}`}
+          aria-label={`Ouvrir Zerion pour consulter une adresse (wallet ${w.label})`}
         >
           {w.address.slice(0, 6)}…{w.address.slice(-4)} <ExternalLink size={12} />
         </a>
@@ -39,19 +39,21 @@ export function WalletConnectionCard({
           {w.data?.chains.map((c) => c.name).join(', ') || 'Réseaux en attente'}
         </span>
         <strong>{usd(w.data?.totalUsd ?? null)}</strong>
-        <span className="small muted">Dernière synchro : {date(w.lastSuccessAt)}</span>
+        <span className="small muted">Dernière réussite : {date(w.lastSuccessAt)}</span>
         <span className="tag">
           {w.status === 'ERROR'
-            ? 'Erreur'
-            : w.status === 'SYNCING'
-              ? 'Synchronisation…'
-              : !w.enabled || !config.enabled
-                ? 'En pause'
-                : !w.data
-                  ? 'En attente'
-                  : w.stale
-                    ? 'Données anciennes'
-                    : 'Synchronisé'}
+            ? 'Erreur · dernière valeur conservée'
+            : w.status === 'PARTIAL'
+              ? 'Données partielles'
+              : w.status === 'SYNCING'
+                ? 'Synchronisation…'
+                : !w.enabled || !config.enabled
+                  ? 'En pause'
+                  : !w.data
+                    ? 'En attente'
+                    : w.stale
+                      ? 'Données anciennes'
+                      : 'Synchronisé'}
         </span>
       </div>
       <details className="wallet-details">
@@ -64,7 +66,8 @@ export function WalletConnectionCard({
           </p>
         )}
         <p className="small muted">
-          Total net DeBank · {w.included ? 'Inclus dans le patrimoine' : 'Exclu du patrimoine'}
+          Total net {walletSource(w.data)} ·{' '}
+          {w.included ? 'Inclus dans le patrimoine' : 'Exclu du patrimoine'}
         </p>
         <p className="small">
           {!config.configured
@@ -79,7 +82,9 @@ export function WalletConnectionCard({
                     ? 'Première synchronisation programmée…'
                     : w.stale
                       ? 'Données anciennes · dernière valeur conservée'
-                      : 'Synchronisé avec DeBank'}
+                      : w.status === 'PARTIAL'
+                        ? 'Détails partiels · consulter les avertissements'
+                        : `À jour · ${walletSource(w.data)}`}
         </p>
         <p className="small muted">
           Dernière réussite : {date(w.lastSuccessAt)}
@@ -87,7 +92,7 @@ export function WalletConnectionCard({
         </p>
         {!!w.data?.warnings?.length && (
           <details>
-            <summary className="small">Détails partiels ({w.data.warnings.length})</summary>
+            <summary className="small">Avertissements ({w.data.warnings.length})</summary>
             <ul className="small">
               {w.data.warnings.map((warning) => (
                 <li key={warning}>{warning}</li>
@@ -114,7 +119,9 @@ export function WalletConnectionCard({
         <div className="wallet-actions">
           <button
             className="btn"
-            disabled={busy || !config.enabled || !w.enabled || w.status === 'SYNCING'}
+            disabled={
+              busy || !config.configured || !config.enabled || !w.enabled || w.status === 'SYNCING'
+            }
             onClick={() => run(() => save(`wallets/${w.id}/sync`, 'POST', {}))}
           >
             <RefreshCw size={14} />

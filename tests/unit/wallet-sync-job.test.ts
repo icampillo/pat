@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { DeBankError } from '@/server/debank';
+import { ZerionError } from '@/server/zerion';
 import type { WalletData } from '@/shared/wallets';
 const mocks = vi.hoisted(() => ({
   findMany: vi.fn(),
@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   claim: vi.fn(),
   config: vi.fn(),
   transaction: vi.fn(),
+  cache: vi.fn(),
+  addressClaim: vi.fn(),
 }));
 vi.mock('@/server/db', () => ({
   db: () => ({
@@ -15,8 +17,9 @@ vi.mock('@/server/db', () => ({
       findUnique: mocks.findUnique,
       updateMany: mocks.claim,
     },
-    deBankConfig: { findUnique: mocks.config },
+    walletSyncConfig: { findUnique: mocks.config },
     $transaction: mocks.transaction,
+    zerionAddressCache: { upsert: mocks.cache, updateMany: mocks.addressClaim },
   }),
 }));
 import { syncDueWallets, syncWallet } from '@/server/wallets';
@@ -33,6 +36,8 @@ beforeEach(() => {
   mocks.config.mockResolvedValue({ enabled: true, mode: 'PUBLIC', intervalMinutes: 60 });
   mocks.claim.mockResolvedValue({ count: 1 });
   mocks.transaction.mockResolvedValue('succeeded');
+  mocks.cache.mockResolvedValue({});
+  mocks.addressClaim.mockResolvedValue({ count: 1 });
   vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
 afterEach(() => {
@@ -46,7 +51,7 @@ it('bounds concurrency to one and continues after provider failure without writi
     maximum = Math.max(maximum, ++concurrent);
     await Promise.resolve();
     concurrent--;
-    if (address === 'b') throw new DeBankError('RATE_LIMIT');
+    if (address === 'b') throw new ZerionError('RATE_LIMIT');
     return data;
   });
   expect(await syncDueWallets(provider)).toEqual({
@@ -69,7 +74,7 @@ it('bounds concurrency to one and continues after provider failure without writi
       where: expect.objectContaining({
         deletedAt: null,
         enabled: true,
-        portfolio: { debank: { is: { enabled: true } } },
+        portfolio: { walletSync: { is: { enabled: true } } },
       }),
     }),
   );
@@ -89,7 +94,7 @@ it('reserves time for the last wallet and signals remaining work', async () => {
   vi.useFakeTimers();
   vi.setSystemTime(0);
   const provider = vi.fn(async () => {
-    vi.setSystemTime(120_001);
+    vi.setSystemTime(180_001);
     return data;
   });
   expect(await syncDueWallets(provider)).toMatchObject({
@@ -105,4 +110,17 @@ it('signals batches larger than the current invocation cap', async () => {
     succeeded: 20,
     hasMore: true,
   });
+});
+
+it('does not double-sync an address owned by another portfolio', async () => {
+  mocks.addressClaim.mockResolvedValue({ count: 0 });
+  const provider = vi.fn();
+  expect(await syncWallet('a', provider)).toBe(false);
+  expect(provider).not.toHaveBeenCalled();
+});
+it('reuses a recent normalized response without another API call', async () => {
+  mocks.cache.mockResolvedValue({ data, fetchedAt: new Date() });
+  const provider = vi.fn();
+  expect(await syncWallet('a', provider)).toBe(true);
+  expect(provider).not.toHaveBeenCalled();
 });

@@ -26,7 +26,9 @@ export type DefiPosition = {
   borrows: WalletToken[];
 };
 export type WalletData = {
-  source?: 'DEBANK_PUBLIC' | 'DEBANK_API';
+  source?: 'DEBANK_PUBLIC' | 'DEBANK_API' | 'ZERION';
+  quality?: 'complete' | 'partial';
+  excludedPositionIds?: string[];
   rounded?: boolean;
   updatedLabel?: string;
   warnings?: string[];
@@ -61,7 +63,7 @@ export type OnchainState = {
     configured: boolean;
     enabled: boolean;
     intervalMinutes: number;
-    mode: 'PUBLIC' | 'API';
+    mode: 'API';
     hasKey: boolean;
   };
   includedCount: number;
@@ -71,16 +73,24 @@ export type OnchainState = {
   valueEur: string | null;
 };
 export const walletErrors: Record<string, string> = {
-  BROWSER: 'Navigateur de lecture indisponible. Lancez pnpm wallet:install dans le projet.',
-  PUBLIC_BLOCKED:
-    'La page publique DeBank ne répond pas ou refuse la lecture. La dernière valeur est conservée ; nouvelle tentative automatique.',
-  AUTH: 'Clé DeBank refusée. Remplacez-la dans les paramètres.',
-  CREDITS: 'Crédits DeBank insuffisants ou accès API refusé. Vérifiez DeBank Cloud.',
-  RATE_LIMIT: 'Limite DeBank atteinte. Une nouvelle tentative est programmée.',
-  NETWORK: 'DeBank est temporairement inaccessible. Nouvelle tentative automatique.',
-  FORMAT: 'La réponse DeBank est incomplète ou inattendue. La dernière valeur est conservée.',
-  KEY: 'La clé ne peut plus être déchiffrée. Enregistrez-la de nouveau.',
+  AUTH: 'Clé Zerion refusée. Vérifiez la configuration serveur.',
+  ACCESS: 'Accès Zerion non autorisé pour cette clé. Aucun abonnement n’est activé.',
+  KEY: 'Zerion n’est pas configuré sur le serveur.',
+  BAD_REQUEST: 'Adresse ou paramètres non acceptés par Zerion.',
+  QUOTA: 'Budget gratuit Zerion atteint. Dernière valeur conservée ; reprise au prochain passage.',
+  RATE_LIMIT: 'Limite Zerion atteinte. Dernière valeur conservée ; nouvelle tentative programmée.',
+  NETWORK: 'Zerion est temporairement inaccessible. Dernière valeur conservée.',
+  SERVER: 'Erreur du service Zerion. Dernière valeur conservée.',
+  TIMEOUT: 'Délai de réponse Zerion dépassé. Dernière valeur conservée.',
+  FORMAT: 'Réponse Zerion invalide ou incomplète. Dernière valeur conservée.',
+  INCOMPLETE: 'Données Zerion incohérentes ou incomplètes. Dernière valeur conservée.',
+  PAGINATION: 'Détails Zerion incomplets. Dernière valeur conservée.',
+  BROWSER: 'Ancienne erreur DeBank. Les données historiques sont conservées.',
+  PUBLIC_BLOCKED: 'Ancienne erreur DeBank. Les données historiques sont conservées.',
+  CREDITS: 'Ancienne erreur DeBank. Les données historiques sont conservées.',
 };
+export const walletSource = (data: WalletData | null) =>
+  data?.source === 'ZERION' ? 'Zerion' : data ? 'DeBank (historique)' : 'Zerion';
 export const positionLabels: Record<string, string> = {
   Staked: 'Staking',
   Locked: 'Verrouillé',

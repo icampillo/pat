@@ -212,17 +212,17 @@ test('wallet par adresse : configuration privée, repère, pause et retrait', as
   await login(page);
   const address = `0x${'c'.repeat(40)}`;
   await page.goto(`/wallets?address=${address}&reference=1000`);
-  await expect(page.getByLabel('Adresse publique ou profil DeBank')).toHaveValue(address);
+  await expect(page.getByLabel('Adresse publique EVM')).toHaveValue(address);
   await page.getByLabel('Nom du wallet (facultatif)').fill('Wallet navigateur');
   await page.getByRole('button', { name: 'Ajouter le wallet' }).click();
   await expect(page.getByRole('heading', { name: 'Wallet navigateur', exact: true })).toBeVisible();
-  await expect(page.getByText('Première synchronisation programmée…')).toBeVisible();
+  await expect(page.getByText('En attente de votre clé API')).toBeVisible();
   await expect(page.getByText('Comparaison après synchronisation')).toBeVisible();
-  await expect(page.getByLabel('Clé API DeBank Cloud')).toHaveCount(0);
+  await expect(page.getByLabel('Clé API Zerion')).toHaveCount(0);
   const state = await (await page.request.get('/api/v1/state')).json();
   expect(state.data.onchain.config).toMatchObject({
-    mode: 'PUBLIC',
-    configured: true,
+    mode: 'API',
+    configured: false,
     hasKey: false,
   });
   await page.getByRole('button', { name: 'Pause', exact: true }).click();

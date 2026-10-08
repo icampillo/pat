@@ -118,7 +118,7 @@ export function HistoryView({ state, currency }: { state: AppState; currency: 'E
                             : s.kind === 'IMPORT'
                               ? 'Import d’inventaire'
                               : s.kind === 'WALLET'
-                                ? 'Wallet / DeBank'
+                                ? 'Wallet / fournisseur au relevé'
                                 : 'Manuel'}
                     </span>
                   </td>

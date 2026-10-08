@@ -68,3 +68,19 @@ l’application, puis relancer la commande navigateur ci-dessus. Elle démarre u
 local sur 127.0.0.1:3002 et intercepte les données via fixtures, sans base de test.
 
 Aucun push ni déploiement effectué.
+
+## Répartition interactive (8 octobre 2026)
+
+La variante dashboard du graphique Recharts se remplit en une seconde à l’ouverture,
+depuis le haut. `isAnimationActive="auto"` respecte `prefers-reduced-motion` ; les transitions
+CSS sont également désactivées avec cette préférence. Aucune nouvelle dépendance.
+
+Survol : section mise en relief, catégorie et poids au centre, montant dans une infobulle.
+Clic sur une section ou la légende : sélection persistante, montant EUR/USD et poids
+par rapport au patrimoine, lien vers la catégorie (portefeuille pour les liquidités).
+Un second clic, la croix ou Échap dans le graphique annule la sélection. Sections
+accessibles avec Tab, Entrée et Espace ; focus visible, légende tactile, annonce du détail.
+Un total inconnu ne devient jamais un pourcentage des seules valeurs connues.
+
+La sélection reste locale au dashboard, sans requête ni écriture supplémentaire.
+Le graphique interne des pages catégories conserve son comportement antérieur.

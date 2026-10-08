@@ -71,7 +71,7 @@ export function WalletPositions({ state }: { state: AppState }) {
     <>
       <div className="wallet-overview" aria-label="Résumé des adresses sélectionnées">
         <div>
-          <span>Total net DeBank</span>
+          <span>Total net consolidé</span>
           <strong>{usd(total)}</strong>
         </div>
         <div>
@@ -95,7 +95,7 @@ export function WalletPositions({ state }: { state: AppState }) {
           <strong>{usd(sum('rewardsUsd'))}</strong>
         </div>
       </div>
-      {chosen.some((w) => !w.data || w.stale || w.status === 'ERROR') && (
+      {chosen.some((w) => !w.data || w.stale || w.status === 'ERROR' || w.status === 'PARTIAL') && (
         <p className="small muted">
           Couverture partielle ou données anciennes : consultez les statuts des wallets ci-dessous.
           Les montants disponibles sont conservés.
@@ -149,22 +149,22 @@ export function WalletPositions({ state }: { state: AppState }) {
         Afficher les valeurs de moins de 1 €
       </label>
       <p className="small muted wallet-filter-note">
-        Ce filtre masque seulement les lignes ; les totaux DeBank ne changent pas.
+        Ce filtre masque seulement les lignes ; les totaux consolidés ne changent pas.
         {!eurUsd && ' Taux EUR/USD indisponible : toutes les lignes restent visibles.'}
       </p>
       {data.some((w) => d(w.reconciliationUsd).abs().gte('0.01')) && (
         <p className="notice">
-          Écart entre le total DeBank et les détails :{' '}
+          Écart entre le total consolidé et les détails :{' '}
           {usd(data.reduce((s, w) => s.add(w.reconciliationUsd), d(0)).toFixed())}. Les requêtes
           peuvent refléter des instants ou des couvertures différents. Le patrimoine utilise le
-          total net DeBank.
+          total net consolidé.
         </p>
       )}
       <section className="panel">
         <div className="section-title">
           <div>
             <h2>Staking & positions DeFi</h2>
-            <p>Positions détectées par DeBank · tous les protocoles compatibles</p>
+            <p>Positions détectées · couverture du fournisseur indiqué sur chaque wallet</p>
           </div>
           <span className="tag">{positions.length} position(s)</span>
         </div>
@@ -228,8 +228,8 @@ export function WalletPositions({ state }: { state: AppState }) {
                 </div>
                 <p className="small muted">
                   {p.observedAt
-                    ? `Observation DeBank : ${date(p.observedAt)}`
-                    : 'Données du profil public · valeurs arrondies'}
+                    ? `Observation fournisseur : ${date(p.observedAt)}`
+                    : 'Date de mise à jour non fournie'}
                   {p.unlockAt && ` · Déverrouillage : ${date(p.unlockAt)}`}
                 </p>
               </details>
@@ -289,10 +289,11 @@ export function WalletPositions({ state }: { state: AppState }) {
         )}
       </section>
       <p className="small muted wallet-footnote">
-        Le mode gratuit reprend les montants affichés par DeBank, parfois arrondis ou inférieurs à
-        un centime. Les données restent limitées à la couverture DeBank. Les prix nuls sont affichés
-        comme indisponibles. Les NFT individuels, l’historique des transactions et les coûts d’achat
-        ne sont pas importés. Les montants de cette page sont en dollars.
+        Zerion fournit le total consolidé et les détails disponibles. Les anciennes observations
+        DeBank conservent leur provenance. Les valeurs inconnues restent indisponibles, jamais
+        assimilées à un solde nul. La couverture des protocoles et réseaux peut être partielle. Les
+        NFT individuels, l’historique des transactions et les coûts d’achat ne sont pas importés.
+        Les montants de cette page sont en dollars.
       </p>
     </>
   );

@@ -191,7 +191,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
                   ? 'Démonstration encore présente · wallets et inventaires importés personnels'
                   : 'Prix et historiques de démonstration fictifs'
                 : state.onchain.wallets.length
-                  ? 'Sources : saisies manuelles et DeBank'
+                  ? 'Sources : saisies manuelles et wallets'
                   : 'Prix saisis manuellement'}
             </span>
           </footer>

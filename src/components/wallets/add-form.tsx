@@ -18,7 +18,7 @@ export function WalletAddForm({
   return (
     <section className="panel detail-panel wallet-add">
       <p className="muted">
-        Les réseaux compatibles et les protocoles DeFi sont détectés par DeBank. Aucun portefeuille
+        Les réseaux compatibles et les protocoles DeFi sont détectés par Zerion. Aucun portefeuille
         à connecter ni signature à fournir.
       </p>
       <form
@@ -40,12 +40,12 @@ export function WalletAddForm({
       >
         <div className="wallet-form-grid">
           <label>
-            Adresse publique ou profil DeBank
+            Adresse publique EVM
             <input
               name="address"
               required
               maxLength={250}
-              placeholder="0x… ou https://debank.com/profile/…"
+              placeholder="0x…"
               defaultValue={params.get('address') || ''}
               spellCheck={false}
               autoComplete="off"
@@ -67,7 +67,7 @@ export function WalletAddForm({
               max="999999999999999"
               step="0.01"
               defaultValue={params.get('reference') || ''}
-              placeholder="Montant observé sur DeBank"
+              placeholder="Montant de référence facultatif"
             />
           </label>
           <p className="small muted">

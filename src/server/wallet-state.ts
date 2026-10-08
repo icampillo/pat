@@ -1,5 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
 import type { OnchainState, WalletData } from '@/shared/wallets';
+import { zerionConfigured } from './zerion';
 import { decimal as d, precise } from '@/domain/money';
 export async function walletState(
   tx: Prisma.TransactionClient,
@@ -7,9 +8,9 @@ export async function walletState(
   at: Date,
   eurUsd: string | null,
 ): Promise<OnchainState> {
-  const config = await tx.deBankConfig.findUnique({
+  const config = await tx.walletSyncConfig.findUnique({
     where: { portfolioId },
-    select: { enabled: true, intervalMinutes: true, mode: true, encryptedKey: true },
+    select: { enabled: true },
   });
   const rows = await tx.walletConnection.findMany({
     where: { portfolioId, deletedAt: null, createdAt: { lte: at } },
@@ -46,15 +47,18 @@ export async function walletState(
   return {
     wallets,
     config: {
-      configured: config?.mode !== 'API' || !!config.encryptedKey,
+      configured: zerionConfigured(),
       enabled: config?.enabled ?? true,
-      mode: config?.mode === 'API' ? 'API' : 'PUBLIC',
-      hasKey: !!config?.encryptedKey,
-      intervalMinutes: config?.intervalMinutes || 60,
+      mode: 'API',
+      hasKey: zerionConfigured(),
+      intervalMinutes: 1440,
     },
     includedCount: included.length,
     missing,
-    staleCount: included.filter((w) => w.stale || w.status === 'ERROR').length,
+    staleCount: included.filter(
+      (w) =>
+        w.stale || w.status === 'ERROR' || w.status === 'PARTIAL' || w.data?.quality === 'partial',
+    ).length,
     valueUsd: missing ? null : precise(total),
     valueEur: missing ? null : total.isZero() ? '0' : eurUsd ? precise(total.div(eurUsd)) : null,
   };

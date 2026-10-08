@@ -80,7 +80,7 @@ async function handle(request: Request, context: { params: Promise<{ path: strin
       const portfolio = await owned(session.user.id);
       return response(await syncMarketData(portfolio.id));
     }
-    if (['wallets', 'debank'].includes(path[0])) {
+    if (['wallets', 'zerion'].includes(path[0])) {
       const input = await body(request);
       const result = await walletCommand(
         session.user.id,

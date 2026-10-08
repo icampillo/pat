@@ -73,9 +73,9 @@ export function workspaceFixture(): AppState & { userName: string } {
       config: {
         enabled: false,
         configured: true,
-        mode: 'PUBLIC',
+        mode: 'API',
         hasKey: false,
-        intervalMinutes: 60,
+        intervalMinutes: 1440,
       },
       includedCount: 0,
       missing: 0,

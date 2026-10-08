@@ -13,3 +13,4 @@ src/generated/
 *.tsbuildinfo
 *.log
 .DS_Store
+.vercel

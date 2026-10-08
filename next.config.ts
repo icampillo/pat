@@ -1,16 +1,10 @@
 import type { NextConfig } from 'next';
 const config: NextConfig = {
-  // Vercel packages its own functions; standalone and browser assets are for Node/Docker.
-  ...(process.env.VERCEL !== '1' && {
-    output: 'standalone',
-    outputFileTracingIncludes: {
-      '/*': ['node_modules/playwright/**/*', 'node_modules/playwright-core/**/*'],
-    },
-  }),
+  ...(process.env.VERCEL !== '1' && { output: 'standalone' }),
   distDir: process.env.NEXT_E2E === '1' ? '.next-e2e' : '.next',
   devIndicators: false,
   poweredByHeader: false,
-  serverExternalPackages: ['pg', 'playwright', 'playwright-core', '@sparticuz/chromium-min'],
+  serverExternalPackages: ['pg'],
   async headers() {
     return [
       {

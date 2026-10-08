@@ -11,7 +11,7 @@ export function WalletSummary({ state, currency }: { state: AppState; currency: 
         <div>
           <h2>Vos cryptos, automatiquement</h2>
           <p className="muted">
-            Ajoutez une adresse pour suivre les soldes, le staking et la DeFi avec DeBank.
+            Ajoutez une adresse pour suivre les soldes, le staking et la DeFi avec Zerion.
           </p>
         </div>
         <Link className="btn" href="/wallets">
@@ -27,8 +27,10 @@ export function WalletSummary({ state, currency }: { state: AppState; currency: 
         <h2>Wallets & DeFi</h2>
         <p className="muted">
           {onchain.includedCount} adresse(s) incluse(s) ·{' '}
-          {onchain.staleCount ? 'Dernières valeurs connues à actualiser' : 'Source DeBank'} · Coût
-          d’achat inconnu
+          {onchain.staleCount
+            ? 'Dernières valeurs connues à actualiser'
+            : 'Sources : Zerion / historique conservé'}{' '}
+          · Coût d’achat inconnu
         </p>
       </div>
       <strong>

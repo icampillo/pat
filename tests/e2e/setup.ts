@@ -42,8 +42,7 @@ export default async function setup() {
     null,
   );
   const { walletCommand, syncWallet } = await import('../../src/server/wallets');
-  const { normalizeDeBank } = await import('../../src/server/debank');
-  const { address, total, tokens, protocols } = await import('../fixtures/debank');
+  const { address, historicalDeBank } = await import('../fixtures/debank-history');
   const { id } = (await walletCommand(
     owner.userId,
     'POST',
@@ -51,7 +50,7 @@ export default async function setup() {
     { address, label: 'Wallet synchronisé' },
     randomUUID(),
   )) as { id: string };
-  const sample = normalizeDeBank(total, tokens, protocols);
+  const sample = structuredClone(historicalDeBank);
   await syncWallet(id, async () => ({
     ...sample,
     tokens: [
@@ -91,8 +90,8 @@ export default async function setup() {
   await walletCommand(
     owner.userId,
     'PATCH',
-    ['debank', 'config'],
-    { mode: 'PUBLIC', enabled: false, intervalMinutes: 60 },
+    ['zerion', 'config'],
+    { enabled: false },
     randomUUID(),
   );
   writeFileSync(

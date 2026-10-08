@@ -2,7 +2,7 @@
 import { type SaveAction } from '@/components/forms';
 import { ImportPanel } from '@/components/import-panel';
 import { SecuritiesImportPanel } from '@/components/securities-import-panel';
-import { DeBankSettings } from '@/components/wallets';
+import { ZerionSettings } from '@/components/wallets';
 import type { AppState } from '@/shared/types';
 import { Download } from 'lucide-react';
 
@@ -32,7 +32,7 @@ function SettingsContent({
 }) {
   return (
     <div className="settings-grid">
-      <DeBankSettings state={state} save={save} />
+      <ZerionSettings state={state} save={save} />
       <section className="panel detail-panel">
         <h2>Votre portefeuille</h2>
         <form
@@ -142,7 +142,7 @@ function SettingsContent({
           <span className="tag success">Disponible</span>
         </div>
         <div className="provider-row">
-          <span>Wallets crypto · DeBank</span>
+          <span>Wallets crypto · Zerion</span>
           <span className="tag">
             {state.onchain.config.configured
               ? state.onchain.config.enabled
@@ -166,7 +166,7 @@ function SettingsContent({
           </div>
         ))}
         <p className="small muted">
-          Les cours Bourse importés et les métaux sont actualisés toutes les 15 minutes. DeBank
+          Les cours Bourse importés et les métaux sont actualisés toutes les 15 minutes. Zerion
           actualise les adresses ajoutées dans Wallets & DeFi.
         </p>
       </section>

@@ -9,17 +9,19 @@ import { command } from '../../src/server/portfolio';
 import { buildCategoryDetails } from '../../src/domain/categories';
 import type { AppState } from '../../src/shared/types';
 import { walletCommand, syncWallet } from '../../src/server/wallets';
-import { normalizeDeBank, DeBankError } from '../../src/server/debank';
+import { normalizeZerion, ZerionError } from '../../src/server/zerion';
 import { exportData } from '../../src/server/exports';
 import { auth } from '../../src/server/auth';
 import { POST, PATCH } from '../../src/app/api/v1/[...path]/route';
-import { total, tokens, protocols, address } from '../fixtures/debank';
+import { portfolio, fluidPositions, address } from '../fixtures/zerion';
+import { historicalDeBank } from '../fixtures/debank-history';
 const testUrl = process.env.DATABASE_URL_TEST;
 if (!testUrl || !new URL(testUrl).pathname.endsWith('_test'))
   throw new Error('Base de test requise.');
 process.env.DATABASE_URL = testUrl;
-const sample = normalizeDeBank(total, tokens, protocols);
+const sample = normalizeZerion(portfolio(), [fluidPositions()]);
 const owners: string[] = [];
+process.env.ZERION_API_KEY = 'test-key-not-real';
 beforeAll(() => {
   execFileSync(process.execPath, ['node_modules/prisma/build/index.js', 'migrate', 'deploy'], {
     env: process.env,
@@ -28,13 +30,14 @@ beforeAll(() => {
   });
 });
 afterAll(async () => {
-  await db().deBankConfig.updateMany({
+  await db().walletSyncConfig.updateMany({
     where: { portfolioId: { in: owners } },
     data: { enabled: false },
   });
   await db().$disconnect();
 });
 async function setup(included = true) {
+  await db().zerionAddressCache.deleteMany({});
   const email = `wallet-${randomUUID()}@example.test`,
     password = randomUUID() + randomUUID();
   const owner = await createUser('Wallet test', email, password);
@@ -48,21 +51,20 @@ async function setup(included = true) {
     included,
   })) as { id: string };
   const configure = () =>
-    call('PATCH', 'debank/config', {
-      mode: 'API',
-      accessKey: 'test-key-not-real',
+    call('PATCH', 'zerion/config', {
       enabled: true,
-      intervalMinutes: 60,
     });
-  const due = () =>
-    db().walletConnection.update({
+  const due = async () => {
+    await db().zerionAddressCache.updateMany({ data: { fetchedAt: new Date(0) } });
+    return db().walletConnection.update({
       where: { id },
       data: { nextSyncAt: new Date(0), lastAttemptAt: new Date(0) },
     });
+  };
   return { ...owner, email, password, call, id, configure, due };
 }
-describe('Synchronisation DeBank persistante et isolée', () => {
-  it('enregistre une adresse en mode gratuit, sans clé ni valeur inventée ; refuse le doublon', async () => {
+describe('Synchronisation Zerion persistante et isolée', () => {
+  it('enregistre une adresse en mode gratuit, sans valeur inventée ; refuse le doublon', async () => {
     const s = await setup();
     const provider = vi.fn(async () => sample);
     const state = await getState(s.userId);
@@ -70,25 +72,25 @@ describe('Synchronisation DeBank persistante et isolée', () => {
     expect(state.totals.valueUsd).toBeNull();
     expect(state.onchain.wallets[0].referenceUsd).toBe('1000');
     expect(state.onchain.config).toMatchObject({
-      mode: 'PUBLIC',
+      mode: 'API',
       configured: true,
-      hasKey: false,
+      hasKey: true,
       enabled: true,
     });
     expect(await syncWallet(s.id, provider)).toBe(true);
-    expect(provider).toHaveBeenCalledWith(address, '');
+    expect(provider).toHaveBeenCalledWith(address);
     expect((await getState(s.userId)).onchain.valueUsd).toBe('905');
     await expect(
       s.call('POST', 'wallets', { address: address.toUpperCase() }),
     ).rejects.toMatchObject({ code: 'DUPLICATE' });
   });
-  it('conserve les secrets hors état, exports et réponses ; chiffre leur stockage', async () => {
+  it('conserve les secrets hors état, exports et réponses ; aucune clé en base', async () => {
     const s = await setup();
     expect(await s.configure()).toEqual({ configured: true });
-    const stored = await db().deBankConfig.findUniqueOrThrow({
+    const stored = await db().walletSyncConfig.findUniqueOrThrow({
       where: { portfolioId: s.portfolioId },
     });
-    expect(stored.encryptedKey).not.toContain('test-key-not-real');
+    expect(JSON.stringify(stored)).not.toContain('test-key-not-real');
     const state = JSON.stringify(await getState(s.userId)),
       exported = await (await exportData(s.userId, 'portfolio.json')).text();
     for (const payload of [state, exported]) {
@@ -125,15 +127,12 @@ describe('Synchronisation DeBank persistante et isolée', () => {
     expect(await syncWallet(s.id, provider)).toBe(false);
     expect(provider).not.toHaveBeenCalled();
   });
-  it.each([15, 60, 240])(
+  it.each([1440])(
     'sépare les observations à %i min des captures manuelles et quotidiennes immuables',
-    async (intervalMinutes) => {
+    async () => {
       const s = await setup();
-      await s.call('PATCH', 'debank/config', {
-        mode: 'API',
-        accessKey: 'test-key-not-real',
+      await s.call('PATCH', 'zerion/config', {
         enabled: true,
-        intervalMinutes,
       });
       await command(
         s.userId,
@@ -204,7 +203,7 @@ describe('Synchronisation DeBank persistante et isolée', () => {
       expect(state.totals.valueUsd).toBe('905');
       expect(state.snapshots).toHaveLength(2);
     }
-    await s.call('DELETE', 'debank/config', {});
+    await s.call('DELETE', 'zerion/config', {});
     expect(await syncWallet(s.id, async () => sample)).toBe(false);
     expect((await getState(s.userId)).totals.valueUsd).toBe('905');
     expect(await db().portfolioSnapshot.count({ where: { portfolioId: s.portfolioId } })).toBe(2);
@@ -310,7 +309,7 @@ describe('Synchronisation DeBank persistante et isolée', () => {
     await s.due();
     expect(
       await syncWallet(s.id, async () => {
-        throw new DeBankError('RATE_LIMIT');
+        throw new ZerionError('RATE_LIMIT');
       }),
     ).toBe(false);
     const after = (await getState(s.userId)).onchain.wallets[0];
@@ -336,7 +335,7 @@ describe('Synchronisation DeBank persistante et isolée', () => {
     await s.due();
     expect(
       await syncWallet(s.id, async () => {
-        await s.call('DELETE', 'debank/config', {});
+        await s.call('DELETE', 'zerion/config', {});
         return sample;
       }),
     ).toBe(false);
@@ -355,6 +354,28 @@ describe('Synchronisation DeBank persistante et isolée', () => {
     const first = await a.call('POST', 'wallets', data, key);
     expect(await a.call('POST', 'wallets', data, key)).toEqual(first);
     expect((await getState(b.userId)).onchain.wallets).toHaveLength(1);
+  });
+  it('conserve intégralement une observation DeBank et son snapshot lors de la migration', async () => {
+    const s = await setup();
+    const legacy = await db().walletObservation.create({
+      data: {
+        walletId: s.id,
+        totalUsd: historicalDeBank.totalUsd,
+        data: historicalDeBank,
+        fetchedAt: new Date(Date.now() - 10000),
+      },
+    });
+    const snapshot = await runSnapshot(s.portfolioId);
+    await syncWallet(s.id, async () => sample);
+    expect(await db().walletObservation.findUnique({ where: { id: legacy.id } })).toEqual(legacy);
+    expect(await db().portfolioSnapshot.findUnique({ where: { id: snapshot!.id } })).toEqual(
+      snapshot,
+    );
+    const state = await getState(s.userId);
+    expect(state.onchain.wallets[0].id).toBe(s.id);
+    expect(state.onchain.wallets[0].data?.source).toBe('ZERION');
+    expect(state.onchain.wallets[0].status).toBe('PARTIAL'); // old protocol absent: visible warning
+    expect(await db().walletObservation.count({ where: { walletId: s.id } })).toBe(2);
   });
   it('exclut un wallet sans effacer son observation et garde les snapshots après retrait', async () => {
     const s = await setup();
@@ -402,7 +423,7 @@ describe('Synchronisation DeBank persistante et isolée', () => {
     expect((await POST(request({ cookie, origin: process.env.APP_ORIGIN! }), path)).status).toBe(
       429,
     );
-    const configRequest = new Request(`${process.env.APP_ORIGIN}/api/v1/debank/config`, {
+    const configRequest = new Request(`${process.env.APP_ORIGIN}/api/v1/zerion/config`, {
       method: 'PATCH',
       headers: {
         cookie,
@@ -410,10 +431,10 @@ describe('Synchronisation DeBank persistante et isolée', () => {
         'content-type': 'application/json',
         'idempotency-key': randomUUID(),
       },
-      body: JSON.stringify({ enabled: true, intervalMinutes: 15 }),
+      body: JSON.stringify({ enabled: true }),
     });
     const saved = await PATCH(configRequest, {
-      params: Promise.resolve({ path: ['debank', 'config'] }),
+      params: Promise.resolve({ path: ['zerion', 'config'] }),
     });
     expect(saved.status).toBe(200);
     expect(await saved.text()).not.toContain('test-key-not-real');

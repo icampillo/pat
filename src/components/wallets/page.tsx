@@ -67,10 +67,10 @@ export function WalletsPage({ state, save }: { state: AppState; save: SaveAction
       />
       <WalletPositions state={state} />
       <h2 className="wallet-tracked-heading">Wallets suivis</h2>
-      {!wallets.length && config.mode === 'PUBLIC' && (
+      {!wallets.length && (
         <div className="notice">
-          Mode gratuit prêt. Ajoutez votre adresse : la lecture DeBank démarre automatiquement, sans
-          clé API.
+          Ajoutez une adresse EVM. La première synchronisation démarre automatiquement si Zerion est
+          configuré.
         </div>
       )}
       {error && !adding && (
@@ -78,17 +78,16 @@ export function WalletsPage({ state, save }: { state: AppState; save: SaveAction
           {error}
         </p>
       )}
-      {config.configured && (
+      {
         <div className="wallet-source">
           <span className="tag">
-            DeBank {config.mode === 'PUBLIC' ? 'gratuit' : 'API'} ·{' '}
-            {config.enabled ? `Automatique · ${config.intervalMinutes} min` : 'En pause'}
+            Zerion API · {config.enabled ? 'Automatique · quotidien' : 'En pause'}
           </span>
-          <Link href="/settings#debank" className="text-link">
+          <Link href="/settings#zerion" className="text-link">
             Configurer la source
           </Link>
         </div>
-      )}
+      }
       {wallets.length > 0 && (
         <>
           <div className="wallet-cards">

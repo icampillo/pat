@@ -89,6 +89,7 @@ model Portfolio {
   requests IdempotencyRecord[]
   imports ImportBatch[]
   wallets WalletConnection[]
+  walletSync WalletSyncConfig?
   debank DeBankConfig?
   @@index([ownerId])
 }
@@ -305,4 +306,28 @@ model WalletObservation {
   invalidatedAt DateTime? @db.Timestamptz(3)
   invalidReason String?
   @@index([walletId, fetchedAt(sort: Desc)])
+}
+
+// Provider-independent preferences. Legacy DeBankConfig remains an inert archive.
+model WalletSyncConfig {
+  portfolioId String @id @db.Uuid
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Restrict)
+  enabled Boolean @default(true)
+  revision Int @default(1)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+// Shared across all Vercel instances using this database/API key.
+model ZerionQuota {
+  id String @id
+  day String
+  requests Int @default(0)
+  advanced Int @default(0)
+  nextRequestAt DateTime @db.Timestamptz(3)
+}
+model ZerionAddressCache {
+  address String @id @db.VarChar(42)
+  leaseToken String?
+  leaseUntil DateTime? @db.Timestamptz(3)
+  fetchedAt DateTime? @db.Timestamptz(3)
+  data Json?
 }
