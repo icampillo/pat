@@ -1,5 +1,7 @@
 # Implémentation de la version 0.1.0
 
+> Mise à jour du 8 octobre 2026 : les descriptions DeBank/Chromium ci-dessous sont historiques. Le runtime utilise désormais Zerion sans navigateur ; voir [la validation Zerion actuelle](zerion-validation.md).
+
 État réel au 25 septembre 2026. Ce document précise le contrat actuellement exécutable ; les anciens documents d’architecture et d’API restent la cible d’évolution.
 
 ## Architecture effective

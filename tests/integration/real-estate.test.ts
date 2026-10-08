@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { configureTestDatabase } from '../database-env';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -11,10 +12,7 @@ import { buildCategoryDetails } from '../../src/domain/categories';
 import { realEstateAt } from '../../src/domain/real-estate';
 import { property, loan } from '../fixtures/real-estate';
 
-const testUrl = process.env.DATABASE_URL_TEST;
-if (!testUrl || !new URL(testUrl).pathname.endsWith('_test'))
-  throw new Error('Base de test requise');
-process.env.DATABASE_URL = testUrl;
+configureTestDatabase();
 beforeAll(() => {
   execFileSync(process.execPath, ['node_modules/prisma/build/index.js', 'migrate', 'deploy'], {
     env: process.env,

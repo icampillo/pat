@@ -1,12 +1,10 @@
 import 'dotenv/config';
+import { configureTestDatabase } from '../database-env';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 export default async function setup() {
-  const url = process.env.DATABASE_URL_TEST;
-  if (!url || !new URL(url).pathname.endsWith('_test'))
-    throw new Error('Base de test obligatoire.');
-  process.env.DATABASE_URL = url;
+  configureTestDatabase();
   execFileSync(process.execPath, ['node_modules/prisma/build/index.js', 'migrate', 'deploy'], {
     env: process.env,
     stdio: 'pipe',

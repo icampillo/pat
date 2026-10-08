@@ -1,5 +1,6 @@
 import 'dotenv/config';
-import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
+import { configureTestDatabase } from '../database-env';
+import { beforeAll, afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { db } from '../../src/server/db';
@@ -12,13 +13,12 @@ import { walletCommand, syncWallet } from '../../src/server/wallets';
 import { normalizeZerion, ZerionError } from '../../src/server/zerion';
 import { exportData } from '../../src/server/exports';
 import { auth } from '../../src/server/auth';
+import { GET as walletsCron } from '../../src/app/api/cron/wallets/route';
+import { GET as snapshotCron } from '../../src/app/api/cron/snapshot/route';
 import { POST, PATCH } from '../../src/app/api/v1/[...path]/route';
 import { portfolio, fluidPositions, address } from '../fixtures/zerion';
 import { historicalDeBank } from '../fixtures/debank-history';
-const testUrl = process.env.DATABASE_URL_TEST;
-if (!testUrl || !new URL(testUrl).pathname.endsWith('_test'))
-  throw new Error('Base de test requise.');
-process.env.DATABASE_URL = testUrl;
+configureTestDatabase();
 const sample = normalizeZerion(portfolio(), [fluidPositions()]);
 const owners: string[] = [];
 process.env.ZERION_API_KEY = 'test-key-not-real';
@@ -28,6 +28,10 @@ beforeAll(() => {
     stdio: 'pipe',
     windowsHide: true,
   });
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 afterAll(async () => {
   await db().walletSyncConfig.updateMany({
@@ -438,5 +442,46 @@ describe('Synchronisation Zerion persistante et isolée', () => {
     });
     expect(saved.status).toBe(200);
     expect(await saved.text()).not.toContain('test-key-not-real');
+  });
+  it('runs the authenticated wallets and snapshot crons through real PostgreSQL', async () => {
+    const s = await setup();
+    vi.stubEnv('CRON_SECRET', 'isolated-cron-fixture');
+    const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.origin).toBe('https://api.zerion.io');
+      expect(new Headers(init?.headers).get('authorization')).toBe(
+        `Basic ${Buffer.from('test-key-not-real:').toString('base64')}`,
+      );
+      const summary = portfolio();
+      summary.data.id = url.pathname.split('/')[3];
+      return Response.json(url.pathname.endsWith('/portfolio') ? summary : fluidPositions());
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const request = () =>
+      new Request('http://localhost/api/cron/test', {
+        headers: { authorization: 'Bearer isolated-cron-fixture' },
+      });
+    const synchronized = await walletsCron(request());
+    expect(synchronized.status).toBe(200);
+    expect(await synchronized.json()).toMatchObject({ data: { ok: true, job: 'wallets' } });
+    expect((await getState(s.userId)).onchain.valueUsd).toBe('905');
+    expect(fetcher).toHaveBeenCalled();
+    const calls = fetcher.mock.calls.length;
+    expect((await walletsCron(request())).status).toBe(200);
+    expect(fetcher).toHaveBeenCalledTimes(calls);
+    expect((await snapshotCron(request())).status).toBe(200);
+    const first = await db().portfolioSnapshot.findMany({
+      where: { portfolioId: s.portfolioId, kind: 'DAILY' },
+    });
+    expect(first).toHaveLength(1);
+    expect(String(first[0].totalUsd)).toBe('905');
+    expect((await snapshotCron(request())).status).toBe(200);
+    expect(
+      await db().portfolioSnapshot.findMany({
+        where: { portfolioId: s.portfolioId, kind: 'DAILY' },
+      }),
+    ).toEqual(first);
+    const payload = JSON.stringify(await getState(s.userId));
+    expect(payload).not.toContain('test-key-not-real');
   });
 });

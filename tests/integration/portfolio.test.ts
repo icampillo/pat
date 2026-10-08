@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { configureTestDatabase } from '../database-env';
 import { readFileSync } from 'node:fs';
 import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
@@ -13,13 +14,7 @@ import { saveImage, getImage } from '../../src/server/images';
 import { exportData } from '../../src/server/exports';
 import sharp from 'sharp';
 import { GET, POST } from '../../src/app/api/v1/[...path]/route';
-const testUrl = process.env.DATABASE_URL_TEST;
-if (!testUrl || !new URL(testUrl).pathname.endsWith('_test'))
-  throw new Error(
-    'Tests refusés : DATABASE_URL_TEST doit désigner une base se terminant par _test.',
-  );
-process.env.DATABASE_URL = testUrl;
-process.env.DIRECT_URL = testUrl;
+configureTestDatabase();
 let userId: string,
   secondId: string,
   portfolioId: string,

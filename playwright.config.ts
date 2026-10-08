@@ -24,6 +24,7 @@ export default defineConfig({
     timeout: 60_000,
     env: {
       DATABASE_URL: process.env.DATABASE_URL_TEST,
+      DIRECT_URL: process.env.DATABASE_URL_TEST,
       BETTER_AUTH_URL: 'http://localhost:3001',
       APP_ORIGIN: 'http://localhost:3001',
       NEXT_TELEMETRY_DISABLED: '1',

@@ -2,12 +2,12 @@
 
 Application privée de suivi des investissements : cryptomonnaies, métaux, actions/ETF, cartes Pokémon et One Piece. Interface française, EUR/USD, PostgreSQL et calculs décimaux.
 
-**Version locale — 23 septembre 2026.** L’application fonctionne avec des données persistantes. Le portefeuille local contient les sept fiches de pièces importées et le wallet personnel synchronisé gratuitement depuis DeBank ; les actifs et historiques fictifs du jeu de démonstration ont été retirés. Le taux EUR/USD de référence BCE et les cours spot de l’or et de l’argent sont actualisés automatiquement. Les autres fournisseurs de marché restent non configurés. Le statut détaillé et les limites se trouvent dans [la roadmap](docs/roadmap.md).
+**Migration Zerion — 8 octobre 2026.** Les nouvelles observations des wallets proviennent de l’API Zerion côté serveur. Les observations DeBank et snapshots existants sont conservés. Voir [la validation avant production](docs/zerion-validation.md).
 
 ## Ce qui fonctionne
 
 - Connexion privée, sessions PostgreSQL, inscription publique désactivée et création des utilisateurs par commande locale.
-- Wallets par adresse EVM : lecture gratuite du profil public DeBank, tokens, staking, prêts, dettes, récompenses et synchronisation automatique.
+- Wallets par adresse EVM : API Zerion, tokens, staking, prêts, dettes, récompenses et synchronisation quotidienne.
 - Création, modification et archivage réversible des actifs soldés ; historique financier et images privées conservés, sans purge définitive.
 - Neuf types d’opération, correction avec motif, annulation confirmée, historique des révisions et contrôle des soldes par plateforme.
 - Quantités, coût moyen pondéré, capital détenu, gains réalisés/latents, revenus, liquidités et apports nets.
@@ -46,7 +46,6 @@ Les sept pièces importées utilisent le cours spot en USD par once troy, conver
 
 ```powershell
 pnpm install --frozen-lockfile
-pnpm wallet:install
 pnpm setup:local
 pnpm db:local
 ```
@@ -83,7 +82,7 @@ docker compose up -d --build
 docker compose --profile tools run --rm tools pnpm user:create
 ```
 
-Compose démarre PostgreSQL, attend son healthcheck, applique les migrations, puis démarre l’application. La cible tools du Dockerfile sert au provisionnement et aux migrations. L’image finale Next.js fonctionne sous l’utilisateur non-root node et installe Chromium avec ses dépendances système pour les wallets gratuits ([installation Playwright](https://playwright.dev/docs/browsers#install-system-dependencies)). Le volume postgres_data conserve la base. Les identifiants sont injectés à l’exécution ; .env est exclu du contexte de build. Le conteneur utilise son propre PostgreSQL sur le port local 5432, distinct du PostgreSQL portable sur 55432. Ce déploiement Docker reste à vérifier sur une machine équipée.
+Compose démarre PostgreSQL, attend son healthcheck, applique les migrations, puis démarre l’application. La cible tools du Dockerfile sert au provisionnement et aux migrations. L’image finale Next.js fonctionne sous l’utilisateur non-root node, sans Chromium ni navigateur serveur. Le volume postgres_data conserve la base. Les identifiants sont injectés à l’exécution ; .env est exclu du contexte de build. Le conteneur utilise son propre PostgreSQL sur le port local 5432, distinct du PostgreSQL portable sur 55432. Ce déploiement Docker reste à vérifier sur une machine équipée.
 
 Pour créer la démonstration Docker :
 
@@ -93,21 +92,17 @@ docker compose --profile tools run --rm tools pnpm db:seed:demo
 
 La base patrimoine_test est créée au premier démarrage du volume. Le script SQL d’initialisation n’est pas rejoué sur un volume déjà initialisé. Ne pas supprimer le volume pour appliquer une migration. Voir [l’ordre de démarrage Compose](https://docs.docker.com/compose/how-tos/startup-order/).
 
-## Wallets gratuits avec DeBank
+## Wallets avec Zerion
 
-Ouvrir **Wallets & DeFi**, coller une adresse EVM ou son URL de profil DeBank, puis **Ajouter le wallet**. Aucun compte DeBank, clé API, connexion de wallet ni signature n’est nécessaire. La lecture gratuite est le mode par défaut. Après une mise à jour du code, lancer `pnpm db:deploy`, `pnpm db:generate`, puis redémarrer le serveur. `pnpm wallet:install` installe Chromium si nécessaire ; il est déjà disponible sur cette machine.
+Configurer `ZERION_API_KEY` exclusivement dans l’environnement serveur (jamais `NEXT_PUBLIC_`). Ouvrir **Wallets & DeFi**, puis ajouter une adresse EVM. Les anciennes URL de profil DeBank restent acceptées comme raccourci d’adresse, sans requête vers DeBank. Aucune connexion de wallet ni signature n’est nécessaire.
 
-Le serveur ouvre un navigateur invisible et lit les données rendues du profil public. Il attend la fin du chargement, déplie les petits soldes et protocoles, et ferme le navigateur. Il ne clique sur aucun bouton de retrait ou de transaction et n’utilise ni cookies personnels ni signatures d’API internes.
+Le serveur consulte les endpoints portfolio et positions de Zerion. Il conserve le total net, les dettes, les détails DeFi et signale une couverture partielle. Aucun navigateur ni ancienne variable DeBank/Chromium n’est nécessaire. La clé Zerion n’est ni stockée en base, ni renvoyée dans l’état ou les exports.
 
-La première lecture et le bouton **Actualiser** déclenchent le même service que le cron, via `after()` dans l’invocation HTTP authentifiée. Sur Vercel, le cron automatique passe une fois par jour. Dans **Paramètres → Connexion DeBank**, les délais de 15 minutes, 1 heure ou 4 heures sont des délais minimaux d’éligibilité, pas des fréquences de cron. Une pause conserve la dernière observation. Aucun worker permanent n’est nécessaire.
+La première lecture et **Actualiser** utilisent le même service que le cron via `after()`. Le cron Vercel passe chaque jour à 04:00 UTC ; l’actualisation manuelle a un délai minimal de cinq minutes. Quotas et verrous d’adresse sont partagés en PostgreSQL. Une pause ou une erreur conserve la dernière observation et sa date. Les fiches manuelles restent comptées : exclure un wallet si elles représentent déjà les mêmes positions.
 
-Les données ont la couverture, les arrondis et la fraîcheur affichés par DeBank. Une modification du site ou un blocage peut interrompre la lecture ; l’application conserve alors la dernière observation et affiche l’erreur. Le total net n’est ajouté qu’une fois au patrimoine ; les détails de staking et les récompenses ne sont pas additionnés une seconde fois. Les fiches manuelles restent comptées : exclure le wallet du total si elles représentent déjà les mêmes positions.
+La migration Prisma `20261008180000_zerion` ajoute trois tables et reprend les préférences d’activation, sans modifier les wallets, observations DeBank, snapshots ou anciens paramètres chiffrés. Elle doit être appliquée par l’opérateur avant d’activer le nouveau code. Le lecteur n’invente aucun achat ni coût historique ; la synchronisation ne crée pas de snapshot complet.
 
-Le lecteur ne reconstruit pas les achats passés, les coûts d’achat ni les transactions ; aucun faux achat n’est créé. Les performances agrégées sont indisponibles quand le coût des wallets est inconnu. Les wallets sont valorisés en USD ; la conversion du patrimoine en EUR utilise le taux enregistré dans les paramètres. Les NFT individuels ne sont pas importés. Le JSON métier contient les observations des wallets ; le CSV des actifs concerne les fiches manuelles.
-
-Le mode **API officielle** reste facultatif et nécessite une clé DeBank Cloud et ses crédits ; il n’est jamais activé automatiquement. La clé est chiffrée en AES-GCM avec une clé dérivée de BETTER_AUTH_SECRET et liée au portefeuille. Les exports métier excluent la clé, même chiffrée. Conserver BETTER_AUTH_SECRET avec les sauvegardes ; après rotation, renseigner à nouveau la clé API. [Documentation DeBank](https://docs.cloud.debank.com/en/readme/open-api).
-
-Diagnostic gratuit en lecture seule, sans modifier le portefeuille :
+Diagnostic en lecture seule, consommant le quota de la clé Zerion configurée :
 
 ```powershell
 pnpm wallet:check 0xVotreAdresse
@@ -127,9 +122,9 @@ pnpm test:e2e
 pnpm build
 ```
 
-Les tests d’intégration et de navigateur utilisent exclusivement DATABASE_URL_TEST et refusent une base dont le nom ne se termine pas par _test. Ils créent des comptes isolés de test ; ils ne vident pas la base. Playwright lance son serveur sur 3001 et utilise .next-e2e afin de cohabiter avec le développement sur 3000.
+Les tests d’intégration et de navigateur utilisent exclusivement DATABASE_URL_TEST, remplacent aussi DIRECT_URL avant Prisma et refusent une base dont le nom ne se termine pas par _test. Ils créent des comptes isolés de test ; ils ne vident pas la base. Playwright lance son serveur sur 3001 et utilise .next-e2e afin de cohabiter avec le développement sur 3000.
 
-Les parcours vérifient connexion, actif, image, transactions, snapshot, export/import, ajout gratuit d’adresse et positions synchronisées. Les autres scénarios couvrent le mobile à 375 px et l’accessibilité sur neuf écrans. Les tests utilisent des réponses DeBank synthétiques sans appel externe. Une lecture réelle gratuite du wallet fourni a aussi été vérifiée. Ces contrôles ne constituent pas un audit exhaustif avec lecteurs d’écran.
+Les parcours vérifient connexion, actif, image, transactions, snapshot, export/import, ajout gratuit d’adresse et positions synchronisées. Les autres scénarios couvrent le mobile à 375 px et l’accessibilité sur neuf écrans. Les tests utilisent des réponses Zerion et des historiques DeBank synthétiques, sans appel externe. La couverture Zerion réelle n’est pas attestée par ces fixtures. Ces contrôles ne constituent pas un audit exhaustif avec lecteurs d’écran.
 
 ## Snapshots et import
 
@@ -145,7 +140,7 @@ Le cron quotidien `/api/cron/snapshot` crée les captures manquantes du jour loc
 
 Les journées manquées ne sont pas reconstruites. Une erreur est isolée par portefeuille et signalée en HTTP 503 ; Vercel ne retente pas automatiquement les crons échoués. Une relance authentifiée le même jour peut compléter les captures manquantes. La commande ci-dessus reste disponible. Les captures figent les dernières données enregistrées, sans forcer leur synchronisation. Les captures anciennes restent inchangées après une correction rétroactive, et l’estimation de performance après flux est alors désactivée.
 
-Les synchronisations DeBank (cron quotidien ou demande manuelle) conservent leurs observations et actualisent les valeurs courantes sans créer de snapshot complet. Les captures supplémentaires concernent les demandes manuelles et les changements d’inclusion des wallets. Mettre la synchronisation en pause conserve la dernière valeur dans le patrimoine. Voir [les règles de fréquence et de périmètre](docs/implementation.md#fréquences-et-changements-de-périmètre).
+Les synchronisations Zerion (cron quotidien ou demande manuelle) conservent leurs observations et actualisent les valeurs courantes sans créer de snapshot complet. Les captures supplémentaires concernent les demandes manuelles et les changements d’inclusion des wallets. Mettre la synchronisation en pause conserve la dernière valeur dans le patrimoine. Voir [les règles de fréquence et de périmètre](docs/implementation.md#fréquences-et-changements-de-périmètre).
 
 L’import de nouvelles opérations se trouve dans Paramètres et dans la catégorie Bourse. Identifier les actifs par `asset_id` ou par symbole et compte ; un ISIN et un nom permettent aussi de créer une fiche Bourse (prix manuel, sans cotation inventée). CSV UTF-8, séparateur virgule, point-virgule ou tabulation, nombres français acceptés, dates ISO 8601 avec fuseau ou dates seules ISO / JJ/MM/AAAA. Types BUY/SELL/DEPOSIT/WITHDRAWAL/TRANSFER/FEE/DIVIDEND/REWARD/ADJUSTMENT, avec alias français pour achat, vente, dividende, frais, dépôt et retrait. La référence du courtier est recommandée ; sans référence, le rapprochement compare les données et leur nombre d’occurrences. Limites : 200 Ko, 500 lignes, aperçu valable 30 minutes. Les opérations connues sont ignorées ; les différences sont présentées sans modifier l’historique. Le journal est revérifié à la confirmation, qui reste atomique. Voir [l’API actuelle](docs/implementation.md).
 
@@ -225,7 +220,6 @@ Hors Vercel, un ordonnanceur externe peut lancer les mêmes jobs ponctuels (la c
 ```sh
 pnpm install --frozen-lockfile
 pnpm db:generate
-pnpm wallet:install
 pnpm workers
 ```
 

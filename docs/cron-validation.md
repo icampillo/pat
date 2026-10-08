@@ -1,5 +1,7 @@
 # Validation des jobs Vercel — 7 octobre 2026
 
+> Mise à jour du 8 octobre 2026 : les descriptions DeBank/Chromium ci-dessous sont historiques. Le runtime utilise désormais Zerion sans navigateur ; voir [la validation Zerion actuelle](zerion-validation.md).
+
 > Rapport historique du commit `a695d17`. Le déploiement a ensuite révélé une erreur de packaging non détectée par le build Next local. La section Chromium ci-dessous est remplacée par [la correction et sa validation](chromium-vercel-validation.md) (`chromium-min` + pack distant).
 
 ## 1. Statut du build

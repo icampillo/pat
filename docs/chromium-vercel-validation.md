@@ -1,5 +1,7 @@
 # Chromium / Vercel — validation du 7 octobre 2026
 
+> Mise à jour du 8 octobre 2026 : les descriptions DeBank/Chromium ci-dessous sont historiques. Le runtime utilise désormais Zerion sans navigateur ; voir [la validation Zerion actuelle](zerion-validation.md).
+
 ## Cause identifiée et portée de la preuve
 
 Le build Next.js réussissait, mais le déploiement était rejeté pendant `Deploying outputs...`.

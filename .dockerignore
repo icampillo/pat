@@ -14,3 +14,7 @@ playwright-report
 src/generated
 *.log
 *.tsbuildinfo
+
+*.dump
+.astra
+.vercel
