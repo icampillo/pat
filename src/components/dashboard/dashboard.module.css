@@ -217,7 +217,7 @@
   height: 320px;
   margin: 10px -2px 0;
 }
-.tile {
+/* .tile {
   position: absolute;
   padding: 0;
   border: 2px solid white;
@@ -234,7 +234,48 @@
 }
 .tile:focus-visible {
   outline-offset: -4px !important;
+} */
+ 
+.tile {
+  position: absolute;
+  padding: 0;
+  border: 2px solid white;
+  border-radius: 9px;
+  overflow: hidden;
+  text-align: left;
+  color: #202030;
+  container-type: size;
+
+  box-sizing: border-box;
+  cursor: default;
+
+  /* Aucune modification de dimensions */
+  transform: none;
+
+  transition:
+    box-shadow 150ms ease,
+    filter 150ms ease;
 }
+
+/* Surbrillance fixe au survol */
+.tile:hover,
+.tile[data-active='true'] {
+  z-index: 1;
+
+  /* Bordure intérieure sans modifier la taille */
+  box-shadow:
+    inset 0 0 0 2px var(--tile-accent);
+
+  filter: saturate(1.07);
+}
+
+/* Navigation clavier */
+.tile:focus-visible {
+  z-index: 1;
+  outline: 2px solid var(--tile-accent);
+  outline-offset: -4px;
+}
+
 .tileContent {
   display: flex;
   flex-direction: column;
@@ -243,6 +284,103 @@
   font-size: 12px;
   overflow-wrap: anywhere;
 }
+
+/* Tooltip flottant de la Treemap */
+
+.tileTooltip {
+  position: absolute;
+  z-index: 10;
+
+  width: min(220px, calc(100% - 16px));
+  height: 120px;
+  box-sizing: border-box;
+
+  padding: 13px 14px;
+
+  background: #ffffff;
+  border: 1px solid rgba(20, 20, 40, 0.09);
+  border-radius: 12px;
+
+  box-shadow:
+    0 8px 28px rgba(20, 20, 40, 0.12),
+    0 2px 6px rgba(20, 20, 40, 0.04);
+
+  /* Ne déclenche jamais de hover */
+  pointer-events: none;
+
+  /* N'affecte jamais le layout */
+  overflow: hidden;
+
+  animation: tooltipFadeIn 140ms ease-out both;
+}
+
+.tileTooltipHeader {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+
+  color: var(--tooltip-accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tileTooltipHeader span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tileTooltipValue {
+  display: block;
+  margin-top: 12px;
+
+  color: #202030;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.6px;
+  line-height: 1.2;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tileTooltipWeight {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+
+  margin-top: 12px;
+  font-size: 11px;
+}
+
+.tileTooltipWeight span {
+  color: #77778b;
+}
+
+.tileTooltipWeight strong {
+  color: var(--tooltip-accent);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tileTooltip {
+    animation: none;
+  }
+}
+
 .tileContent strong {
   font-size: clamp(12px, 12cqw, 20px);
   white-space: nowrap;
@@ -281,67 +419,7 @@
     display: none;
   }
 }
-.allocationDetail {
-  position: relative;
-  background: var(--surface-secondary);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px 34px 10px 10px;
-  margin-top: 8px;
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-.allocationDetail p {
-  margin: 4px 0;
-}
-.allocationDetail > button {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-}
-.allocationDetail a {
-  color: var(--accent);
-  display: inline-flex;
-  align-items: center;
-  min-height: 36px;
-}
-.allocationList {
-  color: var(--muted);
-  font-size: 11px;
-}
-.allocationList summary {
-  cursor: pointer;
-  padding: 10px 0;
-  min-height: 36px;
-}
-.allocationList ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.allocationList a {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 0;
-  min-height: 44px;
-  color: var(--ink);
-  overflow-wrap: anywhere;
-}
-.allocationList a > span {
-  min-width: 0;
-}
-.allocationList a > span:last-child {
-  text-align: right;
-}
-.allocationList small {
-  display: block;
-  color: var(--muted);
-}
+
 .notice,
 .categoryNote {
   font-size: 11px;
