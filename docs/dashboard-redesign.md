@@ -127,3 +127,33 @@ le cas historique hors période a été reproduit avec une fixture déterministe
 Trois outils MCP sont omis par la politique de cette session ; les vérifications ci-dessus
 ont été exécutées via le terminal sandbox et Chromium local, sans ces outils.
 Aucun commit, push, déploiement, modification de base ou de fichier d'environnement.
+
+
+## Répartition sans panneau au survol (9 octobre 2026)
+
+Le survol et le simple focus ne sélectionnent plus une catégorie et n'ouvrent plus
+l'encadré sous la treemap. Le clic, le tap, Entrée et Espace ouvrent toujours les détails ;
+Échap et la croix les ferment. Survoler une autre catégorie ne modifie pas une sélection
+explicite. Aucun changement de géométrie ni de données.
+
+Le signalement « courbes visibles uniquement sur 1 an / Tout » n'est pas reproduit avec
+401 relevés quotidiens synthétiques jusqu'à la veille/heure du calcul : les tracés existent
+sur toutes les périodes principales et sur 7 j / 30 j pour les catégories, en EUR et USD.
+Ce contrôle valide le rendu frontend, pas les données ni la seed exécutée par l'utilisateur.
+Date du dernier relevé et nature de l'état vide demandées ; filtres et seed inchangés,
+aucun accès à la base réelle. La cause propre au signalement reste à confirmer.
+
+Validation exécutée : 28 tests ciblés (dashboard, categories, snapshot-job), 13 scénarios
+Chromium dashboard, ESLint global, formatage ciblé et build Next production (TypeScript
+inclus). Commandes reproductibles :
+
+```sh
+pnpm exec vitest run tests/unit/dashboard.test.ts tests/unit/categories.test.ts tests/unit/snapshot-job.test.ts
+pnpm lint
+pnpm build
+pnpm exec playwright test --config=playwright.navigation.config.ts dashboard.spec.ts
+```
+
+Même environnement local isolé que ci-dessus, sans base réelle et sans workers.
+Logs `/workspace/patrimoine-hover-{build,lint,browser}.log` et
+`/workspace/patrimoine-chart-targeted-unit.log`. Aucun commit, push ni déploiement.

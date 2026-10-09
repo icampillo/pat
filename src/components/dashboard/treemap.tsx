@@ -82,8 +82,6 @@ export function AllocationTreemap({
                 aria-label={describe(item)}
                 aria-describedby={selected === item.id ? detailId : undefined}
                 aria-pressed={selected === item.id}
-                onFocus={() => setSelected(item.id)}
-                onMouseEnter={() => setSelected(item.id)}
                 onClick={() => setSelected(item.id)}
               >
                 <span className={styles.tileContent}>

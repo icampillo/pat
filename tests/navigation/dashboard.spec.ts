@@ -20,6 +20,37 @@ async function noOverflow(page: Page) {
     true,
   );
 }
+// Check rendered geometry, not only visibility: a tiny treemap is still visible.
+async function expectTreemapToFillCard(page: Page) {
+  const tree = page.getByRole('group', { name: 'Répartition par catégories' });
+  await expect
+    .poll(() =>
+      tree.evaluate((el) => {
+        const parent = el.getBoundingClientRect();
+        const tiles = [...el.querySelectorAll('button')].map((tile) =>
+          tile.getBoundingClientRect(),
+        );
+        return (
+          tiles.reduce((sum, tile) => sum + tile.width * tile.height, 0) /
+          (parent.width * parent.height)
+        );
+      }),
+    )
+    .toBeCloseTo(1, 2);
+  const bounds = await tree.evaluate((el) => {
+    const parent = el.getBoundingClientRect();
+    return [...el.querySelectorAll('button')].every((tile) => {
+      const rect = tile.getBoundingClientRect();
+      return (
+        rect.left >= parent.left - 1 &&
+        rect.top >= parent.top - 1 &&
+        rect.right <= parent.right + 1 &&
+        rect.bottom <= parent.bottom + 1
+      );
+    });
+  });
+  expect(bounds).toBe(true);
+}
 for (const width of [1440, 1024, 768, 375]) {
   test(`validated composition and accessibility at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
@@ -42,6 +73,7 @@ for (const width of [1440, 1024, 768, 375]) {
         .locator('.recharts-area-curve'),
     ).toBeVisible();
     await noOverflow(page);
+    await expectTreemapToFillCard(page);
     expect(
       (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze())
         .violations,
@@ -53,6 +85,119 @@ for (const width of [1440, 1024, 768, 375]) {
     expect(errors).toEqual([]);
   });
 }
+
+test('older seeded history is visible without presenting thirty days as seven', async ({
+  page,
+}) => {
+  const state = dashboardDailyFixture();
+  // A seed remains fixed in time; opening it two weeks later must not hide its history.
+  state.asOf = new Date(Date.parse(state.asOf) + 14 * 86400000).toISOString();
+  state.portfolio.isDemo = true;
+  const reads = await openDashboard(page, state);
+  const mainPeriods = page.getByRole('group', { name: 'Période du graphique', exact: true });
+  const categoryPeriods = page.getByRole('group', { name: 'Période des courbes des catégories' });
+  for (const periods of [mainPeriods, categoryPeriods]) {
+    await expect(periods.getByRole('button', { name: '30 j', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  }
+  await expect(
+    page
+      .getByRole('group', { name: 'Évolution de la valeur : Patrimoine', exact: true })
+      .locator('.recharts-area-curve'),
+  ).toBeVisible();
+  const cards = page.getByTestId('investment-card');
+  for (const card of await cards.all()) {
+    await expect(card.getByRole('application')).toBeVisible();
+    // A horizontal SVG path has zero bounding-box height, but its stroke is drawn.
+    await expect
+      .poll(() =>
+        card
+          .locator('.recharts-area-curve')
+          .evaluate((path) => (path as SVGPathElement).getTotalLength()),
+      )
+      .toBeGreaterThan(100);
+    await expect(card.locator('summary').first()).toContainText('—');
+  }
+  await expect(page.getByText('Pas assez de relevés sur 7 j · affichage sur 30 j.')).toHaveCount(2);
+  await page.screenshot({
+    path: test.info().outputPath('dashboard-older-seed-desktop.png'),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 375, height: 1000 });
+  await expectTreemapToFillCard(page);
+  await noOverflow(page);
+  await page.screenshot({
+    path: test.info().outputPath('dashboard-older-seed-mobile.png'),
+    fullPage: true,
+  });
+  // A deliberate selection is respected; it does not silently fall back again.
+  await mainPeriods.getByRole('button', { name: '7 j', exact: true }).click();
+  await categoryPeriods.getByRole('button', { name: '7 j', exact: true }).click();
+  await expect(page.getByText('Historique insuffisant')).toHaveCount(5);
+  for (const periods of [mainPeriods, categoryPeriods]) {
+    await periods.getByRole('button', { name: '30 j', exact: true }).click();
+  }
+  await page.getByLabel('Devise d’affichage').selectOption('USD');
+  await expect(cards.first().locator('.recharts-area-curve')).toBeVisible();
+  await cards.first().getByRole('link', { name: 'Cryptomonnaies' }).click();
+  await expect(
+    page
+      .getByRole('img', { name: 'Évolution de la valeur : Cryptomonnaies' })
+      .locator('.recharts-area-curve'),
+  ).toBeVisible();
+  expect(reads()).toBe(1);
+});
+
+test('daily seed with 401 snapshots draws curves on every period', async ({ page }) => {
+  const state = dashboardDailyFixture();
+  const latest = state.snapshots.at(-1)!;
+  state.snapshots = Array.from({ length: 401 }, (_, index) => ({
+    ...latest,
+    id: `seed-${index}`,
+    capturedAt: new Date(Date.parse(state.asOf) - (400 - index) * 86400000).toISOString(),
+    totalEur: String(100000 + index * 70 + Math.sin(index / 7) * 1000),
+    totalUsd: String((100000 + index * 70 + Math.sin(index / 7) * 1000) * 1.1),
+  }));
+  // The seed is captured before getState calculates the current situation.
+  state.asOf = new Date(Date.parse(state.asOf) + 3600000).toISOString();
+  const reads = await openDashboard(page, state);
+  const mainPeriods = page.getByRole('group', { name: 'Période du graphique', exact: true });
+  const mainChart = page.getByRole('group', {
+    name: 'Évolution de la valeur : Patrimoine',
+    exact: true,
+  });
+  for (const currency of ['EUR', 'USD']) {
+    await page.getByLabel('Devise d’affichage').selectOption(currency);
+    for (const label of ['7 j', '30 j', '3 M', '1 A', 'Tout', '7 j']) {
+      await mainPeriods.getByRole('button', { name: label, exact: true }).click();
+      await expect
+        .poll(() =>
+          mainChart
+            .locator('.recharts-area-curve')
+            .evaluate((path) => (path as SVGPathElement).getTotalLength()),
+        )
+        .toBeGreaterThan(100);
+    }
+    for (const label of ['7 j', '30 j']) {
+      await page
+        .getByRole('group', { name: 'Période des courbes des catégories' })
+        .getByRole('button', { name: label, exact: true })
+        .click();
+      for (const card of await page.getByTestId('investment-card').all()) {
+        await expect
+          .poll(() =>
+            card
+              .locator('.recharts-area-curve')
+              .evaluate((path) => (path as SVGPathElement).getTotalLength()),
+          )
+          .toBeGreaterThan(100);
+      }
+    }
+  }
+  expect(reads()).toBe(1);
+});
 
 test('periods, currencies, category tooltips and detail links preserve the store', async ({
   page,
@@ -95,19 +240,27 @@ test('periods, currencies, category tooltips and detail links preserve the store
   expect(reads()).toBe(1);
 });
 
-test('treemap supports hover, keyboard, touch, cash navigation and currency', async ({ page }) => {
+test('treemap opens details only on activation, not hover or focus', async ({ page }) => {
   const reads = await openDashboard(page);
   const tiles = page.getByRole('group', { name: 'Répartition par catégories' });
   const crypto = tiles.getByRole('button', { name: /^Cryptomonnaies/ });
   await crypto.hover();
   const details = page.getByTestId('allocation-details');
+  await expect(details).toHaveCount(0);
+  await crypto.focus();
+  await expect(details).toHaveCount(0);
+  await page.keyboard.press('Space');
   await expect(details).toContainText(money(28640.5));
   await expect(details.getByRole('link')).toHaveAttribute('href', '/categories/crypto');
   const stocks = tiles.getByRole('button', { name: /^Bourse/ });
+  await stocks.hover();
+  await expect(details).toContainText(money(28640.5));
   await stocks.focus();
   await page.keyboard.press('Enter');
   await expect(details).toContainText('Bourse');
   await page.keyboard.press('Escape');
+  await expect(details).toHaveCount(0);
+  await crypto.hover();
   await expect(details).toHaveCount(0);
   await page.getByLabel('Devise d’affichage').selectOption('USD');
   await stocks.click();
@@ -115,6 +268,7 @@ test('treemap supports hover, keyboard, touch, cash navigation and currency', as
   await page.setViewportSize({ width: 375, height: 850 });
   await tiles.getByRole('button', { name: /^Liquidités/ }).click();
   await expect(details).toContainText(money(18150, 'USD'));
+  await expectTreemapToFillCard(page);
   await expect(details.getByRole('link')).toHaveAttribute('href', '/portfolio');
   await noOverflow(page);
   await page.screenshot({
