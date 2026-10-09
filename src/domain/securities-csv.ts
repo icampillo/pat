@@ -1,6 +1,7 @@
 import { parse } from 'csv-parse/sync';
 import { z } from 'zod';
 import { decimal as d, precise } from './money';
+import { isinSchema } from './security-identity';
 import { marketSymbolSchema } from '@/modules/prices/securities';
 
 const normalized = (text: string) =>
@@ -11,6 +12,7 @@ const normalized = (text: string) =>
     .toLowerCase()
     .replace(/[\s_-]+/g, ' ');
 const aliases: Record<string, string[]> = {
+  accountId: ['account id', 'identifiant compte'],
   ticker: ['ticker', 'symbol', 'symbole', 'code mnémonique'],
   isin: ['isin', 'code isin'],
   name: ['name', 'nom', 'instrument', 'produit', 'libellé'],
@@ -36,11 +38,9 @@ const aliases: Record<string, string[]> = {
 };
 export const securityCsvRowSchema = z.object({
   line: z.number().int().positive(),
+  accountId: z.uuid().optional(),
   ticker: marketSymbolSchema.optional(),
-  isin: z
-    .string()
-    .regex(/^[A-Z]{2}[A-Z0-9]{9}\d$/, 'ISIN invalide.')
-    .optional(),
+  isin: isinSchema.optional(),
   name: z.string().max(120).optional(),
   quantity: z.string().refine((value) => d(value).gt(0)),
   acquisitionCost: z.string().nullable(),
@@ -151,6 +151,7 @@ export function parseSecuritiesCsv(
           isin: record.isin?.toUpperCase() || undefined,
           name: record.name || undefined,
           platform: record.platform || defaultPlatform,
+          accountId: record.accountId || undefined,
         }),
       );
     } catch (error) {

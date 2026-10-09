@@ -129,7 +129,7 @@ export function matchTransactions(rows: MatchRow[], stored: StoredTransaction[])
         t.type === 'ADJUSTMENT' &&
         t.assetId === row.data.assetId &&
         t.platform === row.data.platform &&
-        t.occurredAt >= row.data.occurredAt,
+        Date.parse(t.occurredAt) >= Date.parse(row.data.occurredAt),
     );
     if (possible.length || inventory.length) {
       const candidates = possible.length ? possible : inventory;
@@ -146,6 +146,14 @@ export function matchTransactions(rows: MatchRow[], stored: StoredTransaction[])
       ['CHANGED', 'AMBIGUOUS'].includes(row.status) &&
       row.candidates.length > 0 &&
       !row.reason?.includes('même référence') &&
+      !stored.some(
+        (t) =>
+          !t.voided &&
+          t.type === 'ADJUSTMENT' &&
+          t.assetId === row.data.assetId &&
+          t.platform === row.data.platform &&
+          Date.parse(t.occurredAt) >= Date.parse(row.data.occurredAt),
+      ) &&
       !stored.some(
         (t) =>
           t.externalReference === row.data.externalReference ||

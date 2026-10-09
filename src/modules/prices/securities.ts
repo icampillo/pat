@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isinSchema } from '@/domain/security-identity';
 import { providerFetch } from '@/server/provider-fetch';
 import { decimal as d } from '@/domain/money';
 
@@ -94,6 +95,14 @@ export async function fetchSecurityQuote(symbol: string): Promise<SecurityQuote>
     ticker,
   );
 }
+export class SecurityListingChoice extends Error {
+  constructor(readonly symbols: string[]) {
+    super(
+      `Plusieurs cotations trouvées : ${symbols.join(', ')}. Sélectionnez explicitement un ticker et relancez l’aperçu.`,
+    );
+  }
+}
+
 export async function resolveSecurity(input: {
   ticker?: string;
   isin?: string;
@@ -107,7 +116,7 @@ export async function resolveSecurity(input: {
     .object({ quotes: z.array(z.object({ symbol: z.string(), quoteType: z.string().optional() })) })
     .parse(
       await yahooJson(
-        `v1/finance/search?q=${encodeURIComponent(input.isin)}&quotesCount=20&newsCount=0`,
+        `v1/finance/search?q=${encodeURIComponent(isinSchema.parse(input.isin))}&quotesCount=20&newsCount=0`,
       ),
     );
   const symbols = [
@@ -124,11 +133,10 @@ export async function resolveSecurity(input: {
       );
     return fetchSecurityQuote(ticker);
   }
-  if (symbols.length !== 1)
+  if (symbols.length > 1) throw new SecurityListingChoice(symbols);
+  if (!symbols.length)
     throw new Error(
-      symbols.length
-        ? `Plusieurs cotations trouvées : ${symbols.slice(0, 6).join(', ')}. Précisez le ticker dans le CSV.`
-        : 'ISIN non trouvé. Précisez le ticker de cotation dans le CSV.',
+      'ISIN non trouvé chez le fournisseur. Vérifiez l’ISIN ; aucune fiche ni prix créé.',
     );
   return fetchSecurityQuote(symbols[0]);
 }

@@ -1,4 +1,5 @@
 'use client';
+import { SecurityPricingRepair } from '@/components/security-pricing-repair';
 import { RealEstateDetail } from '@/components/real-estate-detail';
 import { AssetImage } from '@/components/asset-image';
 import { AssetForm } from '@/components/forms';
@@ -87,6 +88,7 @@ export function AssetDetailPage({ state, asset }: { state: AppState; asset: Asse
               </button>
             </div>
           </div>
+          <SecurityPricingRepair key={`${asset.id}:${asset.version}`} asset={asset} save={save} />
           {asset.category.key === 'REAL_ESTATE' ? (
             <>
               <p className="muted">

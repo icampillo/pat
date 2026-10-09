@@ -1,5 +1,6 @@
 import { decimal as d, precise } from './money';
 import { parseCsvDecimal } from './securities-csv';
+import { isinSchema } from './security-identity';
 import { csvDate } from './transaction-csv';
 
 // Un avis, une exécution, Euronext Paris : les autres présentations sont refusées.
@@ -18,7 +19,7 @@ export function parseBoursoNotice(text: string): Record<string, string> {
   const execution = content.match(
     /Informations sur l'exécution\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2}:\d{2})\s+([\d.,]+)\s+(.+?)\s+Référence\s*:\s*(\d+)/,
   );
-  const isin = content.match(/Code ISIN\s*:\s*([A-Z]{2}[A-Z0-9]{9}\d)\b/);
+  const isin = content.match(/Code ISIN\s*:\s*([A-Z]{2}(?:\s*[A-Z0-9]){9}\s*\d)\b/i);
   const price = content.match(/Cours exécuté\s*:\s*([\d., ]+)\s+(EUR|USD)\b/);
   const venue = content.match(/Lieu d'exécution\s*:\s*(.*?)\s+Montant transaction brut/);
   if (!side || !execution || !isin || !price || venue?.[1] !== 'EURONEXT PARIS') throw invalid();
@@ -68,7 +69,7 @@ export function parseBoursoNotice(text: string): Record<string, string> {
   if (dates.length !== 1) throw new Error('Heure locale d’exécution invalide ou ambiguë.');
   return {
     type,
-    isin: isin[1],
+    isin: isinSchema.parse(isin[1]),
     name: execution[4],
     quantity: parseCsvDecimal(execution[3]),
     unit_price: parseCsvDecimal(price[1]),

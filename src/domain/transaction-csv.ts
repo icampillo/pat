@@ -17,6 +17,7 @@ const normalize = (text: string) =>
     .toLowerCase()
     .replace(/[ _-]+/g, ' ');
 const aliases: Record<string, string[]> = {
+  account_id: ['account id', 'identifiant compte'],
   asset_id: ['asset id'],
   asset_symbol: ['asset symbol', 'ticker', 'symbol', 'symbole'],
   isin: ['isin', 'code isin'],

@@ -13,6 +13,23 @@ import { matchTransactions, sourceReference, type Match } from './import-matchin
 import { AppError } from './errors';
 import { decimal as d, precise } from '@/domain/money';
 import { readBoursoNotice } from './bourso-notice';
+import { db } from './db';
+import { owned } from './portfolio-store';
+import { isinSchema, securityIsin } from '@/domain/security-identity';
+import {
+  resolveSecurity,
+  securityQuoteSchema,
+  marketSymbolSchema,
+  SecurityListingChoice,
+  type SecurityQuote,
+} from '@/modules/prices/securities';
+import { saveSecurityQuote } from './securities-market';
+import {
+  importAccounts,
+  selectImportAccount,
+  matchesImportAsset,
+  persistImportAccount,
+} from './import-accounts';
 
 const previewSchema = z
   .object({
@@ -24,12 +41,20 @@ const previewSchema = z
       .regex(/^[A-Za-z0-9+/]+={0,2}$/)
       .optional(),
     platform: z.string().trim().min(1).max(120).optional(),
+    accountId: z.uuid().optional(),
+    listings: z
+      .array(z.object({ isin: isinSchema, ticker: marketSymbolSchema }).strict())
+      .max(100)
+      .default([]),
     currency: z.enum(['EUR', 'USD']).optional(),
     source: z.enum(['GENERIC', 'BOURSORAMA']).default('GENERIC'),
   })
   .strict()
   .refine((v) => !!v.csv !== !!v.pdfBase64, 'Choisissez un CSV ou un avis PDF.')
-  .refine((v) => !v.pdfBase64 || !!v.platform, 'Choisissez le compte destinataire de l’avis.');
+  .refine(
+    (v) => !v.pdfBase64 || !!v.platform || !!v.accountId,
+    'Choisissez le compte destinataire de l’avis.',
+  );
 const assetPlanSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1).max(120),
@@ -37,12 +62,14 @@ const assetPlanSchema = z.object({
   platform: z.string(),
   currency: z.enum(['EUR', 'USD']),
   isin: z.string().optional(),
-  ticker: z.string().optional(),
+  ticker: marketSymbolSchema,
+  accountId: z.uuid(),
+  quote: securityQuoteSchema,
 });
 type AssetPlan = z.infer<typeof assetPlanSchema>;
 const payloadSchema = z.object({
-  kind: z.literal('TRANSACTION_SYNC_V1'),
-  rows: z.array(z.object({ line: z.number().int(), data: transactionSchema })),
+  kind: z.literal('TRANSACTION_SYNC_V2'),
+  rows: z.array(z.object({ line: z.number().int(), data: transactionSchema, accountId: z.uuid() })),
   assets: z.array(assetPlanSchema),
   result: z.object({ id: z.string(), count: z.number(), skipped: z.number() }).optional(),
 });
@@ -60,7 +87,7 @@ export type ImportPreview = {
     reinforced: number;
     newPositions: number;
   };
-  errors: { line: number; message: string }[];
+  errors: { line: number; message: string; isin?: string; symbols?: string[] }[];
   expiresAt: string;
 };
 const confirmSchema = z
@@ -112,6 +139,61 @@ export async function importCommand(
       }
     }
   }
+  // Les requêtes fournisseur sont hors verrou SQL. L'état est revérifié avant l'aperçu.
+  const initial = path.length === 2 && path[1] === 'preview' ? await owned(userId) : null;
+  const initialAssets = initial
+    ? await db().asset.findMany({
+        where: { portfolioId: initial.id, deletedAt: null },
+        include: { category: true },
+      })
+    : [];
+  const accounts = initial
+    ? importAccounts(
+        initial.id,
+        await db().platform.findMany({ where: { portfolioId: initial.id } }),
+        initialAssets,
+      )
+    : [];
+  const quotes = new Map<number, SecurityQuote>();
+  const quoteErrors = new Map<number, ImportPreview['errors'][number]>();
+  if (initial) {
+    const options = previewSchema.parse(input);
+    if (new Set(options.listings.map((item) => item.isin)).size !== options.listings.length)
+      throw new AppError('IMPORT_INVALID', 'Sélections de cotation répétées.', 422);
+    let rows: ReturnType<typeof parseTransactionCsv>;
+    try {
+      rows = notice ? [{ line: 1, fields: notice }] : parseTransactionCsv(options.csv!);
+    } catch (error) {
+      throw new AppError('CSV_INVALID', (error as Error).message, 422);
+    }
+    const cache = new Map<string, Promise<SecurityQuote>>();
+    for (const { line, fields: row } of rows) {
+      try {
+        if (!row.isin || row.asset_id) continue;
+        const isin = isinSchema.parse(row.isin);
+        const account = selectImportAccount(
+          initial.id,
+          accounts,
+          row.platform || options.platform || '',
+          row.account_id || options.accountId,
+        );
+        if (initialAssets.some((a) => matchesImportAsset(a, account, { isin }))) continue;
+        const ticker =
+          options.listings.find((item) => item.isin === isin)?.ticker || row.asset_symbol;
+        const identity = JSON.stringify([isin, ticker]);
+        if (!cache.has(identity)) cache.set(identity, resolveSecurity({ isin, ticker }));
+        quotes.set(line, await cache.get(identity)!);
+      } catch (error) {
+        quoteErrors.set(line, {
+          line,
+          message: (error as Error).message,
+          ...(error instanceof SecurityListingChoice
+            ? { isin: isinSchema.parse(row.isin), symbols: error.symbols }
+            : {}),
+        });
+      }
+    }
+  }
   try {
     return await mutate(userId, key, `POST/${path.join('/')}`, input, async (tx, portfolio) => {
       if (path.length === 2 && path[1] === 'preview') {
@@ -123,29 +205,39 @@ export async function importCommand(
         } catch (error) {
           throw new AppError('CSV_INVALID', (error as Error).message, 422);
         }
-        const assets = await tx.asset.findMany({
-          where: { portfolioId: portfolio.id, deletedAt: null },
-          include: { category: true },
-        });
+        if (portfolio.version !== initial!.version)
+          throw new AppError('PREVIEW_STALE', 'Le portefeuille a changé. Relancez l’aperçu.', 409);
+        const assets = initialAssets;
         const existing = await history(tx, portfolio.id);
         const plans: AssetPlan[] = [],
-          normalized: { line: number; data: ImportTransaction }[] = [],
+          normalized: { line: number; data: ImportTransaction; accountId: string }[] = [],
           errors: ImportPreview['errors'] = [];
         for (const { line, fields: row } of parsed) {
           try {
-            const platform = row.platform || options.platform || '';
-            const isin = row.isin?.toUpperCase();
-            if (isin && !/^[A-Z]{2}[A-Z0-9]{9}\d$/.test(isin)) throw new Error('ISIN invalide.');
-            const matches = assets.filter((asset) => {
-              const metadata = asset.metadata as Record<string, string>;
-              return row.asset_id
-                ? asset.id === row.asset_id
-                : asset.platform === platform &&
-                    (isin
-                      ? metadata.isin === isin || asset.symbol === isin
-                      : !!row.asset_symbol &&
-                        asset.symbol.toUpperCase() === row.asset_symbol.toUpperCase());
-            });
+            const account = selectImportAccount(
+              portfolio.id,
+              accounts,
+              row.platform || options.platform || '',
+              row.account_id || options.accountId,
+            );
+            const isin = row.isin ? isinSchema.parse(row.isin) : undefined;
+            let matches = assets.filter((asset) =>
+              matchesImportAsset(asset, account, {
+                assetId: row.asset_id,
+                isin,
+                ticker: row.asset_symbol,
+              }),
+            );
+            if (!matches.length && isin && !row.asset_id && quotes.has(line)) {
+              matches = assets.filter(
+                (asset) =>
+                  asset.category.key === 'SECURITIES' &&
+                  !securityIsin(asset) &&
+                  matchesImportAsset(asset, account, { ticker: quotes.get(line)!.symbol }),
+              );
+            }
+            // Conserve le libellé historique de la position pour le replay et les empreintes.
+            const platform = matches[0]?.platform ?? account.name;
             if (matches.length > 1)
               throw new Error('Plusieurs actifs correspondent sur ce compte. Précisez asset_id.');
             let assetId = matches[0]?.id ?? null;
@@ -154,15 +246,27 @@ export async function importCommand(
                 throw new Error(
                   'Actif introuvable. Créez sa fiche ou renseignez isin et name pour créer une fiche Bourse.',
                 );
-              assetId = plannedAssetId(portfolio.id, platform, isin);
+              if (quoteErrors.has(line)) {
+                errors.push(quoteErrors.get(line)!);
+                continue;
+              }
+              const quote = quotes.get(line);
+              if (!quote) throw new Error('Cotation non vérifiée. Recréez l’aperçu.');
+              if (quote.currency !== (row.currency || options.currency))
+                throw new Error(
+                  'La devise de la cotation diffère de celle de la transaction. Sélectionnez la bonne cotation.',
+                );
+              assetId = plannedAssetId(portfolio.id, account.id, isin);
               const plan = assetPlanSchema.parse({
                 id: assetId,
                 name: row.name,
-                symbol: row.asset_symbol || isin,
+                symbol: quote.symbol,
                 platform,
                 currency: row.currency || options.currency,
                 isin,
-                ticker: row.asset_symbol,
+                ticker: quote.symbol,
+                accountId: account.id,
+                quote,
               });
               const previous = plans.find((p) => p.id === assetId);
               if (
@@ -172,7 +276,7 @@ export async function importCommand(
                 throw new Error('Cotation ou devise incohérente pour le même produit.');
               if (!previous) plans.push(plan);
             }
-            const data = normalizeCsvTransaction(row, assetId, options);
+            const data = normalizeCsvTransaction({ ...row, platform }, assetId, options);
             // Les anciennes références non namespacées restent valides sur leur compte.
             const legacy = existing.find(
               (t) =>
@@ -180,10 +284,19 @@ export async function importCommand(
                 t.externalReference &&
                 t.externalReference === data.externalReference,
             );
+            const oldReference = sourceReference(
+              options.source,
+              data.platform,
+              data.externalReference,
+            );
             data.externalReference =
               legacy?.externalReference ??
-              sourceReference(options.source, data.platform, data.externalReference);
-            normalized.push({ line, data });
+              (existing.some(
+                (t) => t.platform === data.platform && t.externalReference === oldReference,
+              )
+                ? oldReference
+                : sourceReference(options.source, account.id, data.externalReference));
+            normalized.push({ line, data, accountId: account.id });
           } catch (error) {
             errors.push({
               line,
@@ -295,7 +408,7 @@ export async function importCommand(
             portfolioId: portfolio.id,
             hash: createHash('sha256').update(JSON.stringify(options)).digest('hex'),
             ledgerVersion: portfolio.version + 1,
-            payload: json({ kind: 'TRANSACTION_SYNC_V1', rows: normalized, assets: plans }),
+            payload: json({ kind: 'TRANSACTION_SYNC_V2', rows: normalized, assets: plans }),
             errors: json(errors),
             expiresAt,
           },
@@ -354,6 +467,59 @@ export async function importCommand(
           matches.some((r) => ['CHANGED', 'AMBIGUOUS'].includes(r.status))
         )
           throw new AppError('PREVIEW_STALE', 'Le journal a changé. Recréez l’aperçu.', 409);
+        const currentAssets = await tx.asset.findMany({
+          where: { portfolioId: portfolio.id, deletedAt: null },
+          include: { category: true },
+        });
+        const currentAccounts = importAccounts(
+          portfolio.id,
+          await tx.platform.findMany({ where: { portfolioId: portfolio.id } }),
+          currentAssets,
+        );
+        for (const row of selected) {
+          const saved = payload.rows.find((r) => r.line === row.line)!;
+          const plan = payload.assets.find((p) => p.id === row.data.assetId);
+          const account =
+            currentAccounts.find((a) => a.id === saved.accountId) ??
+            selectImportAccount(portfolio.id, currentAccounts, plan?.platform ?? row.data.platform);
+          if (account.id !== saved.accountId)
+            throw new AppError('PREVIEW_STALE', 'Le compte a changé. Recréez l’aperçu.', 409);
+          if (plan) {
+            const other = currentAssets.find(
+              (a) =>
+                a.id !== plan.id &&
+                (matchesImportAsset(a, account, { isin: plan.isin }) ||
+                  (a.category.key === 'SECURITIES' &&
+                    !securityIsin(a) &&
+                    matchesImportAsset(a, account, { ticker: plan.ticker }))),
+            );
+            const sameId = currentAssets.find((a) => a.id === plan.id);
+            if (
+              sameId &&
+              (!matchesImportAsset(sameId, account, { isin: plan.isin }) ||
+                sameId.currency !== plan.currency)
+            )
+              throw new AppError('PREVIEW_STALE', 'La fiche a changé. Recréez l’aperçu.', 409);
+            if (other)
+              throw new AppError(
+                'PREVIEW_STALE',
+                'Une position a été créée entre-temps. Recréez l’aperçu.',
+                409,
+              );
+          } else if (
+            row.data.assetId &&
+            !currentAssets.some((a) =>
+              matchesImportAsset(a, account, { assetId: row.data.assetId! }),
+            )
+          ) {
+            throw new AppError(
+              'PREVIEW_STALE',
+              'La position ou le compte a changé. Recréez l’aperçu.',
+              409,
+            );
+          }
+          await persistImportAccount(tx, portfolio.id, account);
+        }
         for (const plan of payload.assets.filter((p) =>
           selected.some((r) => r.data.assetId === p.id),
         )) {
@@ -362,7 +528,7 @@ export async function importCommand(
           const category = await tx.assetCategory.findUniqueOrThrow({
             where: { portfolioId_key: { portfolioId: portfolio.id, key: 'SECURITIES' } },
           });
-          await tx.asset.create({
+          const created = await tx.asset.create({
             data: {
               id: plan.id,
               portfolioId: portfolio.id,
@@ -371,19 +537,19 @@ export async function importCommand(
               symbol: plan.symbol,
               currency: plan.currency,
               platform: plan.platform,
+              externalId: plan.isin,
               metadata: {
+                accountId: plan.accountId,
+                exchange: plan.quote.exchange,
+                instrumentType: plan.quote.instrumentType,
                 isin: plan.isin,
                 ticker: plan.ticker,
-                pricingMode: 'MANUAL',
+                pricingMode: 'SECURITIES_MARKET',
                 costBasis: 'KNOWN',
               },
             },
           });
-          await tx.platform.upsert({
-            where: { portfolioId_name: { portfolioId: portfolio.id, name: plan.platform } },
-            create: { portfolioId: portfolio.id, name: plan.platform },
-            update: {},
-          });
+          await saveSecurityQuote(tx, created, plan.quote);
         }
         for (const row of selected) await insertTransaction(tx, portfolio.id, userId, row.data);
         if (selected.length) await validateLedger(tx, portfolio.id);

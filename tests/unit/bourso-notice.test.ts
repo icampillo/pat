@@ -34,6 +34,25 @@ it('lit un avis avec référence broker, cours précis, brut arrondi et heure Pa
     '2026-01-15T08:58:14.000Z',
   );
 });
+it('lit le cas WPEA du 07/10/2026, y compris un ISIN PDF espacé et en minuscules', () => {
+  const real = notice
+    .replace('15/09/2026', '07/10/2026')
+    .replace('55 ETF DE TEST', '30 iShares MSCI World Swap PEA UCITS ETF')
+    .replaceAll('6,8890', '7,1930')
+    .replaceAll('378,90', '215,79')
+    .replace('0,00 EUR 0,00 EUR 0,00 EUR\nMontant net', '1,08 EUR 0,00 EUR 1,08 EUR\nMontant net')
+    .replace('débit de votre compte 215,79', 'débit de votre compte 216,87')
+    .replace('IE0002XZSHO1', 'ie0002 xzsho1');
+  expect(parseBoursoNotice(real)).toMatchObject({
+    isin: 'IE0002XZSHO1',
+    quantity: '30',
+    unit_price: '7.193',
+    amount: '215.79',
+    fees: '1.08',
+    occurred_at: '2026-10-07T07:58:14.000Z',
+    name: 'iShares MSCI World Swap PEA UCITS ETF',
+  });
+});
 it('valide une vente et ses frais sans confondre net et brut', () => {
   const sell = notice
     .replace('ACHAT', 'VENTE')

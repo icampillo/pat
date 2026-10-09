@@ -59,6 +59,7 @@ export const metadataSchema = z
       .optional(),
     gramPrice: nonnegative.optional(),
     premium: nonnegative.optional(),
+    accountId: z.uuid().optional(),
     ticker: text.optional(),
     exchange: text.optional(),
     isin: text.optional(),

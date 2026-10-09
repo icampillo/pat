@@ -50,13 +50,23 @@ export function ImportSummary({ preview }: { preview: ImportPreview }) {
     </div>
   );
 }
-export function ImportPanel({ save, eurUsd }: { save: SaveAction; eurUsd: string | null }) {
+export function ImportPanel({
+  save,
+  eurUsd,
+  accounts = [],
+}: {
+  save: SaveAction;
+  eurUsd: string | null;
+  accounts?: { id: string; name: string }[];
+}) {
   const [csv, setCsv] = useState(''),
     [pdfBase64, setPdfBase64] = useState(''),
     [preview, setPreview] = useState<ImportPreview | null>(null),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState('');
+  const [accountId, setAccountId] = useState('');
+  const [listings, setListings] = useState<Record<string, string>>({});
   const [source, setSource] = useState('GENERIC'),
     [platform, setPlatform] = useState(''),
     [currency, setCurrency] = useState('EUR');
@@ -95,7 +105,8 @@ export function ImportPanel({ save, eurUsd }: { save: SaveAction; eurUsd: string
         Si vos positions initiales sont déjà enregistrées, importez uniquement les opérations qui ne
         sont pas incluses dans cet inventaire. Un relevé de positions n’est pas un avis d’opéré. Les
         montants sont bruts, les frais séparés. Un ISIN et un nom permettent de créer une nouvelle
-        fiche Bourse ; sinon, créez la fiche avant l’import.
+        fiche Bourse avec une cotation vérifiée ; une cotation inconnue bloque la création, et
+        plusieurs cotations nécessitent votre sélection.
       </p>
       <a className="text-link" href="/import-transactions.csv" download>
         Télécharger le modèle CSV
@@ -116,7 +127,29 @@ export function ImportPanel({ save, eurUsd }: { save: SaveAction; eurUsd: string
           </select>
         </label>
         <label>
-          Compte par défaut
+          Compte destinataire
+          <select
+            value={accountId}
+            disabled={busy}
+            onChange={(e) => {
+              setAccountId(e.target.value);
+              reset();
+            }}
+          >
+            <option value="">Nouveau compte / comptes indiqués dans le CSV</option>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+          <small>
+            Le compte sélectionné est prioritaire sur les libellés du fichier. Aucun rapprochement
+            entre comptes distincts.
+          </small>
+        </label>
+        <label>
+          Nom du nouveau compte / compte CSV par défaut
           <input
             value={platform}
             maxLength={120}
@@ -127,7 +160,10 @@ export function ImportPanel({ save, eurUsd }: { save: SaveAction; eurUsd: string
               reset();
             }}
           />
-          <small>Distinguez PEA et CTO. La colonne platform / compte reste prioritaire.</small>
+          <small>
+            Sans compte sélectionné, le libellé doit correspondre exactement ; PEA et CTO restent
+            séparés.
+          </small>
         </label>
         <label>
           Devise par défaut
@@ -183,7 +219,7 @@ export function ImportPanel({ save, eurUsd }: { save: SaveAction; eurUsd: string
       </div>
       <button
         className="btn"
-        disabled={(!csv && !pdfBase64) || busy || (!!pdfBase64 && !platform.trim())}
+        disabled={(!csv && !pdfBase64) || busy || (!!pdfBase64 && !accountId && !platform.trim())}
         onClick={() =>
           run(async () => {
             reset();
@@ -191,6 +227,10 @@ export function ImportPanel({ save, eurUsd }: { save: SaveAction; eurUsd: string
               (await save('imports/preview', 'POST', {
                 ...(pdfBase64 ? { pdfBase64 } : { csv }),
                 source,
+                ...(accountId ? { accountId } : {}),
+                listings: Object.entries(listings)
+                  .filter(([, ticker]) => ticker)
+                  .map(([isin, ticker]) => ({ isin, ticker })),
                 ...(platform.trim() ? { platform: platform.trim() } : {}),
                 currency,
               })) as ImportPreview,
@@ -220,6 +260,25 @@ export function ImportPanel({ save, eurUsd }: { save: SaveAction; eurUsd: string
                 <li key={i}>
                   {e.line ? `Ligne ${e.line} : ` : ''}
                   {e.message}
+                  {e.isin && e.symbols && (
+                    <label>
+                      Cotation pour {e.isin}
+                      <select
+                        value={listings[e.isin] || ''}
+                        disabled={busy}
+                        onChange={(event) =>
+                          setListings({ ...listings, [e.isin!]: event.target.value })
+                        }
+                      >
+                        <option value="">Choisir une cotation puis relancer l’aperçu</option>
+                        {e.symbols.map((symbol) => (
+                          <option key={symbol} value={symbol}>
+                            {symbol}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                 </li>
               ))}
             </ul>

@@ -1,3 +1,4 @@
+import { importAccounts } from './import-accounts';
 import { snapshotDay } from '@/domain/snapshot-day';
 import { db } from './db';
 import type { Transaction } from '@/generated/prisma/client';
@@ -386,7 +387,13 @@ export async function getState(userId: string) {
               new Date(t.occurredAt).getTime() <= s.capturedAt.getTime(),
           ),
       );
+      const accounts = importAccounts(
+        portfolio.id,
+        await tx.platform.findMany({ where: { portfolioId: portfolio.id } }),
+        state.rows,
+      );
       return json({
+        accounts,
         portfolio,
         ...state,
         rows: state.rows.map((row) => ({

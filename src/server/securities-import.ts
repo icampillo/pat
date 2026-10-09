@@ -8,9 +8,12 @@ import { saveSecurityQuote } from './securities-market';
 import { parseSecuritiesCsv, securityCsvRowSchema } from '@/domain/securities-csv';
 import { resolveSecurity, securityQuoteSchema } from '@/modules/prices/securities';
 import { decimal as d, precise } from '@/domain/money';
+import { securityIsin } from '@/domain/security-identity';
+import { matchesImportAsset, selectImportAccount, persistImportAccount } from './import-accounts';
 import { AppError } from './errors';
 
 const rowSchema = securityCsvRowSchema.extend({
+  accountId: z.uuid(),
   quote: securityQuoteSchema,
   existingAssetId: z.string().nullable(),
 });
@@ -32,9 +35,10 @@ export async function previewSecurities(
   input: unknown,
   key: string | null,
 ): Promise<SecuritiesPreview> {
-  const { csv, platform, boursoCurrency } = z
+  const { csv, platform, boursoCurrency, accountId } = z
     .object({
       csv: z.string().max(200_000),
+      accountId: z.uuid().optional(),
       platform: z.string().trim().min(1).max(120).default('BoursoBank'),
       boursoCurrency: z.enum(['EUR', 'USD']).default('EUR'),
     })
@@ -62,33 +66,43 @@ export async function previewSecurities(
     await Promise.all(
       parsed.rows.slice(offset, offset + 4).map(async (row) => {
         try {
-          const identity = `${row.ticker || ''}:${row.isin || ''}`;
-          if (!cache.has(identity)) cache.set(identity, resolveSecurity(row));
-          const quote = await cache.get(identity)!;
-          if (row.quoteCurrency && quote.currency !== row.quoteCurrency)
-            throw new Error(
-              `La cotation est en ${quote.currency}, mais le relevé est déclaré en ${row.quoteCurrency}. Vérifiez la devise et la place de cotation.`,
-            );
+          const account = selectImportAccount(
+            initial.portfolio.id,
+            initial.accounts,
+            row.platform,
+            row.accountId || accountId,
+          );
           const matches = initial.rows.filter(
-            (asset: {
-              deletedAt: string | null;
-              category: { key: string };
-              platform: string;
-              symbol: string;
-              metadata: Record<string, string>;
-            }) =>
+            (asset: Parameters<typeof matchesImportAsset>[0] & { deletedAt: string | null }) =>
               !asset.deletedAt &&
               asset.category.key === 'SECURITIES' &&
-              asset.platform === row.platform &&
-              (asset.metadata.ticker?.toUpperCase() === quote.symbol ||
-                asset.symbol.toUpperCase() === quote.symbol ||
-                (row.isin && asset.metadata.isin === row.isin)),
+              matchesImportAsset(asset, account, row),
           );
           if (matches.length > 1)
             throw new Error(
               'Plusieurs positions existantes correspondent à ce produit et ce compte.',
             );
-          const existing = matches[0];
+          let existing = matches[0];
+          const ticker = row.ticker || existing?.metadata.ticker;
+          const identity = `${ticker || ''}:${row.isin || ''}`;
+          if (!cache.has(identity)) cache.set(identity, resolveSecurity({ ...row, ticker }));
+          const quote = await cache.get(identity)!;
+          if (row.quoteCurrency && quote.currency !== row.quoteCurrency)
+            throw new Error(
+              `La cotation est en ${quote.currency}, mais le relevé est déclaré en ${row.quoteCurrency}. Vérifiez la devise et la place de cotation.`,
+            );
+          if (!existing && row.isin) {
+            const legacy = initial.rows.filter(
+              (asset: Parameters<typeof matchesImportAsset>[0] & { deletedAt: string | null }) =>
+                !asset.deletedAt &&
+                asset.category.key === 'SECURITIES' &&
+                !securityIsin(asset) &&
+                matchesImportAsset(asset, account, { ticker: quote.symbol }),
+            );
+            if (legacy.length > 1)
+              throw new Error('Plusieurs positions correspondent à cette cotation et ce compte.');
+            existing = legacy[0];
+          }
           if (existing) {
             if (existing.status === 'ARCHIVED')
               throw new AppError(
@@ -98,7 +112,8 @@ export async function previewSecurities(
               );
             if (
               existing.currency !== quote.currency ||
-              (existing.metadata.ticker && existing.metadata.ticker !== quote.symbol)
+              (existing.metadata.ticker &&
+                existing.metadata.ticker.trim().toUpperCase() !== quote.symbol)
             )
               throw new Error(
                 'Une autre cotation de ce produit est déjà suivie sur ce compte. Vérifiez le ticker et la devise.',
@@ -115,7 +130,13 @@ export async function previewSecurities(
                 'Une position différente existe déjà pour ce produit et ce compte. Utilisez les transactions pour la mettre à jour ; cet import ne double ni ne remplace vos positions.',
               );
           }
-          rows.push({ ...row, quote, existingAssetId: existing?.id ?? null });
+          rows.push({
+            ...row,
+            accountId: account.id,
+            platform: existing?.platform ?? account.name,
+            quote,
+            existingAssetId: existing?.id ?? null,
+          });
         } catch (error) {
           errors.push({
             line: row.line,
@@ -131,7 +152,7 @@ export async function previewSecurities(
   rows.sort((a, b) => a.line - b.line);
   const identities = new Set<string>();
   for (const row of rows) {
-    const identity = `${row.platform}:${row.quote.symbol}`;
+    const identity = `${row.accountId}:${row.isin || row.quote.symbol}`;
     if (identities.has(identity))
       errors.push({
         line: row.line,
@@ -258,6 +279,7 @@ export async function confirmSecurities(
       for (const row of payload.rows) {
         if (row.existingAssetId) continue;
         const quote = row.quote;
+        await persistImportAccount(tx, portfolio.id, { id: row.accountId, name: row.platform });
         const asset = await tx.asset.create({
           data: {
             portfolioId: portfolio.id,
@@ -268,6 +290,7 @@ export async function confirmSecurities(
             platform: row.platform,
             externalId: row.isin || quote.symbol,
             metadata: {
+              accountId: row.accountId,
               ticker: quote.symbol,
               exchange: quote.exchange,
               ...(row.isin ? { isin: row.isin } : {}),

@@ -100,6 +100,7 @@ export type AssetCategoryDetails = {
   assets: CategoryPosition[];
 };
 export type AppState = {
+  accounts?: { id: string; name: string }[];
   onchain: import('./wallets').OnchainState;
   asOf: string;
   historyRevised: boolean;

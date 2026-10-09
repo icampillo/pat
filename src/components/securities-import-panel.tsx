@@ -11,10 +11,13 @@ import { categoryMoney } from './asset-category-card';
 export function SecuritiesImportPanel({
   save,
   eurUsd,
+  accounts = [],
 }: {
+  accounts?: { id: string; name: string }[];
   save: SaveAction;
   eurUsd: string | null;
 }) {
+  const [accountId, setAccountId] = useState('');
   const [csv, setCsv] = useState(''),
     [platform, setPlatform] = useState('BoursoBank'),
     [boursoCurrency, setCurrency] = useState('EUR');
@@ -55,7 +58,26 @@ export function SecuritiesImportPanel({
       </div>
       <div className="form-grid">
         <label>
-          Compte / courtier
+          Compte existant
+          <select
+            value={accountId}
+            disabled={busy}
+            onChange={(e) => {
+              setAccountId(e.target.value);
+              reset();
+            }}
+          >
+            <option value="">Nouveau compte / comptes du CSV</option>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+          <small>La sélection explicite prime sur le libellé du relevé.</small>
+        </label>
+        <label>
+          Nouveau compte / courtier
           <input
             value={platform}
             disabled={busy}
@@ -117,6 +139,7 @@ export function SecuritiesImportPanel({
                 (await save('securities/imports/preview', 'POST', {
                   csv,
                   platform,
+                  ...(accountId ? { accountId } : {}),
                   boursoCurrency,
                 })) as SecuritiesPreview,
               );

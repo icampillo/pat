@@ -216,7 +216,7 @@ describe('Matching transactionnel', () => {
       matchTransactions(rows(buy()), [
         stored(buy({ type: 'ADJUSTMENT', occurredAt: '2025-04-01T00:00:00.000Z' })),
       ])[0],
-    ).toMatchObject({ status: 'AMBIGUOUS', canCreate: true });
+    ).toMatchObject({ status: 'AMBIGUOUS', canCreate: false });
     expect(
       matchTransactions(rows(buy({ occurredAt: '2025-05-01T00:00:00.000Z' })), [
         stored(buy({ type: 'ADJUSTMENT', occurredAt: '2025-04-01T00:00:00.000Z' })),
