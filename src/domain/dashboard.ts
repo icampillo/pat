@@ -5,6 +5,7 @@ import {
   numeric,
 } from './categories';
 import type { CategoryHistoryPoint } from '@/shared/types';
+import { snapshotDay } from './snapshot-day';
 
 // Prefer seven days, but do not hide saved history behind an empty initial window.
 // Only the chart's initial selection changes; seven-day value comparisons are independent.
@@ -31,20 +32,31 @@ export function valueChange7d(
   asOf: string,
   revised = false,
 ) {
+  const today = snapshotDay(asOf);
+
+  const target = new Date(`${today}T00:00:00Z`);
+  target.setUTCDate(target.getUTCDate() - 7);
+
+  const targetDay = target.toISOString().slice(0, 10);
+
   const baseline = history.find(
-    (point) => Date.parse(point.date) === Date.parse(asOf) - 7 * 86400000,
+    (point) => snapshotDay(point.date) === targetDay,
   );
+
   const reason = revised
     ? 'Historique révisé ou périmètre modifié : comparaison fiable indisponible.'
     : current === null
       ? 'Valorisation actuelle incomplète.'
       : !baseline || baseline.value === null
-        ? 'Aucune valorisation complète exactement 7 jours avant cette situation. Une capture comparable à cette date est nécessaire.'
+        ? 'Aucune valorisation complète disponible 7 jours auparavant.'
         : baseline.value <= 0
-          ? 'Pourcentage indéfinissable : la valeur de référence est nulle ou négative.'
+          ? 'Pourcentage indéfinissable : valeur de référence nulle ou négative.'
           : null;
+
   return {
-    percent: reason ? null : calculatePerformance(current, baseline!.value).percent,
+    percent: reason
+      ? null
+      : calculatePerformance(current, baseline!.value).percent,
     reason,
     baselineDate: baseline?.date ?? null,
   };

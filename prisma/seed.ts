@@ -6,7 +6,8 @@ import { createUser } from '../src/server/provision';
 import { insertTransaction } from '../src/server/portfolio';
 import { capture } from '../src/server/portfolio-query';
 import { precise, decimal as d } from '../src/domain/money';
-const email = 'demo@patrimoine.local';
+// const email = 'demo@patrimoine.local';
+const email = 'demo-recent@patrimoine.local';
 const existing = await db().user.findUnique({ where: { email } });
 if (existing) {
   console.log('Le compte de démonstration existe déjà. Aucune donnée modifiée.');
