@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Layers3, ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 export default function Login() {
   const router = useRouter();
   const [error, setError] = useState(''),
@@ -35,10 +35,10 @@ export default function Login() {
     <main className="login">
       <section className="login-story">
         <div className="brand">
-          <span className="brand-icon">
-            <Layers3 size={23} />
+          <span className="brand-icon" aria-hidden="true">
+            P
           </span>
-          patrimoine<span className="brand-dot">.</span>
+          Patrimoine
         </div>
         <div>
           <span className="eyebrow">UNE VUE D’ENSEMBLE, ENFIN.</span>

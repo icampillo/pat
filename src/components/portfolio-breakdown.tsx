@@ -1,3 +1,5 @@
+import { TableScroll } from '@/components/ui/table-scroll';
+import { CategoryBadge } from '@/components/workspace/display';
 import { sortByValue } from '@/domain/value-sort';
 import Link from '@/components/workspace/link';
 import { categorySlug } from '@/domain/categories';
@@ -58,7 +60,7 @@ export function PortfolioBreakdown({
           <div className="section-title">
             <h2>Résultats par catégorie</h2>
           </div>
-          <div className="table-scroll">
+          <TableScroll label="Résultats par catégorie">
             <table>
               <thead>
                 <tr>
@@ -75,7 +77,7 @@ export function PortfolioBreakdown({
                     <tr key={c.id}>
                       <td>
                         <Link className="text-link" href={`/categories/${categorySlug(c.key)}`}>
-                          {c.label}
+                          <CategoryBadge category={c} />
                         </Link>
                       </td>
                       <td className="num">{money(combined, currency)}</td>
@@ -87,7 +89,7 @@ export function PortfolioBreakdown({
                 })}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         </section>
         <section className="panel">
           <div className="section-title">
@@ -96,7 +98,7 @@ export function PortfolioBreakdown({
               <p>Devise de cotation · valeur convertie en {currency}</p>
             </div>
           </div>
-          <div className="table-scroll">
+          <TableScroll label="Répartition par devise">
             <table>
               <thead>
                 <tr>
@@ -126,7 +128,7 @@ export function PortfolioBreakdown({
                 })}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         </section>
       </div>
     </>

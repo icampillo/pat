@@ -1,6 +1,7 @@
 'use client';
 import { decimal as d } from '@/domain/money';
 import type { AssetView } from '@/shared/types';
+import { categoryStyle } from '@/components/ui/category-appearance';
 import { Shapes } from 'lucide-react';
 import Link from '@/components/workspace/link';
 export const money = (value: string | number | null, currency = 'EUR') =>
@@ -17,10 +18,7 @@ export const date = (value: string) =>
   new Date(value).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
 export function AssetAvatar({ asset }: { asset: AssetView }) {
   return (
-    <span
-      className="asset-avatar"
-      style={{ background: `${asset.category.color}15`, color: asset.category.color }}
-    >
+    <span className="asset-avatar" style={categoryStyle(asset.category.key)}>
       {asset.symbol === 'BTC' ? '₿' : asset.symbol === 'ETH' ? 'Ξ' : asset.symbol.slice(0, 2)}
     </span>
   );
@@ -80,5 +78,13 @@ export function Empty({
         {label}
       </Link>
     </div>
+  );
+}
+
+export function CategoryBadge({ category }: { category: { key: string; label: string } }) {
+  return (
+    <span className="category-pill" style={categoryStyle(category.key)}>
+      {category.label}
+    </span>
   );
 }

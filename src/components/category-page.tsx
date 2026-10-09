@@ -1,8 +1,9 @@
 'use client';
+import { TableScroll } from '@/components/ui/table-scroll';
 import { sortByValue } from '@/domain/value-sort';
 import { useState } from 'react';
 import Link from '@/components/workspace/link';
-import { ArrowLeft } from 'lucide-react';
+import { categoryAppearance, categoryStyle } from '@/components/ui/category-appearance';
 import {
   calculateCategoryWeight,
   calculatePerformance,
@@ -18,7 +19,6 @@ import {
   trendClass,
 } from './asset-category-card';
 
-const colors = ['#6556dc', '#218a89', '#b7791f', '#bb5695', '#507da8', '#849267'];
 export function CategoryPage({
   details,
   currency,
@@ -30,6 +30,10 @@ export function CategoryPage({
 }) {
   const [period, setPeriod] = useState('30d');
   const { category } = details;
+  const { color } = categoryAppearance(category.slug);
+  // Shades stay in the category family; names and values identify each position.
+  const positionColor = (index: number) =>
+    `color-mix(in srgb, ${color} ${100 - (index % 5) * 14}%, white)`;
   const assets = sortByValue(details.assets, (asset) => asset.value);
   const estate = category.realEstate;
   const points = filterCategoryHistory(details.history, period, asOf);
@@ -37,23 +41,13 @@ export function CategoryPage({
     .map((asset, index) => ({
       name: asset.name,
       value: asset.value!,
-      color: colors[index % colors.length],
+      color: positionColor(index),
     }))
     .filter((slice) => slice.value !== null && slice.value > 0);
   const incomplete = category.totalValue === null;
   const negativeValues = assets.some((asset) => asset.value !== null && asset.value < 0);
   return (
-    <>
-      <Link className="text-link category-back" href="/dashboard">
-        <ArrowLeft size={16} /> Tableau de bord
-      </Link>
-      {estate && (
-        <div className="heading-actions">
-          <Link className="btn primary" href="/assets/new?category=REAL_ESTATE">
-            Ajouter un bien
-          </Link>
-        </div>
-      )}
+    <div style={categoryStyle(category.slug)}>
       <div className="metrics category-metrics">
         <section className="metric">
           <div className="metric-top">{estate ? 'Valeur nette immobilière' : 'Valeur totale'}</div>
@@ -132,7 +126,7 @@ export function CategoryPage({
               ))}
             </div>
           </div>
-          <EvolutionChart points={points} currency={currency} label={category.name} />
+          <EvolutionChart points={points} currency={currency} label={category.name} color={color} />
           <p className="chart-foot">Historique quotidien · {currency}</p>
         </section>
         <section className="panel allocation">
@@ -154,7 +148,7 @@ export function CategoryPage({
           <div className="legend category-legend">
             {assets.map((asset, index) => (
               <div key={asset.id}>
-                <span className="dot" style={{ background: colors[index % colors.length] }} />
+                <span className="dot" style={{ background: positionColor(index) }} />
                 <span>{asset.name}</span>
                 <strong>
                   {categoryPercent(calculateCategoryWeight(asset.value, category.totalValue))}
@@ -176,12 +170,7 @@ export function CategoryPage({
             </p>
           </div>
         </div>
-        <div
-          className="table-scroll"
-          tabIndex={0}
-          role="region"
-          aria-label="Actifs de la catégorie"
-        >
+        <TableScroll label="Actifs de la catégorie">
           {estate ? (
             <table>
               <thead>
@@ -264,7 +253,7 @@ export function CategoryPage({
               </tbody>
             </table>
           )}
-        </div>
+        </TableScroll>
         {!assets.length && (
           <div className="empty">
             <h3>Aucun actif détenu dans cette catégorie</h3>
@@ -274,6 +263,6 @@ export function CategoryPage({
           </div>
         )}
       </section>
-    </>
+    </div>
   );
 }

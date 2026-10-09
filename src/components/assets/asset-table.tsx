@@ -1,15 +1,24 @@
 'use client';
+import { TableScroll } from '@/components/ui/table-scroll';
 import { sortByValue } from '@/domain/value-sort';
 import type { AssetView } from '@/shared/types';
 import { ChevronRight } from 'lucide-react';
 import Link from '@/components/workspace/link';
 
-import { AssetAvatar, Empty, money, qty, Signed, date } from '@/components/workspace/display';
+import {
+  CategoryBadge,
+  AssetAvatar,
+  Empty,
+  money,
+  qty,
+  Signed,
+  date,
+} from '@/components/workspace/display';
 export function AssetTable({ rows, currency }: { rows: AssetView[]; currency: 'EUR' | 'USD' }) {
   const val = (a: AssetView) => (currency === 'EUR' ? a.valueEur : a.valueUsd);
   const gain = (a: AssetView) => (currency === 'EUR' ? a.gainEur : a.gainUsd);
   return (
-    <div className="table-scroll">
+    <TableScroll label="Actifs du portefeuille">
       <table>
         <thead>
           <tr>
@@ -44,12 +53,7 @@ export function AssetTable({ rows, currency }: { rows: AssetView[]; currency: 'E
                 </Link>
               </td>
               <td>
-                <span
-                  className="category-pill"
-                  style={{ color: a.category.color, background: `${a.category.color}10` }}
-                >
-                  {a.category.label}
-                </span>
+                <CategoryBadge category={a.category} />
               </td>
               <td className="num">{qty(a.quantity)}</td>
               <td className="num">
@@ -85,6 +89,6 @@ export function AssetTable({ rows, currency }: { rows: AssetView[]; currency: 'E
           label="Ajouter un actif"
         />
       )}
-    </div>
+    </TableScroll>
   );
 }

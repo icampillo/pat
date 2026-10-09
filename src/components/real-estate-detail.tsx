@@ -1,10 +1,11 @@
 'use client';
+import { TableScroll } from '@/components/ui/table-scroll';
 import { sortByValue } from '@/domain/value-sort';
 import { useMemo, useState } from 'react';
 import { amortization } from '@/domain/mortgage';
 import { propertyTypes, propertyUsages } from '@/shared/real-estate';
 import type { AssetView } from '@/shared/types';
-import { money } from './workspace/display';
+import { date, money } from './workspace/display';
 import { PriceHistoryList } from './assets/price-history';
 
 export function RealEstateDetail({ asset }: { asset: AssetView }) {
@@ -54,14 +55,14 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
             ['Localisation', `${property.city}, ${property.country}`],
             ['Adresse', property.address || '—'],
             ['Détention', `${property.ownershipPercent} %`],
-            ['Acquisition', property.purchaseDate],
+            ['Acquisition', date(property.purchaseDate)],
             ['Prix d’acquisition du bien', amount(property.purchasePrice)],
             ['Frais d’acquisition', amount(property.acquisitionFees)],
             ['Travaux initiaux', amount(property.initialRenovations)],
             ['Coût d’acquisition du bien', amount(value.acquisitionCost)],
             ['Prix d’acquisition détenu', amount(value.acquisitionOwnedValue)],
             ['Plus-value brute sur la part détenue', amount(value.grossGain)],
-            ['Dernière estimation', asset.priceDate?.slice(0, 10) ?? 'Inconnue'],
+            ['Dernière estimation', asset.priceDate ? date(asset.priceDate) : 'Inconnue'],
           ])}
           <p className="small muted">
             La plus-value brute mesure uniquement la variation du prix du bien. L’equity comprend
@@ -79,7 +80,7 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
                 ['Apport personnel', amount(loan.downPayment)],
                 ['Taux nominal annuel', `${loan.annualInterestRate} %`],
                 ['Durée', `${loan.durationMonths} mois`],
-                ['Début du prêt', loan.startDate],
+                ['Début du prêt', date(loan.startDate)],
                 ['Mensualité hors assurance', amount(finance.monthlyPayment)],
                 ['Assurance mensuelle', amount(loan.monthlyInsurance)],
                 ['Capital remboursé', amount(finance.principalPaid)],
@@ -95,7 +96,7 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
                 ['Coûts futurs prévisionnels', amount(finance.costsRemaining)],
                 ['Coût total prévisionnel du crédit', amount(finance.totalCost)],
                 ['Échéances restantes', String(finance.remainingPayments)],
-                ['Fin théorique', finance.endDate],
+                ['Fin théorique', date(finance.endDate)],
               ])}
               <label>
                 Capital remboursé : {finance.progressPercent} %
@@ -134,12 +135,7 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
               </button>
             </div>
           </div>
-          <div
-            className="table-scroll"
-            role="region"
-            aria-label="Plan d’amortissement"
-            tabIndex={0}
-          >
+          <TableScroll label="Échéancier du crédit">
             <table>
               <thead>
                 <tr>
@@ -168,7 +164,7 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
                   .map((row) => (
                     <tr key={row.number}>
                       <td>{row.number}</td>
-                      <td>{row.date}</td>
+                      <td>{date(row.date)}</td>
                       {[
                         row.payment,
                         row.interest,
@@ -185,7 +181,7 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
                   ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         </section>
       )}
       {property.usage === 'RENTAL' && value.rental && property.rental && (
@@ -207,13 +203,13 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
               'Rendement brut',
               value.rental.grossYield === null
                 ? '—'
-                : `${Number(value.rental.grossYield).toFixed(2)} %`,
+                : new Intl.NumberFormat('fr-FR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value.rental.grossYield) / 100),
             ],
             [
               'Rendement net avant fiscalité',
               value.rental.netYield === null
                 ? '—'
-                : `${Number(value.rental.netYield).toFixed(2)} %`,
+                : new Intl.NumberFormat('fr-FR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value.rental.netYield) / 100),
             ],
             ['Cash-flow mensuel de votre part', amount(value.rental.monthlyCashFlow)],
           ])}

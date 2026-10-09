@@ -1,15 +1,5 @@
-/* Dashboard-only palette: no global financial or category styles are changed. */
+/* Dashboard composition; visual tokens are shared in globals.css. */
 .root {
-  --surface: #fff;
-  --surface-secondary: #f6f6f9;
-  --ink: #171922;
-  --muted: #64708b;
-  --line: #ececf3;
-  --accent: #7434ff;
-  --accent-soft: #eee8ff;
-  --green: #078355;
-  --red: #cc3548;
-  --focus: #7434ff;
   color: var(--ink);
   font-family: 'Patrimoine Inter', 'Segoe UI', Arial, sans-serif;
   font-variant-numeric: tabular-nums;

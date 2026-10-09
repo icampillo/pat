@@ -1,4 +1,7 @@
 'use client';
+import { categorySlug } from '@/domain/categories';
+import { ArrowLeft } from 'lucide-react';
+import { CategoryBadge } from '@/components/workspace/display';
 import { SecurityPricingRepair } from '@/components/security-pricing-repair';
 import { RealEstateDetail } from '@/components/real-estate-detail';
 import { AssetImage } from '@/components/asset-image';
@@ -31,7 +34,20 @@ export function AssetDetailPage({ state, asset }: { state: AppState; asset: Asse
   const gain = (a: AssetView) => (currency === 'EUR' ? a.gainEur : a.gainUsd);
   return (
     <>
-      <PageHeading view="assets" title={asset.name} detail />
+      <Link className="back" href={`/categories/${categorySlug(asset.category.key)}`}>
+        <ArrowLeft size={16} aria-hidden="true" />
+        {asset.category.label}
+      </Link>
+      <PageHeading
+        view="assets"
+        title={asset.name}
+        detail
+        subtitle={
+          editing
+            ? 'Modifier les informations de cet actif.'
+            : 'Valeur, caractéristiques et opérations.'
+        }
+      />
       {editing ? (
         <AssetForm
           state={state}
@@ -49,7 +65,7 @@ export function AssetDetailPage({ state, asset }: { state: AppState; asset: Asse
               <div>
                 <strong>{asset.symbol}</strong>
                 <p>
-                  {asset.category.label} · {asset.platform}
+                  <CategoryBadge category={asset.category} /> · {asset.platform}
                 </p>
               </div>
             </div>

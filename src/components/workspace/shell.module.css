@@ -1,16 +1,6 @@
-@font-face {
-  font-family: 'Patrimoine Inter';
-  src: url('/fonts/InterVariable.woff2') format('woff2');
-  font-weight: 100 900;
-  font-display: swap;
-}
-/* Navigation only; content of non-dashboard routes retains its existing styles. */
+/* Shared navigation and content frame; dashboard composition is preserved. */
 .shell :global(.sidebar),
 .drawer {
-  --purple: #7434ff;
-  --accent: #7434ff;
-  --line: #ececf3;
-  --ink: #171922;
   background: #fcfcfe;
 }
 .shell :global(.sidebar) {
@@ -74,20 +64,20 @@
 .mobileBrand {
   display: none;
 }
-.dashboard {
+.shell {
   background: #fdfdfe;
 }
-.dashboard :global(.main) {
+.shell :global(.main) {
   max-width: 1530px;
   padding: 8px 26px 22px;
 }
-.dashboard :global(.topbar) {
+.shell :global(.topbar) {
   height: 62px;
   background: transparent;
   border: 0;
   padding: 0 26px;
 }
-.dashboard :global(.footer) {
+.shell :global(.footer) {
   margin-top: 22px;
   font-size: 11px;
 }
@@ -117,7 +107,7 @@
     font-size: 19px;
     gap: 4px;
   }
-  .dashboard :global(.main) {
+  .shell :global(.main) {
     padding-inline: 18px;
   }
 }
@@ -126,11 +116,11 @@
     margin-left: 0;
     padding-bottom: calc(76px + env(safe-area-inset-bottom));
   }
-  .dashboard :global(.topbar) {
+  .shell :global(.topbar) {
     height: 64px;
     padding: 0 14px;
   }
-  .dashboard :global(.main) {
+  .shell :global(.main) {
     padding: 8px 12px 18px;
   }
   .dashboard :global(.breadcrumb) > button {
@@ -195,6 +185,6 @@
 .shell :global(.sidebar),
 .drawer,
 .bottomNav,
-.dashboard :global(.topbar) {
+.shell :global(.topbar) {
   font-family: 'Patrimoine Inter', 'Segoe UI', sans-serif;
 }

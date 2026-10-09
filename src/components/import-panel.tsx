@@ -1,4 +1,5 @@
 'use client';
+import { TableScroll } from '@/components/ui/table-scroll';
 import { sortByValue, valueInEur } from '@/domain/value-sort';
 import { errorMessage } from '@/shared/errors';
 import { useRef, useState } from 'react';
@@ -29,7 +30,7 @@ const fieldLabels: Record<string, string> = {
 };
 export function ImportSummary({ preview }: { preview: ImportPreview }) {
   return (
-    <div role="status">
+    <div className="import-summary" role="status">
       <h3>
         {preview.rows.length +
           preview.errors.filter((e) => e.line > 0 && !preview.rows.some((r) => r.line === e.line))
@@ -302,12 +303,7 @@ export function ImportPanel({
             </details>
           )}
           {preview.rows.some((r) => r.status !== 'EXISTING') && (
-            <div
-              className="table-scroll"
-              tabIndex={0}
-              role="region"
-              aria-label="Nouvelles transactions et lignes à vérifier"
-            >
+            <TableScroll label="Nouvelles transactions et lignes à vérifier">
               <table>
                 <thead>
                   <tr>
@@ -414,7 +410,7 @@ export function ImportPanel({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableScroll>
           )}
           <p className="small muted">
             Aucune transaction ajoutée avant confirmation. Aperçu valable 30 minutes ; le journal

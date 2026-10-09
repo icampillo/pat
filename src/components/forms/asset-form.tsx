@@ -1,4 +1,5 @@
 'use client';
+import { categoryStyle } from '@/components/ui/category-appearance';
 import { errorMessage } from '@/shared/errors';
 import { assetCreationSchema, assetUpdateSchema } from '@/shared/schemas';
 import type { AppState, AssetView } from '@/shared/types';
@@ -88,7 +89,7 @@ export function AssetForm({
     }
   }
   return (
-    <div className="form-wrap">
+    <div className="form-wrap" style={categoryStyle(kind || 'OTHER')}>
       <Link className="back" href="/portfolio">
         <ArrowLeft size={16} /> Tous les actifs
       </Link>

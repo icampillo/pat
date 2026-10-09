@@ -61,7 +61,7 @@ export function InventoryDateForm({
     }
   }
   return (
-    <section className="panel form-panel">
+    <section className="panel form-panel form-wrap">
       <h2>Corriger la date effective de l’inventaire</h2>
       <p>
         {transaction.assetName} · {transaction.platform} · {transaction.quantity} parts. Cet

@@ -1,4 +1,5 @@
 'use client';
+import { TableScroll } from '@/components/ui/table-scroll';
 import { sortByValue, valueInEur } from '@/domain/value-sort';
 import { type SaveAction } from '@/components/forms';
 import { Confirm } from '@/components/ui/confirm';
@@ -26,7 +27,7 @@ export function TransactionTable({
       : valueInEur(t.amount, t.currency, state.fxRate?.eurUsd ?? null),
   );
   return (
-    <div className="table-scroll">
+    <TableScroll label="Transactions">
       <table>
         <thead>
           <tr>
@@ -117,6 +118,6 @@ export function TransactionTable({
           label="Ajouter une transaction"
         />
       )}
-    </div>
+    </TableScroll>
   );
 }

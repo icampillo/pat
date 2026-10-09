@@ -37,7 +37,7 @@ export function WalletsPage({ state, save }: { state: AppState; save: SaveAction
         actions={
           <Dialog.Root open={adding} onOpenChange={setAdding}>
             <Dialog.Trigger asChild>
-              <button className="btn">
+              <button className="btn primary">
                 <Plus size={16} />
                 Ajouter une adresse
               </button>

@@ -1,4 +1,5 @@
 'use client';
+import { TableScroll } from '@/components/ui/table-scroll';
 import { sortByValue } from '@/domain/value-sort';
 import { decimal as d } from '@/domain/money';
 import { showWalletValue } from '@/domain/wallet-display';
@@ -249,7 +250,7 @@ export function WalletPositions({ state }: { state: AppState }) {
           <h2>Tokens en wallet</h2>
           <span className="tag">{tokens.length} ligne(s)</span>
         </div>
-        <div className="table-scroll" tabIndex={0} role="region" aria-label="Tokens du wallet">
+        <TableScroll label="Tokens du wallet">
           <table>
             <thead>
               <tr>
@@ -279,7 +280,7 @@ export function WalletPositions({ state }: { state: AppState }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
         {!tokens.length && (
           <p className="empty-inline">
             {data.length

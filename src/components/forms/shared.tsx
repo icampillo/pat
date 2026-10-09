@@ -1,4 +1,5 @@
 'use client';
+import { useId } from 'react';
 export type SaveAction = (
   path: string,
   method: string,
@@ -24,10 +25,14 @@ export function Field({
   required?: boolean;
   help?: string;
 }) {
+  const id = useId();
   return (
-    <label>
-      {label}
+    <label htmlFor={id}>
+      <span>{label}</span>
       <input
+        id={id}
+        aria-describedby={help ? id + '-help' : undefined}
+        aria-label={label}
         name={name}
         defaultValue={value}
         type={type}
@@ -39,7 +44,7 @@ export function Field({
         required={required}
         step={type === 'number' ? 'any' : undefined}
       />
-      {help && <small>{help}</small>}
+      {help && <small id={id + '-help'}>{help}</small>}
     </label>
   );
 }

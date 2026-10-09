@@ -6,10 +6,10 @@ import type { CSSProperties } from 'react';
 import { allocationRects } from '@/domain/dashboard';
 import { money } from '@/components/workspace/display';
 import {
-  categoryAppearance,
   weightLabel,
   type DashboardCategory,
 } from './category-card';
+import { categoryAppearance } from '@/components/ui/category-appearance';
 import styles from './dashboard.module.css';
 
 const TOOLTIP_WIDTH = 220;

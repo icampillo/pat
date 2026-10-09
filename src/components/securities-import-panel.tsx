@@ -1,4 +1,5 @@
 'use client';
+import { TableScroll } from '@/components/ui/table-scroll';
 import { parisDateTime, suggestInventoryDate } from '@/domain/inventory-date';
 import { sortByValue, valueInEur } from '@/domain/value-sort';
 import { decimal as d } from '@/domain/money';
@@ -245,12 +246,7 @@ export function SecuritiesImportPanel({
               ))}
             </ul>
           )}
-          <div
-            className="table-scroll"
-            tabIndex={0}
-            role="region"
-            aria-label="Aperçu de l’import Bourse"
-          >
+          <TableScroll label="Aperçu de l’import Bourse">
             <table>
               <thead>
                 <tr>
@@ -302,7 +298,7 @@ export function SecuritiesImportPanel({
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
           <p className="small muted">
             Vérifiez les produits et leur place de cotation. Les lignes Bourso utilisent la
             valorisation moins la plus-value pour conserver le coût malgré l’arrondi du PRU. Aucune

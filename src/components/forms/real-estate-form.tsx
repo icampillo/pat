@@ -1,4 +1,7 @@
 'use client';
+import { ArrowLeft } from 'lucide-react';
+import { money } from '@/components/workspace/display';
+import { categoryStyle } from '@/components/ui/category-appearance';
 import { errorMessage } from '@/shared/errors';
 import { useState } from 'react';
 import Link from '@/components/workspace/link';
@@ -135,7 +138,8 @@ export function RealEstateForm({
     }
   }
   return (
-    <div className="form-wrap">
+    <div className="form-wrap" style={categoryStyle('REAL_ESTATE')}>
+      <Link className="back" href="/categories/real-estate"><ArrowLeft size={16} aria-hidden="true" />Immobilier</Link>
       <form
         className="panel form-panel"
         onSubmit={submit}
@@ -278,7 +282,7 @@ export function RealEstateForm({
               <label>
                 Mensualité hors assurance calculée
                 <output style={{ display: 'block' }}>
-                  {payment || '—'} {asset?.currency ?? 'EUR'}
+                  {money(payment || null, asset?.currency ?? 'EUR')}
                 </output>
                 <small>
                   Calculée depuis le montant, le taux et la durée. Dernière échéance ajustée au

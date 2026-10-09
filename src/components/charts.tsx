@@ -25,12 +25,14 @@ export function EvolutionChart({
   label = 'Patrimoine',
   variant = 'default',
   daily = true,
+  color = 'var(--accent)',
 }: {
   points: { date: string; value: number | null }[];
   currency: string;
   label?: string;
   variant?: 'default' | 'dashboard';
   daily?: boolean;
+  color?: string;
 }) {
   const fillId = useId();
   const dashboard = variant === 'dashboard';
@@ -62,8 +64,8 @@ export function EvolutionChart({
         >
           <defs>
             <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--accent)" stopOpacity={dashboard ? 0.1 : 0.14} />
-              <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.01} />
+              <stop offset="0%" stopColor={color} stopOpacity={dashboard ? 0.1 : 0.14} />
+              <stop offset="100%" stopColor={color} stopOpacity={0.01} />
             </linearGradient>
           </defs>
           <CartesianGrid vertical={false} stroke="var(--line)" strokeDasharray="3 5" />
@@ -111,7 +113,7 @@ export function EvolutionChart({
               new Intl.NumberFormat('fr-FR', { style: 'currency', currency }).format(Number(v)),
               label,
             ]}
-            cursor={{ stroke: 'var(--accent)', strokeDasharray: '3 4' }}
+            cursor={{ stroke: color, strokeDasharray: '3 4' }}
             contentStyle={{
               borderRadius: 12,
               border: '1px solid var(--line)',
@@ -127,7 +129,7 @@ export function EvolutionChart({
           <Area
             type={dashboard ? 'linear' : 'monotone'}
             dataKey="value"
-            stroke="var(--accent)"
+            stroke={color}
             strokeWidth={dashboard ? 2 : 2.5}
             fill={`url(#${fillId})`}
             activeDot={{ r: 5, stroke: 'var(--surface)', strokeWidth: 3 }}

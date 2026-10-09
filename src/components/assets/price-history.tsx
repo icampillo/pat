@@ -43,9 +43,10 @@ export function PriceHistoryList({ id, currency }: { id: string; currency: strin
       {loading && (
         <span className="loading-spinner" role="status" aria-label="Chargement des prix" />
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && <p className="error-note" role="alert">{error}</p>}
       {prices && (
         <div className="price-list">
+          {!prices.length && <p className="empty-inline">Aucun cours enregistré pour cet actif.</p>}
           {prices.map((p) => (
             <div key={p.id}>
               <span>{date(p.observedAt)}</span>

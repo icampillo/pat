@@ -1,16 +1,8 @@
-import type { CSSProperties } from 'react';
 import { dashboardCard, PerformanceBadge } from '@/components/dashboard/primitives';
 import Link from '@/components/workspace/link';
-import { ArrowUpRight, Bitcoin, ChartNoAxesCombined, Gem, House, Layers3 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
+import { categoryAppearance, categoryStyle } from '@/components/ui/category-appearance';
 import type { AssetCategorySummary } from '@/shared/types';
-
-const categoryIcons: Record<string, LucideIcon> = {
-  crypto: Bitcoin,
-  stocks: ChartNoAxesCombined,
-  'precious-metals': Gem,
-  'real-estate': House,
-};
 
 export const categoryMoney = (value: number | null, currency: string) =>
   value === null
@@ -61,12 +53,12 @@ export function AssetCategoryCard({
   category: AssetCategorySummary;
   currency: string;
 }) {
-  const Icon = categoryIcons[category.slug] ?? Layers3;
+  const { Icon } = categoryAppearance(category.slug);
   return (
     <Link
       className={`${dashboardCard} group flex flex-col gap-4 p-5 transition-[border-color,transform] hover:border-(--accent)/35 motion-safe:hover:-translate-y-0.5`}
       href={`/categories/${category.slug}`}
-      style={{ '--category-color': category.color } as CSSProperties}
+      style={categoryStyle(category.slug)}
       data-testid="investment-card"
     >
       <div className="flex items-center gap-3">

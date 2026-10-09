@@ -1,4 +1,5 @@
 'use client';
+import { TableScroll } from '@/components/ui/table-scroll';
 import { snapshotDay, SNAPSHOT_TIMEZONE } from '@/domain/snapshot-day';
 import { sortByValue } from '@/domain/value-sort';
 import { useState } from 'react';
@@ -88,7 +89,7 @@ export function HistoryView({ state, currency }: { state: AppState; currency: 'E
         }))}
         currency={currency}
       />
-      <div className="table-scroll history-table">
+      <TableScroll label="Historique des valorisations" className="history-table">
         <table>
           <thead>
             <tr>
@@ -138,7 +139,7 @@ export function HistoryView({ state, currency }: { state: AppState; currency: 'E
             })}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
     </section>
   );
 }
