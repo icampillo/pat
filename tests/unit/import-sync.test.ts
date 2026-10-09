@@ -216,7 +216,7 @@ describe('Matching transactionnel', () => {
       matchTransactions(rows(buy()), [
         stored(buy({ type: 'ADJUSTMENT', occurredAt: '2025-04-01T00:00:00.000Z' })),
       ])[0],
-    ).toMatchObject({ status: 'AMBIGUOUS', canCreate: false });
+    ).toMatchObject({ status: 'INVENTORY_REVIEW', canCreate: false, candidates: [] });
     expect(
       matchTransactions(rows(buy({ occurredAt: '2025-05-01T00:00:00.000Z' })), [
         stored(buy({ type: 'ADJUSTMENT', occurredAt: '2025-04-01T00:00:00.000Z' })),
@@ -251,4 +251,34 @@ describe('Matching transactionnel', () => {
       'AMBIGUOUS',
     ]);
   });
+});
+
+it('une référence en collision ne transforme jamais un inventaire en achat, ni l’inverse', () => {
+  const purchase = {
+    ...normalizeCsvTransaction(
+      {
+        type: 'BUY',
+        quantity: '1',
+        unit_price: '7',
+        currency: 'EUR',
+        occurred_at: '2026-10-07',
+        platform: 'PEA',
+        external_reference: 'collision',
+      },
+      '12345678-1234-4123-a123-123456789012',
+    ),
+    id: 'existing',
+    voided: false,
+  };
+  const inventory = { ...purchase, type: 'ADJUSTMENT' as const, comment: 'Inventaire' };
+  for (const [incoming, stored] of [
+    [purchase, inventory],
+    [inventory, purchase],
+  ]) {
+    expect(matchTransactions([{ line: 1, data: incoming }], [stored])[0]).toMatchObject({
+      status: 'AMBIGUOUS',
+      candidates: [],
+      canCreate: false,
+    });
+  }
 });
