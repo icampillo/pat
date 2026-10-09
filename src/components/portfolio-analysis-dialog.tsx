@@ -10,9 +10,11 @@ import { useWorkspace } from '@/components/workspace/context';
 export function PortfolioAnalysisDialog({
   state,
   triggerClassName = 'btn',
+  triggerLabel = 'Analyser avec une IA',
 }: {
   state: AppState;
   triggerClassName?: string;
+  triggerLabel?: string;
 }) {
   const { currency, setFlash } = useWorkspace();
   const [prompt, setPrompt] = useState('');
@@ -55,7 +57,7 @@ export function PortfolioAnalysisDialog({
       <Dialog.Trigger asChild>
         <button className={triggerClassName} type="button">
           <Sparkles size={16} aria-hidden="true" />
-          Analyser avec une IA
+          {triggerLabel}
         </button>
       </Dialog.Trigger>
       <Dialog.Portal>

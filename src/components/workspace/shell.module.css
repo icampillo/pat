@@ -1,0 +1,200 @@
+@font-face {
+  font-family: 'Patrimoine Inter';
+  src: url('/fonts/InterVariable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+/* Navigation only; content of non-dashboard routes retains its existing styles. */
+.shell :global(.sidebar),
+.drawer {
+  --purple: #7434ff;
+  --accent: #7434ff;
+  --line: #ececf3;
+  --ink: #171922;
+  background: #fcfcfe;
+}
+.shell :global(.sidebar) {
+  width: 210px;
+  padding: 25px 14px 16px;
+}
+.shell :global(.app-body) {
+  margin-left: 210px;
+}
+.shell :global(.brand),
+.drawer :global(.brand) {
+  font-size: 21px;
+  letter-spacing: -1px;
+  margin-bottom: 34px;
+  color: #171922;
+}
+.shell :global(.brand-icon),
+.drawer :global(.brand-icon),
+.mobileBrand > span {
+  background: transparent;
+  color: #7434ff;
+  font-size: 32px;
+  font-weight: 800;
+  width: 28px;
+  transform: skew(-9deg);
+}
+.shell :global(.nav-item),
+.drawer :global(.nav-item) {
+  min-height: 44px;
+  font-size: 13px;
+  padding-inline: 12px;
+  border-radius: 9px;
+  color: #272b36;
+}
+.shell :global(.nav-item.active),
+.drawer :global(.nav-item.active) {
+  color: #6322df;
+  background: #ece5ff;
+}
+.shell :global(.user-avatar),
+.shell :global(.header-avatar),
+.drawer :global(.user-avatar) {
+  background: #e5edfc;
+  color: #243b62;
+}
+.subnav {
+  margin: 2px 0 16px 28px;
+  padding-left: 17px;
+  border-left: 1px solid #e0e3ee;
+  display: flex;
+  flex-direction: column;
+}
+.subnav a {
+  color: #626c82;
+  font-size: 12px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+}
+.bottomNav,
+.mobileBrand {
+  display: none;
+}
+.dashboard {
+  background: #fdfdfe;
+}
+.dashboard :global(.main) {
+  max-width: 1530px;
+  padding: 8px 26px 22px;
+}
+.dashboard :global(.topbar) {
+  height: 62px;
+  background: transparent;
+  border: 0;
+  padding: 0 26px;
+}
+.dashboard :global(.footer) {
+  margin-top: 22px;
+  font-size: 11px;
+}
+.status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: #64708b;
+  font-size: 11px;
+}
+.status i {
+  height: 6px;
+  width: 6px;
+  border-radius: 50%;
+  background: #a694ef;
+  box-shadow: 0 0 0 4px #f0ecff;
+}
+@media (max-width: 1100px) and (min-width: 769px) {
+  .shell :global(.sidebar) {
+    width: 182px;
+    padding-inline: 9px;
+  }
+  .shell :global(.app-body) {
+    margin-left: 182px;
+  }
+  .shell :global(.brand) {
+    font-size: 19px;
+    gap: 4px;
+  }
+  .dashboard :global(.main) {
+    padding-inline: 18px;
+  }
+}
+@media (max-width: 768px) {
+  .shell :global(.app-body) {
+    margin-left: 0;
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+  .dashboard :global(.topbar) {
+    height: 64px;
+    padding: 0 14px;
+  }
+  .dashboard :global(.main) {
+    padding: 8px 12px 18px;
+  }
+  .dashboard :global(.breadcrumb) > button {
+    display: none;
+  }
+  .dashboard .status {
+    display: none;
+  }
+  .mobileBrand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 18px;
+    font-weight: 650;
+    letter-spacing: -0.6px;
+    color: #171922;
+  }
+  .mobileBrand > span {
+    font-size: 27px;
+    width: 20px;
+  }
+  .dashboard :global(.header-avatar) {
+    display: grid;
+  }
+  .bottomNav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    background: #ffffffed;
+    border-top: 1px solid #e9e9f1;
+    backdrop-filter: blur(12px);
+    padding: 5px 8px calc(5px + env(safe-area-inset-bottom));
+    z-index: 25;
+  }
+  .bottomNav a,
+  .bottomNav button {
+    min-height: 53px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 3px;
+    color: #586079;
+    font-size: 11px;
+  }
+  .bottomNav [aria-current='page'] {
+    color: #6d28ed;
+    font-weight: 600;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell :global(.nav-item),
+  .drawer {
+    transition: none;
+    animation: none;
+  }
+}
+
+.shell :global(.sidebar),
+.drawer,
+.bottomNav,
+.dashboard :global(.topbar) {
+  font-family: 'Patrimoine Inter', 'Segoe UI', sans-serif;
+}

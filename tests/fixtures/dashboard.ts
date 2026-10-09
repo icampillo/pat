@@ -139,3 +139,32 @@ export function dashboardWithPropertyAndWallet(): AppState {
   });
   return state;
 }
+
+// Dense captured history for visual checks, in test fixtures only.
+export function dashboardDailyFixture(): AppState {
+  const state = dashboardFixture();
+  const latest = state.snapshots.at(-1)!;
+  state.snapshots = Array.from({ length: 31 }, (_, index) => {
+    const progress = index / 30;
+    const factor = 0.82 + 0.18 * progress + (index === 30 ? 0 : Math.sin(index * 1.7) * 0.025);
+    const crypto = 28640.5 * factor;
+    const stocks = 68410.24 * (1.09 - 0.09 * progress);
+    const metals = 14900 * factor;
+    const cash = 16500;
+    return {
+      ...latest,
+      id: `daily-${index}`,
+      capturedAt: new Date(Date.parse(state.asOf) - (30 - index) * 86400000).toISOString(),
+      totalEur: String(crypto + stocks + metals + cash),
+      totalUsd: String((crypto + stocks + metals + cash) * 1.1),
+      cashValues: { valueEur: String(cash), valueUsd: String(cash * 1.1) },
+      categoryValues: Object.fromEntries(
+        [crypto, stocks, metals].map((value, i) => [
+          state.categories[i].id,
+          { valueEur: String(value), valueUsd: String(value * 1.1) },
+        ]),
+      ),
+    };
+  });
+  return state;
+}

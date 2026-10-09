@@ -1,3 +1,4 @@
+import { snapshotCashValues } from '@/domain/dashboard';
 import { importAccounts } from './import-accounts';
 import { snapshotDay } from '@/domain/snapshot-day';
 import { db } from './db';
@@ -413,6 +414,7 @@ export async function getState(userId: string) {
         snapshots: snapshots.reverse().map(({ data, ...snapshot }) => ({
           ...snapshot,
           categoryValues: snapshotCategoryValues(data, categories),
+          cashValues: snapshotCashValues(data),
         })),
         asOf: asOf.toISOString(),
         historyRevised: revisions > 0 || retrospective || walletHistory > 0,

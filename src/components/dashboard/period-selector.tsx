@@ -1,34 +1,28 @@
+import styles from './dashboard.module.css';
 const periods = [
-  ['24h', '24h'],
-  ['7d', '7j'],
-  ['30d', '30j'],
-  ['90d', '90j'],
-  ['180d', '180j'],
-  ['1y', '1y'],
+  ['7d', '7 j'],
+  ['30d', '30 j'],
+  ['90d', '3 M'],
+  ['1y', '1 A'],
   ['all', 'Tout'],
-] as const;
-
+];
 export function PeriodSelector({
   value,
   onChange,
+  categories = false,
 }: {
   value: string;
   onChange: (value: string) => void;
+  categories?: boolean;
 }) {
   return (
     <div
-      className="grid w-full grid-cols-7 gap-0.5 rounded-lg border border-(--line) bg-(--surface-secondary) p-1 sm:w-auto"
+      className={styles.periods}
       role="group"
-      aria-label="Période du graphique"
+      aria-label={categories ? 'Période des courbes des catégories' : 'Période du graphique'}
     >
-      {periods.map(([key, label]) => (
-        <button
-          key={key}
-          type="button"
-          aria-pressed={value === key}
-          onClick={() => onChange(key)}
-          className={`min-h-9 rounded-md px-1.5 text-xs! font-medium! transition-colors sm:px-2.5 ${value === key ? 'bg-(--surface) text-(--accent) shadow-xs' : 'text-(--muted) hover:bg-(--surface) hover:text-(--ink)'}`}
-        >
+      {(categories ? periods.slice(0, 2) : periods).map(([key, label]) => (
+        <button key={key} type="button" aria-pressed={value === key} onClick={() => onChange(key)}>
           {label}
         </button>
       ))}

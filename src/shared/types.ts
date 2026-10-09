@@ -49,6 +49,7 @@ export type TransactionView = {
   version: number;
 };
 export type SnapshotView = {
+  cashValues?: { valueEur: string | null; valueUsd: string | null };
   referenceDay?: string;
   categoryValues?: Record<string, { valueEur: string | null; valueUsd: string | null }>;
   id: string;

@@ -3,12 +3,14 @@ import * as Dialog from '@radix-ui/react-dialog';
 import {
   ArrowLeftRight,
   ChevronRight,
-  CircleHelp,
   Coins,
-  Layers3,
   LayoutDashboard,
   LogOut,
   Menu,
+  Ellipsis,
+  House,
+  List,
+  ChartPie,
   Settings,
   Wallet,
   X,
@@ -16,14 +18,15 @@ import {
 import Link from '@/components/workspace/link';
 import { useState } from 'react';
 
+import shellStyles from './shell.module.css';
 import { categorySlug } from '@/domain/categories';
 import { usePathname, useRouter } from 'next/navigation';
 import { useWorkspace } from './context';
 const nav = [
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
   { href: '/portfolio', label: 'Portefeuille', icon: Wallet },
-  { href: '/wallets', label: 'Wallets DeFi', icon: Coins },
   { href: '/activity', label: 'Activité', icon: ArrowLeftRight },
+  { href: '/wallets', label: 'Wallets DeFi', icon: Coins },
 ];
 const titles: Record<string, string> = {
   dashboard: 'Vue d’ensemble',
@@ -40,6 +43,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [view, slug] = pathname.split('/').filter(Boolean);
+  const dashboard = view === 'dashboard';
   const activeView =
     view === 'assets' || view === 'categories'
       ? 'portfolio'
@@ -55,39 +59,51 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const sidebar = (
     <>
       <Link href="/dashboard" className="brand">
-        <span className="brand-icon">
-          <Layers3 size={22} />
-        </span>
-        patrimoine<span className="brand-dot">.</span>
+        <span className="brand-icon">P</span>
+        Patrimoine
       </Link>
-      <div className="portfolio-switch">
-        <span className="portfolio-icon">
-          <Wallet size={18} />
-        </span>
-        <div>
-          <strong>{state.portfolio.name}</strong>
-          <span>{state.portfolio.isDemo ? 'Démonstration' : 'Espace privé'}</span>
+      {!dashboard && (
+        <div className="portfolio-switch">
+          <span className="portfolio-icon">
+            <Wallet size={18} />
+          </span>
+          <div>
+            <strong>{state.portfolio.name}</strong>
+            <span>{state.portfolio.isDemo ? 'Démonstration' : 'Espace privé'}</span>
+          </div>
         </div>
-      </div>
-      <p className="nav-label">VOTRE ESPACE</p>
+      )}
       <nav aria-label="Navigation principale">
         {nav.map((n) => (
-          <Link
-            key={n.href}
-            href={n.href}
-            prefetch={true}
-            onClick={() => {
-              setMobile(false);
-            }}
-            aria-current={activeView === n.href.slice(1) ? 'page' : undefined}
-            className={`nav-item ${activeView === n.href.slice(1) ? 'active' : ''}`}
-          >
-            <n.icon size={19} />
-            {n.label}
-            {n.href === '/portfolio' && (
-              <span className="count">{state.rows.filter((a) => !a.deletedAt).length}</span>
+          <div key={n.href}>
+            <Link
+              href={n.href}
+              aria-label={n.label}
+              prefetch={true}
+              onClick={() => {
+                setMobile(false);
+              }}
+              aria-current={activeView === n.href.slice(1) ? 'page' : undefined}
+              className={`nav-item ${activeView === n.href.slice(1) ? 'active' : ''}`}
+            >
+              <n.icon size={19} />
+              {n.href === '/dashboard' ? (
+                <span aria-label="Tableau de bord">Dashboard</span>
+              ) : (
+                n.label
+              )}
+            </Link>
+            {n.href === '/activity' && (
+              <div className={shellStyles.subnav}>
+                <Link href="/activity?view=transactions" onClick={() => setMobile(false)}>
+                  Transactions
+                </Link>
+                <Link href="/activity?view=history" onClick={() => setMobile(false)}>
+                  Historique
+                </Link>
+              </div>
             )}
-          </Link>
+          </div>
         ))}
       </nav>
       <div className="sidebar-bottom">
@@ -101,11 +117,6 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
           <Settings size={19} />
           Paramètres
         </Link>
-        <div className="privacy-card">
-          <CircleHelp size={20} className="muted" />
-          <strong>Votre patrimoine, votre espace.</strong>
-          <p>Vos actifs et vos wallets, un historique conservé.</p>
-        </div>
         <button
           className="user-button"
           onClick={async () => {
@@ -128,7 +139,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
     </>
   );
   return (
-    <div className="app">
+    <div className={`app ${shellStyles.shell} ${dashboard ? shellStyles.dashboard : ''}`}>
       <a className="skip-link" href="#main">
         Aller au contenu
       </a>
@@ -144,7 +155,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
               </Dialog.Trigger>
               <Dialog.Portal>
                 <Dialog.Overlay className="overlay" />
-                <Dialog.Content className="mobile-sidebar">
+                <Dialog.Content className={`mobile-sidebar ${shellStyles.drawer}`}>
                   <Dialog.Title className="sr-only">Navigation</Dialog.Title>
                   <Dialog.Description className="sr-only">
                     Accès aux pages du portefeuille
@@ -156,12 +167,30 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
                 </Dialog.Content>
               </Dialog.Portal>
             </Dialog.Root>
-            <span>Espace personnel</span>
-            <ChevronRight size={14} />
-            <strong>{pageTitle}</strong>
+            {dashboard ? (
+              <>
+                <Link href="/dashboard" className={shellStyles.mobileBrand}>
+                  <span>P</span>Patrimoine
+                </Link>
+                <span className={shellStyles.status}>
+                  <i />
+                  {state.portfolio.isDemo
+                    ? state.onchain.wallets.length || state.totals.incompleteCostBasis
+                      ? 'Démo + données personnelles'
+                      : 'Données de démonstration'
+                    : state.portfolio.name}
+                </span>
+              </>
+            ) : (
+              <>
+                <span>Espace personnel</span>
+                <ChevronRight size={14} />
+                <strong>{pageTitle}</strong>
+              </>
+            )}
           </div>
           <div className="topbar-right">
-            {state.portfolio.isDemo && (
+            {state.portfolio.isDemo && !dashboard && (
               <span className="demo-badge">
                 {state.onchain.wallets.length || state.totals.incompleteCostBasis
                   ? 'DÉMO + DONNÉES PERSONNELLES'
@@ -197,6 +226,28 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
           </footer>
         </main>
       </div>
+      <nav className={shellStyles.bottomNav} aria-label="Navigation mobile">
+        <Link href="/dashboard" aria-current={activeView === 'dashboard' ? 'page' : undefined}>
+          <House size={21} />
+          Vue
+        </Link>
+        <Link href="/portfolio" aria-current={activeView === 'portfolio' ? 'page' : undefined}>
+          <ChartPie size={21} />
+          Portefeuille
+        </Link>
+        <Link href="/activity" aria-current={activeView === 'activity' ? 'page' : undefined}>
+          <List size={21} />
+          Activité
+        </Link>
+        <button
+          type="button"
+          aria-label="Plus : ouvrir la navigation"
+          onClick={() => setMobile(true)}
+        >
+          <Ellipsis size={21} />
+          Plus
+        </button>
+      </nav>
     </div>
   );
 }

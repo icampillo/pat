@@ -2,6 +2,11 @@ import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { workspaceFixture } from '../fixtures/workspace';
 
+// Isolate export from the independently tested market synchronization.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/v1/market/refresh', () => {});
+});
+
 test('generates locally, copies the exact visible prompt, and restores focus on close', async ({
   page,
   context,
@@ -18,7 +23,7 @@ test('generates locally, copies the exact visible prompt, and restores focus on 
   });
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/dashboard');
-  const trigger = page.getByRole('button', { name: 'Analyser avec une IA', exact: true });
+  const trigger = page.getByRole('button', { name: 'Exporter le prompt IA', exact: true });
   await trigger.click();
   const dialog = page.getByRole('dialog', { name: 'Analyser mon patrimoine avec une IA' });
   await expect(dialog).toBeVisible();
@@ -56,7 +61,7 @@ test('handles clipboard rejection with a manual selection fallback on mobile', a
     });
   });
   await page.goto('/dashboard');
-  await page.getByRole('button', { name: 'Analyser avec une IA', exact: true }).click();
+  await page.getByRole('button', { name: 'Exporter le prompt IA', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('button', { name: 'Copier le prompt', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('Copie automatique indisponible');
@@ -69,6 +74,6 @@ test('handles clipboard rejection with a manual selection fallback on mobile', a
   ).toBe((await textarea.inputValue()).length);
   expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   await dialog.getByRole('button', { name: 'Fermer l’analyse' }).click();
-  await page.getByRole('button', { name: 'Analyser avec une IA', exact: true }).click();
+  await page.getByRole('button', { name: 'Exporter le prompt IA', exact: true }).click();
   await expect(dialog.getByRole('alert')).toHaveCount(0);
 });
