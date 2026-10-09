@@ -1,5 +1,28 @@
-import { calculateCategoryValue, calculatePerformance, numeric } from './categories';
+import {
+  calculateCategoryValue,
+  calculatePerformance,
+  filterCategoryHistory,
+  numeric,
+} from './categories';
 import type { CategoryHistoryPoint } from '@/shared/types';
+
+// Prefer seven days, but do not hide saved history behind an empty initial window.
+// Only the chart's initial selection changes; seven-day value comparisons are independent.
+export function availableChartPeriod(
+  histories: CategoryHistoryPoint[][],
+  asOf: string,
+  periods: string[],
+) {
+  return (
+    periods.find((period) =>
+      histories.some(
+        (history) =>
+          filterCategoryHistory(history, period, asOf).filter((point) => point.value !== null)
+            .length >= 2,
+      ),
+    ) ?? periods[0]
+  );
+}
 
 // Exact elapsed time: never relabel the nearest (or first) observation as seven days.
 export function valueChange7d(

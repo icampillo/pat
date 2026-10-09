@@ -614,3 +614,10 @@
 .miniEmpty {
   font-size: 12px;
 }
+
+.historyNotice {
+  margin: -4px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}

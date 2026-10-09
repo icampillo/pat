@@ -21,11 +21,12 @@ import {
   numeric,
 } from '@/domain/categories';
 import type { AppState } from '@/shared/types';
+import { availableChartPeriod } from '@/domain/dashboard';
 
 export function DashboardPage({ state }: { state: AppState }) {
   const { currency, flash, setFlash } = useWorkspace();
-  const [period, setPeriod] = useState('7d');
-  const [categoryPeriod, setCategoryPeriod] = useState('7d');
+  const [selectedPeriod, setPeriod] = useState<string | null>(null);
+  const [selectedCategoryPeriod, setCategoryPeriod] = useState<string | null>(null);
   const field = currency === 'EUR' ? 'valueEur' : 'valueUsd';
   const total = numeric(state.totals[field]);
   const history = state.snapshots
@@ -67,6 +68,22 @@ export function DashboardPage({ state }: { state: AppState }) {
         .filter((point) => Date.parse(point.date) <= Date.parse(state.asOf))
         .sort((a, b) => Date.parse(a.date) - Date.parse(b.date)),
     });
+  const period =
+    selectedPeriod ??
+    availableChartPeriod([history], state.asOf, ['7d', '30d', '90d', '1y', 'all']);
+  const categoryPeriod =
+    selectedCategoryPeriod ??
+    availableChartPeriod(
+      categories.map((category) => category.history),
+      state.asOf,
+      ['7d', '30d'],
+    );
+  const periodLabel = (
+    { '30d': '30 j', '90d': '3 mois', '1y': '1 an', all: 'tout l’historique' } as Record<
+      string,
+      string
+    >
+  )[period];
   // Preserve the previous allocation's known-cash perimeter, not a partial card total.
   const allocationCategories = categories.map((item) =>
     item.key === 'CASH' && item.value === null
@@ -126,6 +143,11 @@ export function DashboardPage({ state }: { state: AppState }) {
           <div className={styles.mainPeriods}>
             <PeriodSelector value={period} onChange={setPeriod} />
           </div>
+          {selectedPeriod === null && period !== '7d' && (
+            <p className={styles.notice} role="status">
+              Pas assez de relevés sur 7 j · affichage sur {periodLabel}.
+            </p>
+          )}
           <ValueChart
             points={filterCategoryHistory(history, period, state.asOf)}
             currency={currency}
@@ -167,6 +189,11 @@ export function DashboardPage({ state }: { state: AppState }) {
           <h2 id="categories-heading">Vos catégories</h2>
           <PeriodSelector value={categoryPeriod} onChange={setCategoryPeriod} categories />
         </div>
+        {selectedCategoryPeriod === null && categoryPeriod !== '7d' && (
+          <p className={styles.historyNotice} role="status">
+            Pas assez de relevés sur 7 j · affichage sur 30 j.
+          </p>
+        )}
         {categories.length ? (
           <div className={styles.categories} role="group" aria-label="Catégories détenues">
             {categories.map((category) => (

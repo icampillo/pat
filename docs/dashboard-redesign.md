@@ -84,3 +84,46 @@ Un total inconnu ne devient jamais un pourcentage des seules valeurs connues.
 
 La sélection reste locale au dashboard, sans requête ni écriture supplémentaire.
 Le graphique interne des pages catégories conserve son comportement antérieur.
+
+
+## Correctifs treemap et historiques (9 octobre 2026)
+
+- La treemap utilisait des rectangles calculés sur 100 × 100 puis les rapportait à
+  300 × 320 ; la référence DOM du `ResizeObserver` n'était pas attachée. Le calcul
+  utilise maintenant les dimensions mesurées de la carte, y compris après redimensionnement
+  et ouverture du détail. Surfaces proportionnelles, clavier et tactile conservés.
+- Les détails de catégories ouvrent 30 jours, le dashboard ouvrait systématiquement 7 jours.
+  Un historique de seed ancien peut donc être visible dans les détails mais masqué sur le
+  dashboard. Reproduction navigateur avec les mêmes observations, situation avancée de
+  14 jours ; aucun accès à la base personnelle pour établir cette reproduction.
+- À l'ouverture, 7 jours restent prioritaires si au moins une série contient deux valeurs
+  enregistrées. Sinon, le graphique principal choisit la première période disponible
+  (30 j / 3 M / 1 A / Tout), les catégories partagent 30 j si disponible. Le sélecteur et
+  une indication affichent explicitement la période retenue. Le choix manuel prime ensuite.
+- Aucun décalage de dates, reconstruction depuis les positions actuelles ou traitement
+  spécial des données de démonstration. Valeurs inconnues et jours manquants conservés.
+  Les indicateurs de variation 7 j sont indépendants et restent indisponibles sans référence
+  temporelle exacte. Si aucune période ne contient assez de relevés, l'état vide demeure.
+- Changements frontend et helpers dashboard uniquement ; seed, API, migrations,
+  snapshots, calculs de performance, données et autres pages inchangés.
+
+Validation reproductible : `pnpm test:unit`, `pnpm lint`, `pnpm build`,
+`pnpm exec playwright test --config=playwright.navigation.config.ts dashboard.spec.ts`.
+Tests navigateur sur fixtures interceptées uniquement, base factice locale inaccessible,
+workers désactivés. Le test de non-régression mesure aussi la surface réellement occupée
+par les rectangles : un simple test de visibilité ne détectait pas la miniature.
+
+Résultats exécutés : 247 tests unitaires, lint global et build Next production réussis
+(TypeScript inclus). Chromium : 11 scénarios réussis sur le premier passage ; le dernier
+scénario, dont l'assertion de visibilité ne tenait pas compte des tracés SVG horizontaux,
+a réussi après correction du test et relance ciblée (12 scénarios validés au total).
+Captures 1440/1024/768/375 px examinées en desktop/mobile, sans débordement et sans
+violation Axe sur les quatre formats. Cas seed vieillie : courbes, sélection manuelle,
+EUR/USD et détail de catégorie validés. Captures conservées hors Git dans
+`/workspace/patrimoine-dashboard-fix-captures/`.
+
+Limites : les dates des relevés de la seed de l'utilisateur n'ont pas été consultées ;
+le cas historique hors période a été reproduit avec une fixture déterministe.
+Trois outils MCP sont omis par la politique de cette session ; les vérifications ci-dessus
+ont été exécutées via le terminal sandbox et Chromium local, sans ces outils.
+Aucun commit, push, déploiement, modification de base ou de fichier d'environnement.

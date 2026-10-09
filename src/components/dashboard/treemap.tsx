@@ -20,6 +20,9 @@ export function AllocationTreemap({
   const detailId = useId();
   const treeRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 300, height: 320 });
+  const positive = categories
+    .filter((item) => item.value !== null && item.value > 0)
+    .sort((a, b) => b.value! - a.value!);
   useEffect(() => {
     const element = treeRef.current;
     if (!element) return;
@@ -29,12 +32,15 @@ export function AllocationTreemap({
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [categories.length]);
+  }, [positive.length]);
   const current = categories.find((item) => item.id === selected);
-  const positive = categories
-    .filter((item) => item.value !== null && item.value > 0)
-    .sort((a, b) => b.value! - a.value!);
-  const rects = allocationRects(positive.map((item) => ({ id: item.id, value: item.value! })));
+  const rects = allocationRects(
+    positive.map((item) => ({ id: item.id, value: item.value! })),
+    0,
+    0,
+    size.width,
+    size.height,
+  );
   const partial =
     total === null || categories.some((item) => item.value === null || item.value < 0);
   const describe = (item: DashboardCategory) =>
@@ -52,7 +58,12 @@ export function AllocationTreemap({
         {partial ? 'Répartition partielle · valeurs positives connues' : 'Poids dans le patrimoine'}
       </p>
       {rects.length ? (
-        <div className={styles.treemap} role="group" aria-label="Répartition par catégories">
+        <div
+          ref={treeRef}
+          className={styles.treemap}
+          role="group"
+          aria-label="Répartition par catégories"
+        >
           {rects.map((rect) => {
             const item = positive.find((item) => item.id === rect.id)!;
             const { color, soft, Icon } = categoryAppearance(item.key);

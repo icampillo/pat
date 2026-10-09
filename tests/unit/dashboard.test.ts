@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { allocationRects, snapshotCashValues, valueChange7d } from '../../src/domain/dashboard';
+import {
+  allocationRects,
+  availableChartPeriod,
+  snapshotCashValues,
+  valueChange7d,
+} from '../../src/domain/dashboard';
 import { buildCategoryDetails } from '../../src/domain/categories';
 import { dashboardFixture } from '../fixtures/dashboard';
 const asOf = '2026-10-09T12:00:00Z';
@@ -86,4 +91,41 @@ it('treemap preserves areas, bounds and non-overlap for arbitrary categories', (
   expect(allocationRects([{ id: 'one', value: 1 }])).toEqual([
     { id: 'one', x: 0, y: 0, width: 100, height: 100 },
   ]);
+});
+
+describe('available chart periods', () => {
+  const periods = ['7d', '30d', '90d', '1y', 'all'];
+  it('keeps seven days as the initial window when recorded values exist', () => {
+    expect(availableChartPeriod([[baseline, { date: asOf, value: 120 }]], asOf, periods)).toBe(
+      '7d',
+    );
+  });
+  it('exposes old seeded observations without changing their dates or the seven-day variation', () => {
+    const history = [
+      { date: '2026-09-20T12:00:00Z', value: 100 },
+      { date: '2026-09-21T12:00:00Z', value: 120 },
+    ];
+    expect(availableChartPeriod([history], asOf, periods)).toBe('30d');
+    expect(availableChartPeriod([history], '2026-11-09T12:00:00Z', periods)).toBe('90d');
+    expect(availableChartPeriod([history], '2028-11-09T12:00:00Z', periods)).toBe('all');
+    expect(valueChange7d(130, history, asOf).percent).toBeNull();
+  });
+  it('ignores future or unknown valuations, and does not invent an available period', () => {
+    for (const history of [
+      [],
+      [baseline],
+      [baseline, { date: asOf, value: null }],
+      [baseline, { date: '2027-01-01T12:00:00Z', value: 120 }],
+    ]) {
+      expect(availableChartPeriod([history], asOf, periods)).toBe('7d');
+    }
+  });
+  it('selects a common category window from category values, not just global totals', () => {
+    const history = [
+      { date: '2026-09-20T12:00:00Z', value: 0 },
+      { date: '2026-09-21T12:00:00Z', value: -10 },
+    ];
+    expect(availableChartPeriod([[], history], asOf, ['7d', '30d'])).toBe('30d');
+    expect(availableChartPeriod([history], '2027-10-09T12:00:00Z', ['7d', '30d'])).toBe('7d');
+  });
 });
