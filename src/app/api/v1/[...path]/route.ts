@@ -11,7 +11,11 @@ import { importCommand } from '@/server/imports';
 import { getImage, saveImage } from '@/server/images';
 import { walletCommand, syncWallet } from '@/server/wallets';
 import { syncMarketData } from '@/server/market';
-import { previewSecurities, confirmSecurities } from '@/server/securities-import';
+import {
+  previewSecurities,
+  confirmSecurities,
+  correctInventoryDate,
+} from '@/server/securities-import';
 import { syncSecuritiesPrices, repairSecurityPricing } from '@/server/securities-market';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -51,6 +55,15 @@ async function handle(request: Request, context: { params: Promise<{ path: strin
       throw new AppError('ORIGIN_REJECTED', 'Origine de la requête refusée.', 403);
     if (path[0] === 'snapshots') throw new AppError('NOT_FOUND', 'Route introuvable.', 404);
     if (path[0] === 'securities' && request.method === 'POST') {
+      if (path.length === 4 && path[1] === 'inventories' && path[3] === 'date')
+        return response(
+          await correctInventoryDate(
+            session.user.id,
+            path[2],
+            await body(request),
+            request.headers.get('idempotency-key'),
+          ),
+        );
       if (path.length === 3 && path[2] === 'repair')
         return response(
           await repairSecurityPricing(

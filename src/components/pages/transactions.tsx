@@ -1,4 +1,5 @@
 'use client';
+import { InventoryDateForm } from '@/components/forms/inventory-date-form';
 import { TransactionForm } from '@/components/forms';
 import { typeLabels } from '@/shared/schemas';
 import type { AppState } from '@/shared/types';
@@ -59,15 +60,24 @@ export function TransactionEditorPage({
         title={transaction ? 'Modifier la transaction' : 'Nouvelle transaction'}
         detail
       />
-      <TransactionForm
-        transaction={transaction}
-        state={state}
-        save={save}
-        initialAsset={searchParams.get('asset') || undefined}
-        done={() => {
-          router.push('/activity');
-        }}
-      />
+      {transaction?.type === 'ADJUSTMENT' &&
+      transaction.externalReference?.startsWith('securities:') ? (
+        <InventoryDateForm
+          transaction={transaction}
+          save={save}
+          done={() => router.push('/activity')}
+        />
+      ) : (
+        <TransactionForm
+          transaction={transaction}
+          state={state}
+          save={save}
+          initialAsset={searchParams.get('asset') || undefined}
+          done={() => {
+            router.push('/activity');
+          }}
+        />
+      )}
     </>
   );
 }

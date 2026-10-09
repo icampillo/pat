@@ -1,0 +1,21 @@
+BoursoBank ACHAT COMPTANT ETR ACTION
+Date et heure locale d'exécution Quantité Informations sur la valeur
+Informations sur l'exécution
+07/10/2026
+17:10:02
+30 ETF MONDE SYNTHETIQUE Référence : 111111111
+Type d'ordre : à cours limite
+Cours demandé : 7,1930 EUR
+Code ISIN : IE0002XZSHO1 Cours exécuté : 7,1930 EUR
+Lieu d'exécution : EURONEXT PARIS
+Montant transaction brut Intérêts
+Montant transaction
+total brut Courtages Montant transaction net
+215,79 EUR 0,00 EUR
+000 jours
+215,79 EUR 0,00 EUR 0,00 EUR
+Commission Frais divers Montant total des frais
+1,08 EUR 0,00 EUR 1,08 EUR
+Montant net au débit de votre compte
+216,87 EUR
+Sous réserve de bonne fin.

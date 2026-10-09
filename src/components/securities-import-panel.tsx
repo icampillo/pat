@@ -1,4 +1,5 @@
 'use client';
+import { parisDateTime, suggestInventoryDate } from '@/domain/inventory-date';
 import { sortByValue, valueInEur } from '@/domain/value-sort';
 import { decimal as d } from '@/domain/money';
 import { errorMessage } from '@/shared/errors';
@@ -18,6 +19,9 @@ export function SecuritiesImportPanel({
   eurUsd: string | null;
 }) {
   const [accountId, setAccountId] = useState('');
+  const [asOf, setAsOf] = useState('');
+  const [suggested, setSuggested] = useState(false);
+  const [dateConfirmed, setDateConfirmed] = useState(false);
   const [csv, setCsv] = useState(''),
     [platform, setPlatform] = useState('BoursoBank'),
     [boursoCurrency, setCurrency] = useState('EUR');
@@ -113,12 +117,18 @@ export function SecuritiesImportPanel({
             onChange={async (event) => {
               reset();
               setCsv('');
+              setAsOf('');
+              setSuggested(false);
+              setDateConfirmed(false);
               const file = event.target.files?.[0];
               if (!file) return;
               if (file.size > 200_000) {
                 setError('Fichier limité à 200 Ko.');
                 return;
               }
+              const suggestion = suggestInventoryDate(file.name);
+              setAsOf(suggestion || '');
+              setSuggested(!!suggestion);
               setCsv(await file.text());
             }}
           />
@@ -127,17 +137,49 @@ export function SecuritiesImportPanel({
             acceptées.
           </small>
         </label>
+        <label>
+          Date effective de l’inventaire (Europe/Paris)
+          <input
+            type="datetime-local"
+            step="1"
+            value={asOf}
+            disabled={busy}
+            onChange={(event) => {
+              setAsOf(event.target.value);
+              setDateConfirmed(false);
+              reset();
+            }}
+          />
+          <small>
+            {suggested
+              ? 'Date proposée d’après le nom du fichier, à vérifier : ce n’est pas une preuve.'
+              : 'Indiquez la date et l’heure auxquelles ces positions étaient détenues.'}
+          </small>
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={dateConfirmed}
+            disabled={busy || !asOf}
+            onChange={(event) => {
+              setDateConfirmed(event.target.checked);
+              reset();
+            }}
+          />
+          Je confirme la date effective de cet inventaire
+        </label>
       </div>
       <div className="heading-actions">
         <button
           className="btn primary"
-          disabled={busy || !csv || !platform.trim()}
+          disabled={busy || !csv || !platform.trim() || !asOf || !dateConfirmed}
           onClick={() =>
             run(async () => {
               setPreview(null);
               setPreview(
                 (await save('securities/imports/preview', 'POST', {
                   csv,
+                  asOf: parisDateTime(asOf),
                   platform,
                   ...(accountId ? { accountId } : {}),
                   boursoCurrency,
@@ -187,6 +229,12 @@ export function SecuritiesImportPanel({
             Aperçu Bourse · {preview.rows.filter((row) => !row.existingAssetId).length} position(s)
             à créer
           </h3>
+          <p className="notice">
+            Inventaire au{' '}
+            {new Date(preview.asOf).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}{' '}
+            (Europe/Paris), distinct de la date d’import. Les achats et ventes postérieurs pourront
+            s’y ajouter.
+          </p>
           {!!preview.errors.length && (
             <ul className="error-note" role="alert">
               {preview.errors.map((item, index) => (

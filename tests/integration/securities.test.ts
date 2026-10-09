@@ -92,7 +92,7 @@ it('refuse un import Bourse correspondant à une fiche archivée sans en créer 
   );
   const preview = await previewSecurities(
     user.userId,
-    { csv, platform: 'BoursoBank PEA' },
+    { asOf: '2026-09-23T15:50:30.000Z', csv, platform: 'BoursoBank PEA' },
     randomUUID(),
   );
   expect(preview.errors).toEqual([
@@ -110,7 +110,7 @@ it('imports Bourso atomically with precise cost, live quote, no action-triggered
   mockQuotes();
   const preview = await previewSecurities(
     user.userId,
-    { csv, platform: 'BoursoBank PEA' },
+    { asOf: '2026-09-23T15:50:30.000Z', csv, platform: 'BoursoBank PEA' },
     randomUUID(),
   );
   expect(preview.errors).toEqual([]);
@@ -137,6 +137,7 @@ it('imports Bourso atomically with precise cost, live quote, no action-triggered
     const again = await previewSecurities(
       user.userId,
       {
+        asOf: '2026-09-23T15:50:30.000Z',
         csv: i % 2 ? csv.replace('ETF de test', 'Autre libellé') : csv,
         platform: 'BoursoBank PEA',
       },
@@ -158,7 +159,7 @@ it('preserves unknown cost, fetches FX for USD and blocks manual replacement of 
   mockQuotes(12, undefined, 'USD');
   const preview = await previewSecurities(
     user.userId,
-    { csv: 'ticker;quantity\nTEST.PA;2' },
+    { asOf: '2026-09-23T15:50:30.000Z', csv: 'ticker;quantity\nTEST.PA;2' },
     randomUUID(),
   );
   expect(preview.errors).toEqual([]);
@@ -186,7 +187,11 @@ it('rejects wrong import kind, another owner, expired previews and duplicate pro
   const user = await owner(),
     other = await owner();
   mockQuotes();
-  const preview = await previewSecurities(user.userId, { csv }, randomUUID());
+  const preview = await previewSecurities(
+    user.userId,
+    { asOf: '2026-09-23T15:50:30.000Z', csv },
+    randomUUID(),
+  );
   await expect(
     confirmSecurities(other.userId, preview.id, { confirmed: true }, randomUUID()),
   ).rejects.toMatchObject({ code: 'NOT_FOUND' });
@@ -204,7 +209,7 @@ it('rejects wrong import kind, another owner, expired previews and duplicate pro
   ).rejects.toMatchObject({ code: 'PREVIEW_STALE' });
   const duplicate = await previewSecurities(
     user.userId,
-    { csv: `${csv}\n${csv.split('\n')[1]}` },
+    { asOf: '2026-09-23T15:50:30.000Z', csv: `${csv}\n${csv.split('\n')[1]}` },
     randomUUID(),
   );
   expect(duplicate.errors.some((error) => error.message.includes('plusieurs fois'))).toBe(true);
@@ -216,7 +221,11 @@ it('rejects wrong import kind, another owner, expired previews and duplicate pro
 it('updates prices automatically, deduplicates observations and preserves the last quote on outage', async () => {
   const user = await owner();
   mockQuotes();
-  const preview = await previewSecurities(user.userId, { csv }, randomUUID());
+  const preview = await previewSecurities(
+    user.userId,
+    { asOf: '2026-09-23T15:50:30.000Z', csv },
+    randomUUID(),
+  );
   await confirmSecurities(user.userId, preview.id, { confirmed: true }, randomUUID());
   // Attempts, not observation dates, control the shared cooldown.
   await db().marketQuoteCache.updateMany({
@@ -242,7 +251,11 @@ it('updates prices automatically, deduplicates observations and preserves the la
 it('does not block stocks when the metals provider is unavailable', async () => {
   const user = await owner();
   const fetcher = mockQuotes();
-  const preview = await previewSecurities(user.userId, { csv }, randomUUID());
+  const preview = await previewSecurities(
+    user.userId,
+    { asOf: '2026-09-23T15:50:30.000Z', csv },
+    randomUUID(),
+  );
   await confirmSecurities(user.userId, preview.id, { confirmed: true }, randomUUID());
   const fn = fetcher.getMockImplementation()!;
   vi.stubGlobal(

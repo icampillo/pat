@@ -1,0 +1,53 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 1200 850] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Length 851 >>
+stream
+BT /F1 8 Tf 20 780 Td 16 TL
+(BoursoBank ACHAT COMPTANT ETR ACTION) Tj T*
+(Date et heure locale d'exécution Quantité Informations sur la valeur) Tj T*
+(Informations sur l'exécution) Tj T*
+(07/10/2026) Tj T*
+(17:10:02) Tj T*
+(30 ETF MONDE SYNTHETIQUE Référence : 111111111) Tj T*
+(Type d'ordre : à cours limite) Tj T*
+(Cours demandé : 7,1930 EUR) Tj T*
+(Code ISIN : IE0002XZSHO1 Cours exécuté : 7,1930 EUR) Tj T*
+(Lieu d'exécution : EURONEXT PARIS) Tj T*
+(Montant transaction brut Intérêts) Tj T*
+(Montant transaction) Tj T*
+(total brut Courtages Montant transaction net) Tj T*
+(215,79 EUR 0,00 EUR) Tj T*
+(000 jours) Tj T*
+(215,79 EUR 0,00 EUR 0,00 EUR) Tj T*
+(Commission Frais divers Montant total des frais) Tj T*
+(1,08 EUR 0,00 EUR 1,08 EUR) Tj T*
+(Montant net au débit de votre compte) Tj T*
+(216,87 EUR) Tj T*
+(Sous réserve de bonne fin.) Tj T*
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000242 00000 n 
+0000000339 00000 n 
+trailer << /Size 6 /Root 1 0 R >>
+startxref
+1241
+%%EOF

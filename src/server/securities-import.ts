@@ -11,6 +11,9 @@ import { decimal as d, precise } from '@/domain/money';
 import { securityIsin } from '@/domain/security-identity';
 import { matchesImportAsset, selectImportAccount, persistImportAccount } from './import-accounts';
 import { AppError } from './errors';
+import { dateSchema } from '@/shared/schemas';
+import { replay } from '@/domain/ledger';
+import { toLedger } from './portfolio-store';
 
 const rowSchema = securityCsvRowSchema.extend({
   accountId: z.uuid(),
@@ -19,12 +22,14 @@ const rowSchema = securityCsvRowSchema.extend({
 });
 const payloadSchema = z.object({
   kind: z.literal('SECURITIES_POSITIONS'),
+  asOf: z.iso.datetime({ offset: true }).optional(),
   rows: z.array(rowSchema),
   rate: z.object({ eurUsd: z.string(), observedAt: z.string() }).nullable(),
 });
 type ImportRow = z.infer<typeof rowSchema>;
 export type SecuritiesPreview = {
   id: string;
+  asOf: string;
   rows: ImportRow[];
   errors: { line: number; message: string }[];
   expiresAt: string;
@@ -35,9 +40,10 @@ export async function previewSecurities(
   input: unknown,
   key: string | null,
 ): Promise<SecuritiesPreview> {
-  const { csv, platform, boursoCurrency, accountId } = z
+  const { csv, platform, boursoCurrency, accountId, asOf } = z
     .object({
       csv: z.string().max(200_000),
+      asOf: dateSchema.transform((value) => new Date(value).toISOString()),
       accountId: z.uuid().optional(),
       platform: z.string().trim().min(1).max(120).default('BoursoBank'),
       boursoCurrency: z.enum(['EUR', 'USD']).default('EUR'),
@@ -53,7 +59,7 @@ export async function previewSecurities(
   const initial = await getState(userId);
   const hash = createHash('sha256')
     .update(
-      `securities-positions:${platform}:${boursoCurrency}:${csv
+      `securities-positions:${asOf}:${platform}:${boursoCurrency}:${csv
         .replace(/^\uFEFF/, '')
         .replaceAll('\r\n', '\n')
         .trim()}`,
@@ -194,6 +200,7 @@ export async function previewSecurities(
       if (!errors.length && rows.every((row) => row.existingAssetId))
         throw new UnchangedMutation({
           id: 'unchanged',
+          asOf,
           rows,
           errors,
           expiresAt: expiresAt.toISOString(),
@@ -204,11 +211,11 @@ export async function previewSecurities(
           hash,
           ledgerVersion: portfolio.version + 1,
           expiresAt,
-          payload: json({ kind: 'SECURITIES_POSITIONS', rows, rate }),
+          payload: json({ kind: 'SECURITIES_POSITIONS', asOf, rows, rate }),
           errors: json(errors),
         },
       });
-      return { id: batch.id, rows, errors, expiresAt: expiresAt.toISOString() };
+      return { id: batch.id, asOf, rows, errors, expiresAt: expiresAt.toISOString() };
     },
   )) as SecuritiesPreview;
 }
@@ -246,6 +253,12 @@ export async function confirmSecurities(
         skipped: payload.rows.filter((row) => row.existingAssetId).length,
       };
       if (batch.status === 'COMMITTED') throw new UnchangedMutation(result);
+      if (!payload.asOf)
+        throw new AppError(
+          'PREVIEW_STALE',
+          'Cet ancien aperçu ne contient pas de date effective. Recréez-le et confirmez la date de l’inventaire.',
+          409,
+        );
       if (batch.expiresAt < new Date() || batch.ledgerVersion !== portfolio.version)
         throw new AppError(
           'PREVIEW_STALE',
@@ -275,7 +288,7 @@ export async function confirmSecurities(
             observedAt: new Date(payload.rate.observedAt),
           },
         });
-      const occurredAt = new Date().toISOString();
+      const importedAt = new Date().toISOString();
       for (const row of payload.rows) {
         if (row.existingAssetId) continue;
         const quote = row.quote;
@@ -300,24 +313,130 @@ export async function confirmSecurities(
             },
           },
         });
-        await insertTransaction(tx, portfolio.id, userId, {
-          assetId: asset.id,
-          type: 'ADJUSTMENT',
-          quantity: row.quantity,
-          unitPrice:
-            row.acquisitionCost === null ? '0' : precise(d(row.acquisitionCost).div(row.quantity)),
-          currency: row.costCurrency || quote.currency,
-          platform: row.platform,
-          occurredAt,
-          settlement: 'EXTERNAL',
-          externalReference: `securities:${batch.id}:${row.line}:${randomUUID()}`,
-          comment:
-            'Inventaire de positions importé par CSV. Date d’achat inconnue ; conversion du coût au taux disponible à la date d’import.',
-        });
+        await insertTransaction(
+          tx,
+          portfolio.id,
+          userId,
+          {
+            assetId: asset.id,
+            type: 'ADJUSTMENT',
+            quantity: row.quantity,
+            unitPrice:
+              row.acquisitionCost === null
+                ? '0'
+                : precise(d(row.acquisitionCost).div(row.quantity)),
+            currency: row.costCurrency || quote.currency,
+            platform: row.platform,
+            occurredAt: importedAt,
+            settlement: 'EXTERNAL',
+            externalReference: `securities:${batch.id}:${row.line}:${randomUUID()}`,
+            comment:
+              'Inventaire de positions importé par CSV. Date d’achat inconnue ; date effective confirmée ; conversion du coût au taux disponible à la date d’import.',
+          },
+          new Date(payload.asOf),
+        );
         await saveSecurityQuote(tx, asset, quote);
       }
       await validateLedger(tx, portfolio.id);
       await tx.importBatch.update({ where: { id: batch.id }, data: { status: 'COMMITTED' } });
+      return result;
+    },
+  );
+}
+
+// Correction ciblée : ni montant, ni quantité, ni FX, ni snapshot ne sont réécrits.
+// L'aperçu est sans écriture ; la confirmation doit porter sur la même version du journal.
+export async function correctInventoryDate(
+  userId: string,
+  id: string,
+  input: unknown,
+  key: string | null,
+) {
+  const options = z
+    .object({
+      asOf: dateSchema.transform((value) => new Date(value).toISOString()),
+      reason: z.string().trim().min(3).max(500),
+      confirmed: z.literal(true).optional(),
+      version: z.number().int().nonnegative().optional(),
+    })
+    .strict()
+    .parse(input);
+  return mutate(
+    userId,
+    key,
+    `POST/securities/inventories/${id}/date`,
+    input,
+    async (tx, portfolio) => {
+      const row = await tx.transaction.findFirst({
+        where: { id, portfolioId: portfolio.id, voided: false },
+      });
+      if (!row) throw new AppError('NOT_FOUND', 'Inventaire introuvable.', 404);
+      if (row.type !== 'ADJUSTMENT' || !row.externalReference?.startsWith('securities:'))
+        throw new AppError(
+          'IMPORT_KIND',
+          'Cette correction est réservée aux inventaires CSV Bourse.',
+          422,
+        );
+      const asOf = new Date(options.asOf);
+      if (asOf > row.createdAt)
+        throw new AppError(
+          'INVENTORY_DATE',
+          'La date effective ne peut pas suivre la date réelle d’import.',
+          422,
+        );
+      const entries = await tx.transaction.findMany({
+        where: { portfolioId: portfolio.id, voided: false },
+      });
+      if (
+        entries.some(
+          (t) =>
+            t.id !== id &&
+            t.assetId === row.assetId &&
+            t.platform === row.platform &&
+            t.occurredAt >= new Date(Math.min(+row.occurredAt, +asOf)) &&
+            t.occurredAt <= new Date(Math.max(+row.occurredAt, +asOf)),
+        )
+      )
+        throw new AppError(
+          'INVENTORY_OVERLAP',
+          'Des opérations existent entre les deux dates. Vérifiez leur inclusion dans l’inventaire avant toute correction.',
+          409,
+        );
+      const ledger = replay(
+        entries.map((t) => toLedger(t.id === id ? { ...t, occurredAt: asOf } : t)),
+      );
+      const result = {
+        id,
+        version: portfolio.version,
+        before: row.occurredAt.toISOString(),
+        asOf: options.asOf,
+        importedAt: row.createdAt.toISOString(),
+        quantity: String(row.quantity),
+        unitPrice: String(row.unitPrice),
+        currency: row.currency,
+        position: row.assetId ? ledger.assets[row.assetId] : null,
+      };
+      if (!options.confirmed) throw new UnchangedMutation(result);
+      if (options.version !== portfolio.version)
+        throw new AppError(
+          'PREVIEW_STALE',
+          'Le journal a changé. Recréez l’aperçu de correction.',
+          409,
+        );
+      if (+row.occurredAt === +asOf) throw new UnchangedMutation(result);
+      const updated = await tx.transaction.update({
+        where: { id },
+        data: { occurredAt: asOf, version: { increment: 1 } },
+      });
+      await tx.transactionRevision.create({
+        data: {
+          transactionId: id,
+          version: updated.version,
+          actorId: userId,
+          reason: `Correction de date effective d’inventaire : ${options.reason}`,
+          payload: json(updated),
+        },
+      });
       return result;
     },
   );

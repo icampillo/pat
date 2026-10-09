@@ -18,11 +18,13 @@ test('import Bourso : fichier, aperçu, confirmation et présentation mobile', a
       csv,
       platform: 'BoursoBank PEA',
       boursoCurrency: 'EUR',
+      asOf: '2026-09-23T15:50:30.000Z',
     });
     await route.fulfill({
       json: {
         data: {
           id: 'preview-ui-test',
+          asOf: '2026-09-23T15:50:30.000Z',
           errors: [],
           expiresAt: new Date(Date.now() + 60000).toISOString(),
           rows: [
@@ -52,10 +54,17 @@ test('import Bourso : fichier, aperçu, confirmation et présentation mobile', a
     expect(route.request().postDataJSON()).toEqual({ confirmed: true });
     await route.fulfill({ json: { data: { id: 'preview-ui-test', created: 1, skipped: 0 } } });
   });
-  await page.getByLabel('Compte / courtier').fill('BoursoBank PEA');
-  await page
-    .getByLabel('Fichier CSV Bourse')
-    .setInputFiles({ name: 'bourso.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await page.getByLabel('Nouveau compte / courtier').fill('BoursoBank PEA');
+  await page.getByLabel('Fichier CSV Bourse').setInputFiles({
+    name: 'export-positions-instantanees-23-09-2026_17-50-30.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(csv),
+  });
+  await expect(page.getByLabel('Date effective de l’inventaire (Europe/Paris)')).toHaveValue(
+    '2026-09-23T17:50:30',
+  );
+  await expect(page.getByRole('button', { name: 'Analyser le CSV Bourse' })).toBeDisabled();
+  await page.getByLabel('Je confirme la date effective de cet inventaire').check();
   await page.getByRole('button', { name: 'Analyser le CSV Bourse' }).click();
   await expect(
     page.getByRole('heading', { name: 'Aperçu Bourse · 1 position(s) à créer' }),
@@ -64,7 +73,10 @@ test('import Bourso : fichier, aperçu, confirmation et présentation mobile', a
     '20,01',
   );
   await expect(page.getByText('Enregistrement effectué.', { exact: true })).toHaveCount(0);
-  await page.evaluate(() => { window.scrollTo(0, 0); if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
   mkdirSync('.local/screenshots', { recursive: true });
   await page.screenshot({ path: '.local/screenshots/import-bourse-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 375, height: 812 });

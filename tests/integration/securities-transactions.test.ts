@@ -98,6 +98,7 @@ async function csvInventory(user: Awaited<ReturnType<typeof owner>>) {
     const batch = await previewSecurities(
       user.userId,
       {
+        asOf: '2026-09-23T15:50:30.000Z',
         csv: 'name;isin;quantity;pru;currency\nLibellé CSV différent; ie0002xzsho1 ;10;7;EUR',
         platform,
       },
@@ -259,13 +260,21 @@ it('bloque un achat antérieur à un inventaire CSV, y compris un forçage CREAT
   provider();
   const inv = await previewSecurities(
     user.userId,
-    { csv: 'isin;quantity;pru;currency\nIE0002XZSHO1;30;7.229;EUR', platform },
+    {
+      asOf: '2026-10-08T12:00:00.000Z',
+      csv: 'isin;quantity;pru;currency\nIE0002XZSHO1;30;7.229;EUR',
+      platform,
+    },
     randomUUID(),
   );
   await confirmSecurities(user.userId, inv.id, { confirmed: true }, randomUUID());
   const before = await db().transaction.findMany({ where: { portfolioId: user.portfolioId } });
   const batch = await preview(user.userId);
-  expect(batch.rows[0]).toMatchObject({ status: 'AMBIGUOUS', canCreate: false });
+  expect(batch.rows[0]).toMatchObject({
+    status: 'INVENTORY_REVIEW',
+    canCreate: false,
+    candidates: [],
+  });
   await expect(
     confirm(user.userId, batch.id, [{ line: 1, action: 'CREATE' }]),
   ).rejects.toMatchObject({ code: 'IMPORT_DECISION' });

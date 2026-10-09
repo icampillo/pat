@@ -121,10 +121,17 @@ export async function insertTransaction(
   portfolioId: string,
   userId: string,
   input: unknown,
+  inventoryAsOf?: Date,
 ) {
-  const row = await tx.transaction.create({
-    data: await prepareTransaction(tx, portfolioId, input),
-  });
+  const data = await prepareTransaction(tx, portfolioId, input);
+  if (inventoryAsOf) {
+    if (data.type !== 'ADJUSTMENT')
+      throw new AppError('IMPORT_KIND', 'Date effective réservée aux inventaires.');
+    data.occurredAt = new Date(
+      transactionSchema.shape.occurredAt.parse(inventoryAsOf.toISOString()),
+    );
+  }
+  const row = await tx.transaction.create({ data });
   await tx.transactionRevision.create({
     data: {
       transactionId: row.id,
@@ -487,6 +494,12 @@ export async function command(
         checkVersion(row.version, version);
         if (row.assetId) await requireActiveAsset(tx, p.id, row.assetId);
         if (method === 'PATCH') {
+          if (row.type === 'ADJUSTMENT' && row.externalReference?.startsWith('securities:'))
+            throw new AppError(
+              'INVENTORY_CORRECTION',
+              'Utilisez la correction contrôlée de date de cet inventaire CSV.',
+              422,
+            );
           const { transaction, reason } = transactionEditSchema.parse(input);
           const data = await prepareTransaction(tx, p.id, transaction, row);
           const updated = await tx.transaction.update({

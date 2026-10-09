@@ -76,6 +76,7 @@ const payloadSchema = z.object({
 export type ImportPreview = {
   id: string;
   rows: (Match & {
+    positionEffect: 'EXISTING_POSITION' | 'NEW_POSITION' | null;
     asset: string;
     type: string;
     quantity: string;
@@ -83,7 +84,7 @@ export type ImportPreview = {
     currency: string;
     occurredAt: string;
   })[];
-  summary: Record<'EXISTING' | 'NEW' | 'CHANGED' | 'AMBIGUOUS', number> & {
+  summary: Record<Match['status'], number> & {
     reinforced: number;
     newPositions: number;
   };
@@ -362,7 +363,10 @@ export async function importCommand(
             errors.push({ line: row.line, message: (error as Error).message });
           }
         }
-        if (!errors.length && !matches.some((r) => ['CHANGED', 'AMBIGUOUS'].includes(r.status))) {
+        if (
+          !errors.length &&
+          !matches.some((r) => ['CHANGED', 'AMBIGUOUS', 'INVENTORY_REVIEW'].includes(r.status))
+        ) {
           try {
             replay([...existing.filter((t) => !t.voided), ...prepared]);
           } catch (error) {
@@ -372,19 +376,25 @@ export async function importCommand(
         const newAssetIds = new Set(
           matches.filter((r) => r.status === 'NEW' && r.data.assetId).map((r) => r.data.assetId),
         );
-        const knownAssetIds = new Set(existing.filter((t) => !t.voided).map((t) => t.assetId));
+        const knownAssetIds = new Set(assets.map((asset) => asset.id));
         const summary = {
           EXISTING: 0,
           NEW: 0,
           CHANGED: 0,
           AMBIGUOUS: 0,
-          reinforced: [...newAssetIds].filter((id) => knownAssetIds.has(id)).length,
-          newPositions: [...newAssetIds].filter((id) => !knownAssetIds.has(id)).length,
+          INVENTORY_REVIEW: 0,
+          reinforced: [...newAssetIds].filter((id) => knownAssetIds.has(id!)).length,
+          newPositions: [...newAssetIds].filter((id) => !knownAssetIds.has(id!)).length,
         };
         for (const row of matches) summary[row.status]++;
         const expiresAt = new Date(Date.now() + 30 * 60_000);
         const display = matches.map((r) => ({
           ...r,
+          positionEffect: !r.data.assetId
+            ? null
+            : plans.some((p) => p.id === r.data.assetId)
+              ? 'NEW_POSITION'
+              : 'EXISTING_POSITION',
           asset:
             assets.find((a) => a.id === r.data.assetId)?.name ??
             plans.find((a) => a.id === r.data.assetId)?.name ??
@@ -464,7 +474,7 @@ export async function importCommand(
         // d’un autre import peuvent en revanche être ignorés sans refaire l’aperçu.
         if (
           batch.ledgerVersion !== portfolio.version &&
-          matches.some((r) => ['CHANGED', 'AMBIGUOUS'].includes(r.status))
+          matches.some((r) => ['CHANGED', 'AMBIGUOUS', 'INVENTORY_REVIEW'].includes(r.status))
         )
           throw new AppError('PREVIEW_STALE', 'Le journal a changé. Recréez l’aperçu.', 409);
         const currentAssets = await tx.asset.findMany({

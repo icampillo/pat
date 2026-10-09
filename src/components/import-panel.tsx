@@ -11,7 +11,8 @@ const labels = {
   EXISTING: 'Déjà connue',
   NEW: 'Nouvelle',
   CHANGED: 'Potentiellement modifiée',
-  AMBIGUOUS: 'À vérifier',
+  AMBIGUOUS: 'Conflit à vérifier',
+  INVENTORY_REVIEW: 'Antérieure à l’inventaire · vérification requise',
 };
 const fieldLabels: Record<string, string> = {
   assetId: 'Actif',
@@ -41,7 +42,7 @@ export function ImportSummary({ preview }: { preview: ImportPreview }) {
       </p>
       <p>
         ↻ {preview.summary.CHANGED} potentiellement modifiées · ⚠ {preview.summary.AMBIGUOUS} à
-        vérifier
+        vérifier · {preview.summary.INVENTORY_REVIEW} antérieures ou égales à un inventaire
       </p>
       <p className="muted">
         {preview.summary.reinforced} positions avec de nouvelles opérations ·{' '}
@@ -341,7 +342,24 @@ export function ImportPanel({
                         {r.amount} {r.currency}
                       </td>
                       <td>
-                        <strong>{labels[r.status]}</strong>
+                        <strong>
+                          {r.status === 'NEW' && r.positionEffect
+                            ? r.positionEffect === 'NEW_POSITION'
+                              ? 'Nouvelle transaction créant une position'
+                              : 'Nouvelle transaction sur position existante'
+                            : labels[r.status]}
+                        </strong>
+                        {r.inventories?.map((inventory) => (
+                          <p key={inventory.id}>
+                            <a className="text-link" href={`/transactions/${inventory.id}`}>
+                              Vérifier l’inventaire du{' '}
+                              {new Date(inventory.asOf).toLocaleString('fr-FR', {
+                                timeZone: 'Europe/Paris',
+                              })}{' '}
+                              (Europe/Paris)
+                            </a>
+                          </p>
+                        ))}
                         {r.reason && <p>{r.reason}</p>}
                         {r.candidates.length > 0 && (
                           <details>
@@ -365,7 +383,7 @@ export function ImportPanel({
                             ))}
                           </details>
                         )}
-                        {['CHANGED', 'AMBIGUOUS'].includes(r.status) && (
+                        {['CHANGED', 'AMBIGUOUS', 'INVENTORY_REVIEW'].includes(r.status) && (
                           <>
                             <p className="small">
                               La transaction existante reste intacte. Corrigez-la si nécessaire dans
@@ -406,6 +424,7 @@ export function ImportPanel({
           {preview.summary.NEW === 0 &&
           preview.summary.CHANGED === 0 &&
           preview.summary.AMBIGUOUS === 0 &&
+          preview.summary.INVENTORY_REVIEW === 0 &&
           !preview.errors.length ? (
             <p className="notice">Tout est déjà synchronisé. Aucun changement en base.</p>
           ) : (

@@ -1,0 +1,13 @@
+BoursoBank ACHAT COMPTANT ETR ACTION
+Date et heure locale d'exécution Quantité Informations sur la valeur
+Informations sur l'exécution
+07/10/2026
+17:03:18
+6 ETF EMERGENTS SYNTHETIQUE Référence : 222222222
+Type d'ordre : à cours limite
+Cours demandé : 37,350 EUR
+Code ISIN : FR0013412020 Cours exécuté : 37,350 EUR
+Lieu d'exécution : EURONEXT PARIS
+Montant brut Commission Frais (¨) Montant net au débit de votre compte
+224,10 EUR 0,00 EUR 224,10 EUR
+Sous réserve de bonne fin.

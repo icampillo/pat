@@ -2,12 +2,13 @@ import { createHash } from 'node:crypto';
 import type { ImportTransaction } from '@/domain/transaction-csv';
 import { precise } from '@/domain/money';
 
-export type MatchStatus = 'EXISTING' | 'NEW' | 'CHANGED' | 'AMBIGUOUS';
+export type MatchStatus = 'EXISTING' | 'NEW' | 'CHANGED' | 'AMBIGUOUS' | 'INVENTORY_REVIEW';
 export type StoredTransaction = ImportTransaction & { id: string; voided: boolean };
 export type MatchRow = { line: number; data: ImportTransaction };
 export type Match = MatchRow & {
   status: MatchStatus;
   candidates: { id: string; differences: { field: string; before: string; after: string }[] }[];
+  inventories?: { id: string; asOf: string }[];
   reason?: string;
   canCreate?: boolean;
 };
@@ -75,7 +76,13 @@ export function matchTransactions(rows: MatchRow[], stored: StoredTransaction[])
   const accept = (row: Match, t: StoredTransaction) => {
     used.add(t.id);
     row.status = t.voided ? 'AMBIGUOUS' : differences(t, row.data).length ? 'CHANGED' : 'EXISTING';
-    row.candidates = [candidate(row, t)];
+    row.candidates =
+      (t.type === 'ADJUSTMENT') !== (row.data.type === 'ADJUSTMENT') ? [] : [candidate(row, t)];
+    if ((t.type === 'ADJUSTMENT') !== (row.data.type === 'ADJUSTMENT')) {
+      row.status = 'AMBIGUOUS';
+      row.reason =
+        'Conflit de référence avec un inventaire : ce n’est pas une transaction d’achat ou de vente.';
+    }
     if (t.voided)
       row.reason =
         'Cette opération a été annulée dans le journal. Elle ne sera pas recréée automatiquement.';
@@ -92,7 +99,8 @@ export function matchTransactions(rows: MatchRow[], stored: StoredTransaction[])
       for (const row of group) {
         row.status = 'AMBIGUOUS';
         row.reason = 'La même référence désigne des lignes différentes dans ce fichier.';
-        if (known) row.candidates = [candidate(row, known)];
+        if (known && (known.type === 'ADJUSTMENT') === (row.data.type === 'ADJUSTMENT'))
+          row.candidates = [candidate(row, known)];
       }
       if (known) used.add(known.id);
     } else {
@@ -131,14 +139,15 @@ export function matchTransactions(rows: MatchRow[], stored: StoredTransaction[])
         t.platform === row.data.platform &&
         Date.parse(t.occurredAt) >= Date.parse(row.data.occurredAt),
     );
-    if (possible.length || inventory.length) {
-      const candidates = possible.length ? possible : inventory;
-      row.status =
-        possible.length === 1 && !possible[0].voided && !inventory.length ? 'CHANGED' : 'AMBIGUOUS';
-      row.candidates = candidates.map((t) => candidate(row, t));
-      row.reason = inventory.length
-        ? 'Un inventaire initial couvre peut-être cet historique. Vérifiez le journal avant d’ajouter ces opérations.'
-        : 'Opération proche sans identifiant fiable : aucune modification automatique.';
+    if (inventory.length) {
+      row.status = 'INVENTORY_REVIEW';
+      row.inventories = inventory.map((t) => ({ id: t.id, asOf: t.occurredAt }));
+      row.reason =
+        'Transaction antérieure ou égale à l’inventaire : elle peut déjà être incluse. Vérifiez la date effective de l’inventaire dans le journal. Aucun ajout autorisé.';
+    } else if (possible.length) {
+      row.status = possible.length === 1 && !possible[0].voided ? 'CHANGED' : 'AMBIGUOUS';
+      row.candidates = possible.map((t) => candidate(row, t));
+      row.reason = 'Opération proche sans identifiant fiable : aucune modification automatique.';
     }
   }
   for (const row of result) {
