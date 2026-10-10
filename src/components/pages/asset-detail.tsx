@@ -75,6 +75,7 @@ export function AssetDetailPage({ state, asset }: { state: AppState; asset: Asse
                 Modifier
               </button>
               <button
+                aria-busy={busy}
                 className="btn"
                 disabled={busy}
                 onClick={() =>
@@ -215,7 +216,7 @@ export function AssetDetailPage({ state, asset }: { state: AppState; asset: Asse
                           defaultValue={asset.price || ''}
                         />
                       </label>
-                      <button className="btn primary" disabled={busy}>
+                      <button aria-busy={busy} className="btn primary" disabled={busy}>
                         <RefreshCw size={16} />
                         Enregistrer le prix
                       </button>
@@ -226,6 +227,7 @@ export function AssetDetailPage({ state, asset }: { state: AppState; asset: Asse
                       currency={asset.currency}
                     />
                     <button
+                      aria-busy={busy}
                       className="text-link"
                       disabled={busy}
                       onClick={() =>

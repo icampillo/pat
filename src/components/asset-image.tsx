@@ -15,7 +15,7 @@ export function AssetImage({
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   return (
-    <section className="asset-image">
+    <section className="asset-image" aria-busy={busy}>
       <h3>Image de l’actif</h3>
       {updatedAt && (
         <Image

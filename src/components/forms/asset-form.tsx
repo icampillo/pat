@@ -1,4 +1,5 @@
 'use client';
+import { BusyLabel } from '@/components/ui/busy-label';
 import { categoryStyle } from '@/components/ui/category-appearance';
 import { errorMessage } from '@/shared/errors';
 import { assetCreationSchema, assetUpdateSchema } from '@/shared/schemas';
@@ -238,9 +239,11 @@ export function AssetForm({
           <Link className="btn" href={asset ? `/assets/${asset.id}` : '/assets'}>
             Annuler
           </Link>
-          <button className="btn primary" disabled={busy}>
+          <button aria-busy={busy} className="btn primary" disabled={busy}>
             <Save size={16} />
-            {busy ? 'Enregistrement…' : 'Enregistrer l’actif'}
+            <BusyLabel busy={busy} pending="Enregistrement…">
+              Enregistrer l’actif
+            </BusyLabel>
           </button>
         </div>
       </form>

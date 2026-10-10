@@ -82,7 +82,7 @@ export function WalletAddForm({
           Les actifs déjà saisis manuellement restent comptés. Excluez ce wallet du total si ses
           positions sont déjà représentées dans vos saisies.
         </p>
-        <button className="btn primary" disabled={busy}>
+        <button aria-busy={busy} className="btn primary" disabled={busy}>
           <Plus size={16} />
           Ajouter le wallet
         </button>

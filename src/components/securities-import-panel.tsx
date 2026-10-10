@@ -1,4 +1,5 @@
 'use client';
+import { BusyLabel } from '@/components/ui/busy-label';
 import { TableScroll } from '@/components/ui/table-scroll';
 import { parisDateTime, suggestInventoryDate } from '@/domain/inventory-date';
 import { sortByValue, valueInEur } from '@/domain/value-sort';
@@ -172,6 +173,7 @@ export function SecuritiesImportPanel({
       </div>
       <div className="heading-actions">
         <button
+          aria-busy={busy}
           className="btn primary"
           disabled={busy || !csv || !platform.trim() || !asOf || !dateConfirmed}
           onClick={() =>
@@ -190,12 +192,15 @@ export function SecuritiesImportPanel({
           }
         >
           <Upload size={16} />
-          {busy ? 'Traitement en cours…' : 'Analyser le CSV Bourse'}
+          <BusyLabel busy={busy} pending="Traitement en cours…">
+            Analyser le CSV Bourse
+          </BusyLabel>
         </button>
         <a className="text-link" href="/import-bourse.csv" download>
           Modèle CSV générique
         </a>
         <button
+          aria-busy={busy}
           className="btn"
           disabled={busy}
           onClick={() =>
@@ -310,6 +315,7 @@ export function SecuritiesImportPanel({
             </p>
           ) : (
             <button
+              aria-busy={busy}
               className="btn primary"
               disabled={busy || preview.errors.length > 0 || !preview.rows.length}
               onClick={() =>

@@ -66,7 +66,7 @@ function SettingsContent({
               <option>UTC</option>
             </select>
           </label>
-          <button className="btn primary" disabled={busy}>
+          <button aria-busy={busy} className="btn primary" disabled={busy}>
             Enregistrer les préférences
           </button>
         </form>
@@ -79,6 +79,7 @@ function SettingsContent({
             : 'Aucun taux EUR/USD renseigné.'}
         </p>
         <button
+          aria-busy={busy}
           className="btn"
           disabled={busy}
           onClick={() => run(() => save('market/refresh', 'POST', {}))}
@@ -110,7 +111,7 @@ function SettingsContent({
             Date du taux
             <input name="observedAt" type="datetime-local" required />
           </label>
-          <button className="btn primary" disabled={busy}>
+          <button aria-busy={busy} className="btn primary" disabled={busy}>
             Enregistrer le taux
           </button>
         </form>

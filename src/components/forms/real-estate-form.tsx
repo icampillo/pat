@@ -1,4 +1,5 @@
 'use client';
+import { BusyLabel } from '@/components/ui/busy-label';
 import { ArrowLeft } from 'lucide-react';
 import { money } from '@/components/workspace/display';
 import { categoryStyle } from '@/components/ui/category-appearance';
@@ -139,7 +140,10 @@ export function RealEstateForm({
   }
   return (
     <div className="form-wrap" style={categoryStyle('REAL_ESTATE')}>
-      <Link className="back" href="/categories/real-estate"><ArrowLeft size={16} aria-hidden="true" />Immobilier</Link>
+      <Link className="back" href="/categories/real-estate">
+        <ArrowLeft size={16} aria-hidden="true" />
+        Immobilier
+      </Link>
       <form
         className="panel form-panel"
         onSubmit={submit}
@@ -324,8 +328,10 @@ export function RealEstateForm({
           <Link className="btn" href={asset ? `/assets/${asset.id}` : '/assets'}>
             Annuler
           </Link>
-          <button className="btn primary" disabled={busy}>
-            {busy ? 'Enregistrement…' : 'Enregistrer le bien'}
+          <button aria-busy={busy} className="btn primary" disabled={busy}>
+            <BusyLabel busy={busy} pending="Enregistrement…">
+              Enregistrer le bien
+            </BusyLabel>
           </button>
         </div>
       </form>

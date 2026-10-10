@@ -20,7 +20,7 @@ import { useState } from 'react';
 
 import shellStyles from './shell.module.css';
 import { categorySlug } from '@/domain/categories';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useWorkspace } from './context';
 const nav = [
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
@@ -50,7 +50,12 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
       : view === 'transactions' || view === 'history'
         ? 'activity'
         : view;
-  const [mobile, setMobile] = useState(false);
+  const location = pathname + '?' + useSearchParams().toString();
+  const [mobileLocation, setMobileLocation] = useState<string | null>(null);
+  const mobile = mobileLocation === location;
+  // Close on commit, not on click: a slow destination keeps its native Link status mounted.
+  if (mobileLocation !== null && !mobile) setMobileLocation(null);
+  const setMobile = (open: boolean) => setMobileLocation(open ? location : null);
   const { state, userName, currency, setCurrency } = useWorkspace();
   const pageTitle =
     view === 'categories'
@@ -79,9 +84,8 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
             <Link
               href={n.href}
               aria-label={n.label}
-              prefetch={true}
               onClick={() => {
-                setMobile(false);
+                if (pathname === n.href) setMobile(false);
               }}
               aria-current={activeView === n.href.slice(1) ? 'page' : undefined}
               className={`nav-item ${activeView === n.href.slice(1) ? 'active' : ''}`}
@@ -95,10 +99,20 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
             </Link>
             {n.href === '/activity' && (
               <div className={shellStyles.subnav}>
-                <Link href="/activity?view=transactions" onClick={() => setMobile(false)}>
+                <Link
+                  href="/activity?view=transactions"
+                  onClick={() => {
+                    if (location === '/activity?view=transactions') setMobile(false);
+                  }}
+                >
                   Transactions
                 </Link>
-                <Link href="/activity?view=history" onClick={() => setMobile(false)}>
+                <Link
+                  href="/activity?view=history"
+                  onClick={() => {
+                    if (location === '/activity?view=history') setMobile(false);
+                  }}
+                >
                   Historique
                 </Link>
               </div>
@@ -109,8 +123,9 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
       <div className="sidebar-bottom">
         <Link
           href="/settings"
-          prefetch={true}
-          onClick={() => setMobile(false)}
+          onClick={() => {
+            if (pathname === '/settings') setMobile(false);
+          }}
           aria-current={view === 'settings' ? 'page' : undefined}
           className={`nav-item ${view === 'settings' ? 'active' : ''}`}
         >

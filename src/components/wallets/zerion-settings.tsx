@@ -1,4 +1,5 @@
 'use client';
+import { BusyLabel } from '@/components/ui/busy-label';
 import { errorMessage } from '@/shared/errors';
 import type { SaveAction } from '@/components/forms';
 import type { AppState } from '@/shared/types';
@@ -46,8 +47,10 @@ export function ZerionSettings({ state, save }: { state: AppState; save: SaveAct
           chaque page ou nouvelle tentative consomme du quota. Aucun abonnement payant n’est activé
           par l’application.
         </p>
-        <button className="btn primary" disabled={busy}>
-          {busy ? 'Enregistrement…' : 'Enregistrer Zerion'}
+        <button aria-busy={busy} className="btn primary" disabled={busy}>
+          <BusyLabel busy={busy} pending="Enregistrement…">
+            Enregistrer Zerion
+          </BusyLabel>
         </button>
       </form>
       {message && (

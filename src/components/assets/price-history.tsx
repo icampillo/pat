@@ -1,4 +1,5 @@
 'use client';
+import { BusyLabel } from '@/components/ui/busy-label';
 import { History } from 'lucide-react';
 import { useState } from 'react';
 
@@ -14,6 +15,7 @@ export function PriceHistoryList({ id, currency }: { id: string; currency: strin
       <button
         className="text-link"
         disabled={loading}
+        aria-busy={loading}
         onClick={async () => {
           if (prices) {
             setPrices(null);
@@ -33,17 +35,16 @@ export function PriceHistoryList({ id, currency }: { id: string; currency: strin
           }
         }}
       >
-        {loading
-          ? 'Chargement des prix…'
-          : prices
-            ? 'Masquer l’historique des prix'
-            : 'Consulter l’historique des prix'}{' '}
+        <BusyLabel busy={loading} pending="Chargement des prix…">
+          {prices ? 'Masquer l’historique des prix' : 'Consulter l’historique des prix'}
+        </BusyLabel>{' '}
         <History size={15} />
       </button>
-      {loading && (
-        <span className="loading-spinner" role="status" aria-label="Chargement des prix" />
+      {error && (
+        <p className="error-note" role="alert">
+          {error}
+        </p>
       )}
-      {error && <p className="error-note" role="alert">{error}</p>}
       {prices && (
         <div className="price-list">
           {!prices.length && <p className="empty-inline">Aucun cours enregistré pour cet actif.</p>}

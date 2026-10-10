@@ -107,7 +107,9 @@ test('revalidates once after saving, keeps content visible and shares new state 
   await page.goto('/settings');
   await page.getByRole('textbox', { name: 'Nom', exact: true }).fill('Nom actualisé');
   await page.getByRole('button', { name: 'Enregistrer les préférences' }).click();
-  await expect(page.getByText('Actualisation…', { exact: true })).toBeVisible();
+  await expect.poll(() => reads).toBe(2);
+  await expect(page.locator('.workspace-loading, .navigation-progress')).toHaveCount(0);
+  await expect(page.getByText('Actualisation…', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Paramètres', exact: true })).toBeVisible();
   saved.release();
   await expect(page.locator('.portfolio-switch')).toContainText('Nom actualisé');
@@ -163,7 +165,9 @@ test('keeps navigation responsive during stale refresh and skips polling in hidd
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  await expect(page.getByText('Actualisation…', { exact: true })).toBeVisible();
+  await expect.poll(() => reads).toBe(2);
+  await expect(page.locator('.workspace-loading, .navigation-progress')).toHaveCount(0);
+  await expect(page.getByText('Actualisation…', { exact: true })).toHaveCount(0);
   await page
     .getByRole('navigation', { name: 'Navigation principale' })
     .getByRole('link', { name: 'Portefeuille' })

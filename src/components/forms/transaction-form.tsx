@@ -1,4 +1,5 @@
 'use client';
+import { BusyLabel } from '@/components/ui/busy-label';
 import { errorMessage } from '@/shared/errors';
 import { decimal } from '@/domain/money';
 import { transactionSchema, typeLabels } from '@/shared/schemas';
@@ -267,9 +268,11 @@ export function TransactionForm({
           <Link className="btn" href="/activity">
             Annuler
           </Link>
-          <button className="btn primary" disabled={busy}>
+          <button aria-busy={busy} className="btn primary" disabled={busy}>
             <Check size={16} />
-            {busy ? 'Enregistrement…' : 'Enregistrer la transaction'}
+            <BusyLabel busy={busy} pending="Enregistrement…">
+              Enregistrer la transaction
+            </BusyLabel>
           </button>
         </div>
       </form>

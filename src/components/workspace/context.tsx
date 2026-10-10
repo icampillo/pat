@@ -44,7 +44,6 @@ export function WorkspaceProvider({
   const [store] = useState(() => createWorkspaceStore(initialState));
   const {
     data: state,
-    loading,
     error,
     unauthorized,
   } = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
@@ -160,7 +159,7 @@ export function WorkspaceProvider({
         </button>
       </main>
     ) : (
-      <WorkspaceLoading fullPage />
+      <WorkspaceLoading fullPage pathname={pathname} />
     );
 
   return (
@@ -177,25 +176,21 @@ export function WorkspaceProvider({
         setFlash,
       }}
     >
-      {loading && (
-        <div className="workspace-refresh" role="status">
-          <span className="loading-spinner" aria-hidden="true" />
-          Actualisation…
-        </div>
-      )}
-      {error && (
-        <div className="workspace-refresh refresh-error" role="alert">
-          {error} Les dernières données restent affichées.{' '}
-          <button className="text-link" onClick={() => void store.refresh(true)}>
-            Réessayer
-          </button>
-        </div>
-      )}
-      {marketWarning && (
-        <div className="workspace-refresh refresh-error" role="status">
-          {marketWarning}
-        </div>
-      )}
+      <div className="workspace-notifications">
+        {error && (
+          <div className="workspace-refresh refresh-error" role="alert">
+            {error} Les dernières données restent affichées.{' '}
+            <button className="text-link" onClick={() => void store.refresh(true)}>
+              Réessayer
+            </button>
+          </div>
+        )}
+        {marketWarning && (
+          <div className="workspace-refresh refresh-error" role="status">
+            {marketWarning}
+          </div>
+        )}
+      </div>
       {children}
     </WorkspaceContext.Provider>
   );

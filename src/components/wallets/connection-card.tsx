@@ -118,6 +118,7 @@ export function WalletConnectionCard({
         )}
         <div className="wallet-actions">
           <button
+            aria-busy={busy || w.status === 'SYNCING'}
             className="btn"
             disabled={
               busy || !config.configured || !config.enabled || !w.enabled || w.status === 'SYNCING'
@@ -128,6 +129,7 @@ export function WalletConnectionCard({
             Actualiser
           </button>
           <button
+            aria-busy={busy}
             className="btn"
             disabled={busy}
             onClick={() => run(() => save(`wallets/${w.id}`, 'PATCH', { enabled: !w.enabled }))}
@@ -140,7 +142,12 @@ export function WalletConnectionCard({
             description="Elle sera exclue du patrimoine et ne sera plus synchronisée. Les captures historiques sont conservées."
             onConfirm={() => run(() => save(`wallets/${w.id}`, 'DELETE', {}))}
           >
-            <button className="icon-btn" aria-label={`Retirer ${w.label}`} disabled={busy}>
+            <button
+              aria-busy={busy}
+              className="icon-btn"
+              aria-label={`Retirer ${w.label}`}
+              disabled={busy}
+            >
               <Trash2 size={16} />
             </button>
           </Confirm>

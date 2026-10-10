@@ -1,4 +1,5 @@
 'use client';
+import { BusyLabel } from '@/components/ui/busy-label';
 import { TableScroll } from '@/components/ui/table-scroll';
 import { sortByValue, valueInEur } from '@/domain/value-sort';
 import { errorMessage } from '@/shared/errors';
@@ -241,7 +242,9 @@ export function ImportPanel({
         }
       >
         <Upload size={16} />
-        {busy ? 'Traitement en cours…' : 'Vérifier et afficher l’aperçu'}
+        <BusyLabel busy={busy} pending="Traitement en cours…">
+          Vérifier et afficher l’aperçu
+        </BusyLabel>
       </button>
       {error && (
         <p className="error-note" role="alert">
@@ -425,6 +428,7 @@ export function ImportPanel({
             <p className="notice">Tout est déjà synchronisé. Aucun changement en base.</p>
           ) : (
             <button
+              aria-busy={busy}
               className="btn primary"
               disabled={busy || !!preview.errors.length || count === 0}
               onClick={() =>

@@ -52,7 +52,7 @@ export function SecurityPricingRepair({ asset, save }: { asset: AssetView; save:
           }}
         />
       </label>
-      <button className="btn" disabled={busy} onClick={() => run(false)}>
+      <button aria-busy={busy} className="btn" disabled={busy} onClick={() => run(false)}>
         Vérifier la cotation
       </button>
       {error && (
@@ -67,7 +67,12 @@ export function SecurityPricingRepair({ asset, save }: { asset: AssetView; save:
             {preview.quote.currency} · cours du{' '}
             {new Date(preview.quote.observedAt).toLocaleString('fr-FR')}
           </p>
-          <button className="btn primary" disabled={busy} onClick={() => run(true)}>
+          <button
+            aria-busy={busy}
+            className="btn primary"
+            disabled={busy}
+            onClick={() => run(true)}
+          >
             Confirmer l’activation des cours automatiques
           </button>
         </>

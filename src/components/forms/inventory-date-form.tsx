@@ -97,6 +97,7 @@ export function InventoryDateForm({
         />
       </label>
       <button
+        aria-busy={busy}
         className="btn"
         disabled={busy || !local || reason.trim().length < 3}
         onClick={() => run(false)}
@@ -121,7 +122,12 @@ export function InventoryDateForm({
             Les snapshots passés restent des observations historiques ; ils ne seront pas
             recalculés. Après correction, relancez l’aperçu des avis d’opéré.
           </p>
-          <button className="btn primary" disabled={busy} onClick={() => run(true)}>
+          <button
+            aria-busy={busy}
+            className="btn primary"
+            disabled={busy}
+            onClick={() => run(true)}
+          >
             Confirmer uniquement la correction de date
           </button>
         </div>

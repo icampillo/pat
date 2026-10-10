@@ -1,4 +1,5 @@
 'use client';
+import { BusyLabel } from '@/components/ui/busy-label';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, ShieldCheck, Eye, EyeOff } from 'lucide-react';
@@ -99,8 +100,10 @@ export default function Login() {
                 {error}
               </p>
             )}
-            <button className="btn primary full" disabled={busy}>
-              {busy ? 'Connexion…' : 'Ouvrir mon portefeuille'}
+            <button aria-busy={busy} className="btn primary full" disabled={busy}>
+              <BusyLabel busy={busy} pending="Connexion…">
+                Ouvrir mon portefeuille
+              </BusyLabel>
               <ArrowRight size={18} />
             </button>
           </form>
