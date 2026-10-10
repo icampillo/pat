@@ -110,6 +110,10 @@
   margin: 0 -8px;
   min-width: 0;
 }
+/* Recharts' focusable SVG gets a native outline on touch even without :focus-visible. */
+:is(.chart, .miniChart)[data-touch-focus='true'] :global(.recharts-surface):focus:not(:focus-visible) {
+  outline: none;
+}
 .chartEmpty {
   min-height: 268px;
   display: flex;

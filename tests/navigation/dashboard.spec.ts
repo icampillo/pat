@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { dashboardDailyFixture, dashboardWithPropertyAndWallet } from '../fixtures/dashboard';
 const money = (value: number, currency = 'EUR') =>
@@ -51,7 +51,7 @@ async function expectTreemapToFillCard(page: Page) {
   });
   expect(bounds).toBe(true);
 }
-for (const width of [1440, 1024, 768, 375]) {
+for (const width of [1440, 1024, 768, 390, 375, 320]) {
   test(`validated composition and accessibility at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -240,43 +240,134 @@ test('periods, currencies, category tooltips and detail links preserve the store
   expect(reads()).toBe(1);
 });
 
-test('treemap opens details only on activation, not hover or focus', async ({ page }) => {
-  const reads = await openDashboard(page);
-  const tiles = page.getByRole('group', { name: 'Répartition par catégories' });
-  const crypto = tiles.getByRole('button', { name: /^Cryptomonnaies/ });
-  await crypto.hover();
-  const details = page.getByTestId('allocation-details');
-  await expect(details).toHaveCount(0);
-  await crypto.focus();
-  await expect(details).toHaveCount(0);
-  await page.keyboard.press('Space');
-  await expect(details).toContainText(money(28640.5));
-  await expect(details.getByRole('link')).toHaveAttribute('href', '/categories/crypto');
-  const stocks = tiles.getByRole('button', { name: /^Bourse/ });
-  await stocks.hover();
-  await expect(details).toContainText(money(28640.5));
-  await stocks.focus();
-  await page.keyboard.press('Enter');
-  await expect(details).toContainText('Bourse');
-  await page.keyboard.press('Escape');
-  await expect(details).toHaveCount(0);
-  await crypto.hover();
-  await expect(details).toHaveCount(0);
-  await page.getByLabel('Devise d’affichage').selectOption('USD');
-  await stocks.click();
-  await expect(details).toContainText(money(75251.264, 'USD'));
-  await page.setViewportSize({ width: 375, height: 850 });
-  await tiles.getByRole('button', { name: /^Liquidités/ }).click();
-  await expect(details).toContainText(money(18150, 'USD'));
-  await expectTreemapToFillCard(page);
-  await expect(details.getByRole('link')).toHaveAttribute('href', '/portfolio');
-  await noOverflow(page);
-  await page.screenshot({
-    path: test.info().outputPath('allocation-mobile-detail.png'),
-    fullPage: true,
+// Relative coordinates stay comparable even when Playwright scrolls a tile into view.
+async function treemapGeometry(tree: Locator) {
+  return tree.evaluate((el) => {
+    const bounds = el.getBoundingClientRect();
+    return [
+      { x: 0, y: 0, width: bounds.width, height: bounds.height },
+      ...[...el.querySelectorAll('button')].map((tile) => {
+        const rect = tile.getBoundingClientRect();
+        return {
+          x: rect.x - bounds.x,
+          y: rect.y - bounds.y,
+          width: rect.width,
+          height: rect.height,
+        };
+      }),
+    ];
   });
-  expect(reads()).toBe(1);
-});
+}
+
+for (const width of [1440, 768, 390, 320]) {
+  test(`mini curves keep vertical room for falling, negative, flat and zero histories at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const state = dashboardDailyFixture();
+    state.snapshots.forEach((snapshot, index) => {
+      // Rendering-only fixtures: a steep drop with a missing observation, a negative drop,
+      // an all-zero series and the existing constant cash series.
+      [(1000000 * (30 - index)) / 30 + 0.01, 50000 - index * 10000, 0].forEach((value, i) => {
+        snapshot.categoryValues![state.categories[i].id] = {
+          valueEur: i === 0 && index === 27 ? null : String(value),
+          valueUsd: i === 0 && index === 27 ? null : String(value * 1.1),
+        };
+      });
+    });
+    await openDashboard(page, state);
+    const cards = page.getByTestId('investment-card');
+    for (const card of await cards.all()) {
+      const chart = card.getByRole('application');
+      await expect(chart).toBeVisible();
+      const height = width <= 600 ? 74 : 94;
+      await expect
+        .poll(() => chart.evaluate((el) => el.getBoundingClientRect().height))
+        .toBe(height);
+      const geometry = await chart.evaluate((svg) => {
+        const curve = svg.querySelector<SVGPathElement>('.recharts-area-curve')!;
+        const fill = svg.querySelector<SVGPathElement>('.recharts-area-area')!;
+        const line = curve.getBBox();
+        const area = fill.getBBox();
+        return {
+          top: line.y,
+          bottom: line.y + line.height,
+          fillTop: area.y,
+          fillBottom: area.y + area.height,
+          length: curve.getTotalLength(),
+          path: curve.getAttribute('d'),
+        };
+      });
+      expect(geometry.length).toBeGreaterThan(100);
+      expect(geometry.top).toBeGreaterThanOrEqual(14);
+      expect(geometry.bottom).toBeLessThanOrEqual(height - 14);
+      expect(geometry.fillTop).toBeGreaterThanOrEqual(8);
+      expect(geometry.fillBottom).toBeLessThanOrEqual(height - 8);
+      expect(geometry.path).not.toMatch(/NaN|Infinity/);
+      await expect(card.locator('.recharts-cartesian-axis')).toHaveCount(0);
+    }
+    // Missing observations must still create a break, not interpolated historical values.
+    expect(
+      (await cards.first().locator('.recharts-area-curve').getAttribute('d'))!.match(/M/g),
+    ).toHaveLength(2);
+    for (const card of [cards.nth(2), cards.nth(3)]) {
+      const box = await card.locator('.recharts-area-curve').evaluate((el) => {
+        const bounds = (el as SVGPathElement).getBBox();
+        return { y: bounds.y, height: bounds.height };
+      });
+      expect(box.height).toBe(0);
+      expect(box.y).toBeCloseTo((width <= 600 ? 74 : 94) / 2, 1);
+    }
+    await noOverflow(page);
+  });
+
+  test(`treemap hover, keyboard and floating tooltip keep geometry at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const reads = await openDashboard(page);
+    const tree = page.getByRole('group', { name: 'Répartition par catégories' });
+    const tooltip = tree.getByRole('tooltip');
+    const crypto = tree.getByRole('button', { name: /^Cryptomonnaies/ });
+    const stocks = tree.getByRole('button', { name: /^Bourse/ });
+    await expectTreemapToFillCard(page);
+    const before = await treemapGeometry(tree);
+    await crypto.hover();
+    await expect(tooltip).toContainText(money(28640.5));
+    await expect(crypto).toHaveAttribute('aria-describedby', (await tooltip.getAttribute('id'))!);
+    await expect(tooltip.getByRole('link')).toHaveCount(0);
+    expect(await treemapGeometry(tree)).toEqual(before);
+    await stocks.hover();
+    await expect(tooltip).toContainText('Bourse');
+    await page.getByRole('heading', { name: 'Répartition', exact: true }).hover();
+    await expect(tooltip).toHaveCount(0);
+    // Tab really moves between the native tile buttons; focus remains visible.
+    await stocks.focus();
+    await page.keyboard.press('Tab');
+    await expect(crypto).toBeFocused();
+    await expect(tooltip).toContainText('Cryptomonnaies');
+    expect(await crypto.evaluate((el) => getComputedStyle(el).outlineStyle)).not.toBe('none');
+    await page.keyboard.press('Escape');
+    await expect(tooltip).toHaveCount(0);
+    await expect(crypto).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(tooltip).toContainText('Cryptomonnaies');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Space');
+    await expect(tooltip).toBeVisible();
+    await page.getByLabel('Devise d’affichage').focus();
+    await expect(tooltip).toHaveCount(0);
+    await page.getByLabel('Devise d’affichage').selectOption('USD');
+    await stocks.hover();
+    await expect(tooltip).toContainText(money(75251.264, 'USD'));
+    // Escape must also dismiss a hover tooltip when keyboard focus is outside the treemap.
+    await page.keyboard.press('Escape');
+    await expect(tooltip).toHaveCount(0);
+    expect(await treemapGeometry(tree)).toEqual(before);
+    await noOverflow(page);
+    expect(reads()).toBe(1);
+  });
+}
 
 test('empty, missing historical categories and incomplete values remain explicit', async ({
   page,
@@ -320,8 +411,12 @@ test('partial cash, missing prices, negative and null references are never compl
   await expect(cash).toContainText('Historique insuffisant');
   await cash.locator('summary').click();
   await expect(cash).toContainText('Valorisation actuelle incomplète');
-  await page.getByText('Toutes les catégories', { exact: false }).click();
-  await expect(page.getByRole('list', { name: 'Poids des catégories' })).not.toContainText('%');
+  const tree = page.getByRole('group', { name: 'Répartition par catégories' });
+  for (const tile of await tree.getByRole('button').all()) {
+    await tile.focus();
+    await expect(tree.getByRole('tooltip')).toContainText('Poids indisponible');
+    await expect(tree.getByRole('tooltip')).not.toContainText('%');
+  }
   await expect(page.locator('main')).not.toContainText(/NaN|undefined/);
   await page.screenshot({
     path: test.info().outputPath('dashboard-incomplete.png'),
@@ -360,10 +455,13 @@ test('many dynamic categories, long amounts, tiny allocations and mobile navigat
       await page.getByTestId('wealth-total').evaluate((el) => el.scrollWidth <= el.clientWidth),
     ).toBe(true);
   }
-  await page.getByText('Toutes les catégories', { exact: false }).click();
-  await expect(
-    page.getByRole('list', { name: 'Poids des catégories' }).getByRole('link'),
-  ).toHaveCount(16);
+  const tree = page.getByRole('group', { name: 'Répartition par catégories' });
+  await expect(tree.getByRole('button')).toHaveCount(16);
+  // Tiny rectangles remain accessible by keyboard even when their visual label is hidden.
+  await tree.getByRole('button', { name: /^Collection 11 :/ }).focus();
+  await expect(tree.getByRole('tooltip')).toContainText('Collection 11');
+  await page.keyboard.press('Escape');
+  await expect(tree.getByRole('tooltip')).toHaveCount(0);
   const mobile = page.getByRole('navigation', { name: 'Navigation mobile' });
   await expect(mobile).toBeVisible();
   await mobile.getByRole('button', { name: /Plus/ }).click();
@@ -406,7 +504,7 @@ test.describe('touch interactions', () => {
       .getByRole('group', { name: 'Répartition par catégories' })
       .getByRole('button', { name: /^Liquidités/ })
       .tap();
-    await expect(page.getByTestId('allocation-details')).toContainText(money(16500));
+    await expect(page.getByRole('tooltip')).toContainText(money(16500));
     const cash = page.getByTestId('investment-card').filter({ hasText: 'Liquidités' });
     await cash.locator('summary').tap();
     await expect(cash).toContainText('achats et ventes compris');
@@ -423,3 +521,75 @@ test.describe('touch interactions', () => {
     await page.screenshot({ path: test.info().outputPath('dashboard-mobile-viewport.png') });
   });
 });
+
+for (const width of [1440, 768, 390, 320]) {
+  test.describe(`touch regressions at ${width}px`, () => {
+    test.use({ hasTouch: true, isMobile: true, viewport: { width, height: 1000 } });
+
+    test('treemap dismisses on outside pointerdown and switches tiles without moving', async ({
+      page,
+    }) => {
+      await openDashboard(page);
+      const tree = page.getByRole('group', { name: 'Répartition par catégories' });
+      const tooltip = tree.getByRole('tooltip');
+      const crypto = tree.getByRole('button', { name: /^Cryptomonnaies/ });
+      const stocks = tree.getByRole('button', { name: /^Bourse/ });
+      await expectTreemapToFillCard(page);
+      const before = await treemapGeometry(tree);
+      await crypto.tap();
+      await expect(tooltip).toContainText(money(28640.5));
+      await stocks.tap();
+      await expect(tooltip).toContainText(money(68410.24));
+      await page.keyboard.press('Escape');
+      await expect(tooltip).toHaveCount(0);
+      await stocks.tap();
+      await expect(tooltip).toContainText('Bourse');
+      // A non-focusable heading inside the allocation card is outside the treemap.
+      await page.getByRole('heading', { name: 'Répartition', exact: true }).tap();
+      await expect(tooltip).toHaveCount(0);
+      await crypto.tap();
+      await expect(tooltip).toContainText('Cryptomonnaies');
+      // No click, pointerup or blur: dismissal must already happen during pointerdown,
+      // including when another control stops event propagation.
+      await page.getByTestId('wealth-total').evaluate((el) => {
+        el.addEventListener('pointerdown', (event) => event.stopPropagation(), { once: true });
+        el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }));
+      });
+      await expect(tooltip).toHaveCount(0);
+      expect(await treemapGeometry(tree)).toEqual(before);
+      await noOverflow(page);
+    });
+
+    test('every dashboard chart keeps touch tooltips without a native outline and preserves keyboard focus', async ({
+      page,
+    }) => {
+      await openDashboard(page);
+      const charts = page.getByRole('group', { name: /^Évolution de la valeur :/ });
+      await expect(charts).toHaveCount(5);
+      for (const chart of await charts.all()) {
+        const surface = chart.getByRole('application');
+        await surface.tap({ position: { x: 100, y: 35 } });
+        await expect(surface).toBeFocused();
+        await expect
+          .poll(() => surface.evaluate((el) => getComputedStyle(el).outlineStyle))
+          .toBe('none');
+        await expect(chart.locator('.recharts-tooltip-wrapper')).toBeVisible();
+        await expect(surface).toHaveAttribute('tabindex', '0');
+        await page.keyboard.press('ArrowRight');
+        await expect
+          .poll(() => surface.evaluate((el) => getComputedStyle(el).outlineStyle))
+          .not.toBe('none');
+        expect(await surface.evaluate((el) => el.matches(':focus-visible'))).toBe(true);
+        const first = await chart.locator('.recharts-tooltip-wrapper').textContent();
+        await page.keyboard.press('ArrowRight');
+        await expect(chart.locator('.recharts-tooltip-wrapper')).not.toHaveText(first!);
+        // Switching back from keyboard to touch must suppress only the touch focus again.
+        await surface.tap({ position: { x: 110, y: 35 } });
+        await expect
+          .poll(() => surface.evaluate((el) => getComputedStyle(el).outlineStyle))
+          .toBe('none');
+      }
+      await noOverflow(page);
+    });
+  });
+}

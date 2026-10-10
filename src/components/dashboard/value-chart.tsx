@@ -1,5 +1,5 @@
 'use client';
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import {
   Area,
   AreaChart,
@@ -39,6 +39,7 @@ export function ValueChart({
   color?: string;
 }) {
   const id = useId();
+  const [touchFocus, setTouchFocus] = useState(false);
   const data = snapshotChartPoints(points).map((point) => ({
     ...point,
     timestamp: Date.parse(point.date),
@@ -54,6 +55,9 @@ export function ValueChart({
   return (
     <div
       className={mini ? styles.miniChart : styles.chart}
+      data-touch-focus={touchFocus}
+      onPointerDownCapture={(event) => setTouchFocus(event.pointerType === 'touch')}
+      onKeyDownCapture={() => setTouchFocus(false)}
       role="group"
       aria-label={`Évolution de la valeur : ${name}`}
     >
@@ -65,7 +69,7 @@ export function ValueChart({
         <AreaChart
           data={data}
           accessibilityLayer
-          margin={{ top: 10, bottom: mini ? 0 : 8, left: 0, right: mini ? 4 : 12 }}
+          margin={{ top: 10, bottom: mini ? 10 : 8, left: mini ? 6 : 0, right: mini ? 6 : 12 }}
         >
           <defs>
             <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
@@ -94,7 +98,15 @@ export function ValueChart({
           />
           <YAxis
             hide={mini}
-            domain={['auto', 'auto']}
+            domain={
+              mini
+                ? ([min, max]) => {
+                    // Leave room for the stroke and active dots, including flat/zero histories.
+                    const padding = (max - min || Math.abs(max) || 1) * 0.12;
+                    return [min - padding, max + padding];
+                  }
+                : ['auto', 'auto']
+            }
             width={55}
             tickLine={false}
             axisLine={false}
