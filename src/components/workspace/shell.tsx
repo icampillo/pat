@@ -67,17 +67,6 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
         <span className="brand-icon">P</span>
         Patrimoine
       </Link>
-      {!dashboard && (
-        <div className="portfolio-switch">
-          <span className="portfolio-icon">
-            <Wallet size={18} />
-          </span>
-          <div>
-            <strong>{state.portfolio.name}</strong>
-            <span>{state.portfolio.isDemo ? 'Démonstration' : 'Espace privé'}</span>
-          </div>
-        </div>
-      )}
       <nav aria-label="Navigation principale">
         {nav.map((n) => (
           <div key={n.href}>
