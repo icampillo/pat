@@ -18,7 +18,7 @@ describe('dashboard value changes', () => {
   it('never substitutes another interval, a partial value, zero or revised perimeter', () => {
     for (const points of [
       [],
-      [{ ...baseline, date: '2026-10-02T11:59:59Z' }],
+      [{ ...baseline, date: '2026-10-01T21:59:59Z' }],
       [{ ...baseline, value: null }],
       [{ ...baseline, value: 0 }],
       [{ ...baseline, value: -100 }],
@@ -29,6 +29,16 @@ describe('dashboard value changes', () => {
     }
     expect(valueChange7d(null, [baseline], asOf).percent).toBeNull();
     expect(valueChange7d(150, [baseline], asOf, true).percent).toBeNull();
+  });
+  it('uses the saved Paris calendar day regardless of observation time', () => {
+    for (const date of ['2026-10-01T22:00:00Z', '2026-10-02T11:59:59Z', '2026-10-02T21:59:59Z']) {
+      const result = valueChange7d(150, [{ ...baseline, date }], asOf);
+      expect(result.percent).toBe(50);
+      expect(result.baselineDate).toBe(date);
+    }
+    expect(
+      valueChange7d(150, [{ ...baseline, date: '2026-10-02T22:00:00Z' }], asOf).percent,
+    ).toBeNull();
   });
   it('uses saved category values in the requested currency, not current positions', () => {
     const state = dashboardFixture();

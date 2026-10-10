@@ -85,7 +85,6 @@ Un total inconnu ne devient jamais un pourcentage des seules valeurs connues.
 La sélection reste locale au dashboard, sans requête ni écriture supplémentaire.
 Le graphique interne des pages catégories conserve son comportement antérieur.
 
-
 ## Correctifs treemap et historiques (9 octobre 2026)
 
 - La treemap utilisait des rectangles calculés sur 100 × 100 puis les rapportait à
@@ -128,7 +127,6 @@ Trois outils MCP sont omis par la politique de cette session ; les vérification
 ont été exécutées via le terminal sandbox et Chromium local, sans ces outils.
 Aucun commit, push, déploiement, modification de base ou de fichier d'environnement.
 
-
 ## Répartition sans panneau au survol (9 octobre 2026)
 
 Le survol et le simple focus ne sélectionnent plus une catégorie et n'ouvrent plus
@@ -157,3 +155,84 @@ pnpm exec playwright test --config=playwright.navigation.config.ts dashboard.spe
 Même environnement local isolé que ci-dessus, sans base réelle et sans workers.
 Logs `/workspace/patrimoine-hover-{build,lint,browser}.log` et
 `/workspace/patrimoine-chart-targeted-unit.log`. Aucun commit, push ni déploiement.
+
+## Correctifs des interactions et mini-courbes — 2026-10-10
+
+Les correctifs UI initiaux sont présents dans le commit `0c35e60`. La reprise complète
+la transition clavier → toucher → clavier et les vérifications. Cette section remplace les
+anciens comportements de sélection décrits plus haut : la treemap utilise désormais
+un tooltip flottant, sans panneau de sélection ni déplacement des rectangles.
+
+### Causes et corrections
+
+- `src/components/dashboard/value-chart.tsx` : le domaine Y automatique et l'absence
+  de marge basse rapprochaient les minima du bord. Les mini-courbes utilisent une
+  marge de 10 px en haut/en bas et un domaine élargi de 12 % de l'amplitude (repli sur
+  la valeur absolue, puis 1, pour les séries constantes ou nulles). Hauteurs inchangées
+  de 94/74 px ; valeurs et interruptions historiques conservées.
+- `src/components/dashboard/dashboard.module.css` : le contour venait du focus natif
+  du SVG Recharts (ou d'un calque interne focalisable), pas de la surbrillance tactile
+  déjà transparente. Sa suppression
+  est limitée à la dernière interaction tactile. Chromium peut garder `:focus-visible`
+  après un retour du clavier au toucher : on ne s'appuie donc pas uniquement sur cette
+  pseudo-classe. Un `keydown` ou une sortie du focus du graphique remet le focus normal ;
+  les changements de focus internes ne réactivent pas le contour tactile. Tab/Shift+Tab et les
+  flèches sont vérifiés. L'accessibility layer et le `tabindex` restent actifs, avec
+  une règle commune à toutes les courbes.
+- `src/components/dashboard/treemap.tsx` : il manquait une écoute des interactions
+  extérieures. Un écouteur `pointerdown` en capture ferme le tooltip avant le clic,
+  même si un autre contrôle arrête la propagation. Échap ferme également le tooltip.
+  Les écouteurs sont retirés à la fermeture/au démontage. Le blur d'un ancien rectangle
+  ne ferme pas le nouveau rectangle activé au toucher ; hover et boutons natifs conservés.
+
+### Tests maintenus
+
+`tests/navigation/dashboard.spec.ts` contrôle la géométrie des tracés/remplissages et
+les séries fortement baissières, négatives, constantes et nulles ; les trous historiques ;
+le hover, le clavier, les appuis successifs/extérieurs et Échap ; les contours tactiles et
+la stabilité exacte des rectangles. Les quatre largeurs demandées (1440, 768, 390, 320 px)
+sont couvertes, ainsi que 1024 et 375 px pour la composition et axe-core.
+
+Deux attentes obsolètes ont été actualisées : les couleurs sont désormais partagées avec
+le reste de l'application ; `tests/unit/dashboard.test.ts` doit vérifier le jour comptable
+Europe/Paris (y compris ses bornes), et non une différence de sept jours à la seconde.
+Le calcul financier, modifié antérieurement par `2ed02ea`, n'a pas été changé ici.
+Pour tester l'exploration clavier, le pointeur émulé quitte la courbe : Recharts donne
+priorité au point survolé tant que le pointeur reste dessus.
+
+### Résultats de la reprise
+
+- TypeScript (`tsc --noEmit`) et ESLint global : succès.
+- Vitest : **264 tests unitaires / 33 fichiers réussis**. Le premier passage ciblé
+  avait révélé l'attente obsolète sur l'heure ; elle est corrigée et complétée par les
+  bornes du jour Europe/Paris, sans changement du code financier.
+- Build Next production webpack : succès, avec `VERCEL=1`, URL de base factice locale
+  inaccessible et secret synthétique de validation. Aucun `.env` modifié.
+- Playwright Chromium : **30 scénarios dashboard réussis** sur le build final, dont
+  axe-core, géométrie, fermeture extérieure en capture, Échap, clavier et toucher.
+  Les premiers échecs ont permis de confirmer le focus sur les calques SVG et la
+  persistance de `:focus-visible` après passage du clavier au tactile.
+- Prettier ciblé et `git diff --check` : succès. Le CSS préexistant n'a pas été reformaté.
+
+Commandes réellement exécutées (helpers locaux préexistants qui invoquent les binaires
+installés du projet ; `pnpm` n'est pas présent dans le PATH de cette session) :
+
+```sh
+node /workspace/snapshot-build.cjs
+node /workspace/patrimoine-dashboard-fix-checks.cjs typecheck
+node /workspace/patrimoine-dashboard-fix-checks.cjs lint
+node /workspace/patrimoine-dashboard-fix-checks.cjs unit
+node /workspace/patrimoine-dashboard-fix-checks.cjs browser --output=/workspace/dashboard-finish-results
+```
+
+Le helper navigateur appelle `playwright test --config=playwright.navigation.config.ts
+dashboard.spec.ts` avec les binaires et bibliothèques Chromium locaux, les API simulées,
+les workers désactivés et une URL de base factice. Journaux :
+`/workspace/dashboard-finish-{typecheck,lint,unit,build,browser}.log` ; captures de composition
+sous `/workspace/dashboard-finish-results/`.
+
+Limites : vérification Chromium avec émulation tactile, pas sur appareils physiques ; la
+capture annoncée dans la demande n'était pas jointe au texte reçu. Aucun accès à la base
+réelle, aucune migration, aucun push/déploiement. Trois outils MCP sont omis par la politique
+de cette session ; les vérifications ont été exécutées via le terminal sandbox, sans eux.
+`next-env.d.ts` et les fichiers utilisateur hors périmètre restent exclus du commit de reprise.

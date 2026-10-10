@@ -110,8 +110,8 @@
   margin: 0 -8px;
   min-width: 0;
 }
-/* Recharts' focusable SVG gets a native outline on touch even without :focus-visible. */
-:is(.chart, .miniChart)[data-touch-focus='true'] :global(.recharts-surface):focus:not(:focus-visible) {
+/* Recharts' SVG and inner layers can retain :focus-visible after keyboard use. */
+:is(.chart, .miniChart)[data-touch-focus='true'] :focus {
   outline: none;
 }
 .chartEmpty {

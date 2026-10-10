@@ -493,7 +493,11 @@ test('property equity and included wallets keep their perimeter and other page s
     await page
       .locator('main')
       .evaluate((el) => getComputedStyle(el).getPropertyValue('--accent').trim()),
-  ).not.toBe('#7434ff');
+  ).toBe(
+    await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+    ),
+  );
 });
 
 test.describe('touch interactions', () => {
@@ -569,25 +573,40 @@ for (const width of [1440, 768, 390, 320]) {
       for (const chart of await charts.all()) {
         const surface = chart.getByRole('application');
         await surface.tap({ position: { x: 100, y: 35 } });
-        await expect(surface).toBeFocused();
+        const focused = chart.locator(':focus');
+        await expect(focused).toHaveCount(1);
         await expect
-          .poll(() => surface.evaluate((el) => getComputedStyle(el).outlineStyle))
+          .poll(() => focused.evaluate((el) => getComputedStyle(el).outlineStyle))
           .toBe('none');
         await expect(chart.locator('.recharts-tooltip-wrapper')).toBeVisible();
         await expect(surface).toHaveAttribute('tabindex', '0');
+        // Recharts prioritizes the hovered point over keyboard tooltips. Move the
+        // emulated pointer out before checking keyboard exploration, keeping focus.
+        await surface.hover({ position: { x: 100, y: 35 } });
+        await page.mouse.move(0, 0);
+        await expect(chart.locator('.recharts-tooltip-wrapper')).not.toBeVisible();
         await page.keyboard.press('ArrowRight');
         await expect
-          .poll(() => surface.evaluate((el) => getComputedStyle(el).outlineStyle))
+          .poll(() => focused.evaluate((el) => getComputedStyle(el).outlineStyle))
           .not.toBe('none');
-        expect(await surface.evaluate((el) => el.matches(':focus-visible'))).toBe(true);
+        expect(await focused.evaluate((el) => el.matches(':focus-visible'))).toBe(true);
         const first = await chart.locator('.recharts-tooltip-wrapper').textContent();
         await page.keyboard.press('ArrowRight');
         await expect(chart.locator('.recharts-tooltip-wrapper')).not.toHaveText(first!);
         // Switching back from keyboard to touch must suppress only the touch focus again.
         await surface.tap({ position: { x: 110, y: 35 } });
         await expect
-          .poll(() => surface.evaluate((el) => getComputedStyle(el).outlineStyle))
+          .poll(() => focused.evaluate((el) => getComputedStyle(el).outlineStyle))
           .toBe('none');
+        // A previously touched chart must regain a visible focus when tabbing back.
+        await page.keyboard.press('Tab');
+        await expect(focused).toHaveCount(0);
+        await page.keyboard.press('Shift+Tab');
+        await expect(surface).toBeFocused();
+        expect(await focused.evaluate((el) => el.matches(':focus-visible'))).toBe(true);
+        await expect
+          .poll(() => focused.evaluate((el) => getComputedStyle(el).outlineStyle))
+          .not.toBe('none');
       }
       await noOverflow(page);
     });

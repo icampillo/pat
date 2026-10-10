@@ -58,6 +58,9 @@ export function ValueChart({
       data-touch-focus={touchFocus}
       onPointerDownCapture={(event) => setTouchFocus(event.pointerType === 'touch')}
       onKeyDownCapture={() => setTouchFocus(false)}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setTouchFocus(false);
+      }}
       role="group"
       aria-label={`Évolution de la valeur : ${name}`}
     >
