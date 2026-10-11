@@ -1,23 +1,29 @@
+
 import { decimal } from './money';
 
 export function showWalletValue(
   valueUsd: string | null,
   eurUsd: string | null,
   showSmall: boolean,
-  valueText?: string,
+  _valueText?: string,
 ): boolean {
   if (showSmall) return true;
 
-  if (valueUsd !== null && eurUsd && decimal(eurUsd).gt(0)) {
-    return decimal(valueUsd).abs().gte(eurUsd);
+  if (valueUsd === null || valueUsd.trim() === '') {
+    return false;
   }
 
-  // Masquer les poussières explicitement identifiées par DeBank.
-  if (valueText?.trim() === '<$0.01') return false;
+  const value = decimal(valueUsd).abs();
 
-  // Valeur inconnue ou taux absent :
-  // impossible de confirmer que la ligne vaut moins de 1 €.
-  return true;
+  if (!value.isFinite() || value.isZero()) {
+    return false;
+  }
+
+  if (!eurUsd || decimal(eurUsd).lte(0)) {
+    return true;
+  }
+
+  return value.gte(eurUsd);
 }
 
 
