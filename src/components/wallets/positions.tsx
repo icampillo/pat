@@ -184,7 +184,10 @@ export function WalletPositions({ state }: { state: AppState }) {
               </div>
               <p className="small">
                 <strong>
-                  {p.supplies.map((t) => t.symbol).join(' · ') || 'Détail des tokens non fourni'}
+                  {p.supplies
+                    .filter(showToken)
+                    .map((t) => t.symbol)
+                    .join(' · ') || 'Aucun token visible'}
                 </strong>
               </p>
               <details>
