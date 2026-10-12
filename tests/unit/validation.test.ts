@@ -51,8 +51,8 @@ it('conserve la date du dernier prix lors d’une panne', async () => {
 });
 it('n’utilise pas de prix fictif ou dans une mauvaise devise', async () => {
   const result = await withFallback(
-    new UnconfiguredProvider('cards'),
-    { id: 'a', symbol: 'X', currency: 'EUR', category: 'POKEMON' },
+    new UnconfiguredProvider('securities'),
+    { id: 'a', symbol: 'X', currency: 'EUR', category: 'SECURITIES' },
     null,
     () => {},
   );

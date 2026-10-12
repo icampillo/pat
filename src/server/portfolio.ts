@@ -339,8 +339,6 @@ export async function command(
             CRYPTO: 'crypto',
             SECURITIES: 'securities',
             METALS: 'metals',
-            POKEMON: 'cards',
-            ONE_PIECE: 'cards',
           };
           const providerKey = providerKeys[asset.category.key];
           const provider = providerKey

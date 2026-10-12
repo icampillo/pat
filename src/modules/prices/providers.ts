@@ -26,7 +26,7 @@ export class ManualPriceProvider implements PriceProvider {
   }
 }
 export class UnconfiguredProvider implements PriceProvider {
-  constructor(readonly id: 'crypto' | 'securities' | 'metals' | 'cards') {}
+  constructor(readonly id: 'crypto' | 'securities' | 'metals') {}
   async getPrice(): Promise<PriceQuote> {
     throw new Error('PROVIDER_NOT_CONFIGURED');
   }

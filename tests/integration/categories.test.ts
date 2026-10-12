@@ -32,6 +32,13 @@ it('exposes historical category valuations and price performance from stored obs
   const now = Date.now();
   const ago = (days: number) => new Date(now - days * 86400000);
   const initial = await getState(owner.userId);
+  expect(initial.categories.map((item: { key: string }) => item.key).sort()).toEqual([
+    'CRYPTO',
+    'METALS',
+    'OTHER',
+    'REAL_ESTATE',
+    'SECURITIES',
+  ]);
   const category = initial.categories.find((item: { key: string }) => item.key === 'CRYPTO');
   const asset = (await run('assets', {
     name: 'Actif historique',

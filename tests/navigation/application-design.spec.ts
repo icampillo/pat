@@ -35,7 +35,7 @@ const mainPages = [
 ];
 const categories = [
   ['crypto','Cryptomonnaies'], ['precious-metals','Métaux précieux'], ['real-estate','Immobilier'],
-  ['pokemon','Pokémon'], ['one-piece','One Piece'], ['other','Autres'],
+  ['other','Autres'],
 ];
 for (const width of [1440, 768, 375]) {
   test(`shared design, main screens and accessibility at ${width}px`, async ({page}) => {
@@ -53,7 +53,7 @@ for (const width of [1440, 768, 375]) {
     await page.setViewportSize({ width, height: 900 });
     await mockState(page);
     for (const [slug,title] of categories) await inspect(page, '/categories/'+slug, title);
-    for (const [id,title] of [['asset-0','Bitcoin'],['asset-1','ETF Monde'],['asset-2','Or'],['pokemon','Pokémon test'],['one_piece','One Piece test'],['other','Autres test']]) {
+    for (const [id,title] of [['asset-0','Bitcoin'],['asset-1','ETF Monde'],['asset-2','Or'],['other','Autres test']]) {
       await inspect(page, '/assets/'+id,title);
     }
   });
@@ -61,7 +61,7 @@ for (const width of [1440, 768, 375]) {
     test.setTimeout(180_000);
     await page.setViewportSize({ width, height: 900 });
     await mockState(page);
-    for (const key of ['CRYPTO','SECURITIES','METALS','REAL_ESTATE','POKEMON','ONE_PIECE','OTHER']) {
+    for (const key of ['CRYPTO','SECURITIES','METALS','REAL_ESTATE','OTHER']) {
       await inspect(page, '/assets/new?category='+key, 'Ajouter un actif');
     }
     await inspect(page,'/transactions/new','Nouvelle transaction');

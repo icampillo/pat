@@ -8,18 +8,65 @@ import { capture } from '../src/server/portfolio-query';
 import { precise, decimal as d } from '../src/domain/money';
 // const email = 'demo@patrimoine.local';
 const email = 'demo-recent@patrimoine.local';
-const existing = await db().user.findUnique({ where: { email } });
-if (existing) {
-  console.log('Le compte de démonstration existe déjà. Aucune donnée modifiée.');
-  await db().$disconnect();
-  process.exit(0);
-}
-const password = randomBytes(18).toString('base64url');
-const owner = await createUser('Ilan', email, password, true);
-mkdirSync('.local', { recursive: true });
-writeFileSync('.local/demo-access.json', JSON.stringify({ email, password }, null, 2), {
-  mode: 0o600,
+const existing = await db().user.findUnique({
+  where: { email },
+  include: {
+    portfolios: {
+      select: { id: true, isDemo: true },
+    },
+  },
 });
+
+let owner: {
+  userId: string;
+  portfolioId: string;
+};
+
+if (existing) {
+  const portfolios = existing.portfolios.filter(
+    (p) => p.isDemo,
+  );
+
+  if (
+    portfolios.length !== 1 ||
+    existing.portfolios.length !== 1
+  ) {
+    throw new Error('Portefeuille demo invalide.');
+  }
+
+  const portfolioId = portfolios[0].id;
+
+  const [assets, transactions, snapshots, wallets] =
+    await Promise.all([
+      db().asset.count({ where: { portfolioId } }),
+      db().transaction.count({ where: { portfolioId } }),
+      db().portfolioSnapshot.count({ where: { portfolioId } }),
+      db().walletConnection.count({ where: { portfolioId } }),
+    ]);
+
+  if (assets || transactions || snapshots || wallets) {
+    throw new Error(
+      'Le portefeuille contient encore des données. Reset requis.',
+    );
+  }
+
+  owner = {
+    userId: existing.id,
+    portfolioId,
+  };
+} else {
+  const password = randomBytes(18).toString('base64url');
+
+  owner = await createUser('Ilan', email, password, true);
+
+  mkdirSync('.local', { recursive: true });
+
+  writeFileSync(
+    '.local/demo-access.json',
+    JSON.stringify({ email, password }, null, 2),
+    { mode: 0o600 },
+  );
+}
 const now = new Date();
 const start = new Date(now.getTime() - 400 * 86400000);
 const entries = [
@@ -70,31 +117,6 @@ const entries = [
     '31',
     'Coffre',
     { metalType: 'SILVER', weightGrams: '31.1035', purity: '0.999', pricingMode: 'MANUAL' },
-  ],
-  [
-    'Dracaufeu · Set de base',
-    '4/102',
-    'POKEMON',
-    '1',
-    '480',
-    '720',
-    'Collection',
-    { setName: 'Set de base', language: 'Français', condition: 'Très bon', cardNumber: '4/102' },
-  ],
-  [
-    'Monkey D. Luffy',
-    'OP05-119',
-    'ONE_PIECE',
-    '1',
-    '185',
-    '245',
-    'Collection',
-    {
-      setName: 'Awakening of the New Era',
-      language: 'Japonais',
-      condition: 'Excellent',
-      cardNumber: 'OP05-119',
-    },
   ],
 ] as const;
 await db().$transaction(
@@ -156,6 +178,6 @@ for (let day = 0; day <= 400; day++) {
   );
 }
 console.log(
-  'Démonstration créée : 8 actifs, 8 achats, 401 snapshots. Identifiants dans .local/demo-access.json (ignoré par Git).',
+  'Démonstration créée : 6 actifs, 6 achats, 401 snapshots. Identifiants dans .local/demo-access.json (ignoré par Git).',
 );
 await db().$disconnect();

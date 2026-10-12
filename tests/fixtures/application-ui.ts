@@ -9,7 +9,7 @@ export function applicationUiFixture() {
   state.accounts = [{ id: 'account-ui', name: 'PEA de test' }];
   state.rows[1].metadata = { pricingMode: 'SECURITIES_MARKET', ticker: 'TEST.PA', exchange: 'Paris', isin: 'FR0011871128' };
   state.rows[2].metadata = { pricingMode: 'METAL_MARKET', metalType: 'GOLD', weightGrams: '6.45', purity: '0.9' };
-  for (const [key, label] of [['POKEMON', 'Pokémon'], ['ONE_PIECE', 'One Piece'], ['OTHER', 'Autres']]) {
+  for (const [key, label] of [['OTHER', 'Autres']]) {
     const category = { id: key.toLowerCase(), key, label, color: '#777777' };
     state.categories.push(category);
     state.rows.push({ ...state.rows[0], id: category.id, categoryId: category.id, category, name: label + ' test', symbol: label, price: '180', valueEur: '180', valueUsd: '198', metadata: {} });

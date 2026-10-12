@@ -53,7 +53,7 @@ erDiagram
 | `Platform` | id, portfolioId, name, kind, notes?, archivedAt? | Unique portfolioId + nom normalisé ; aucune credential |
 | `CashAccount` | id, portfolioId, platformId, currency, name, projectedBalance, version | Unique portefeuille + plateforme + devise ; devise immuable |
 
-Catégories seed : crypto, métaux, actions/ETF, Pokémon, One Piece, autres. Les liquidités sont une catégorie de présentation réservée aux `CashAccount`, sans créer de faux actif négociable. Une nouvelle catégorie utilisateur de type `OTHER` ne nécessite pas de migration.
+Catégories seed : crypto, métaux, actions/ETF, immobilier, autres. Les liquidités sont une catégorie de présentation réservée aux `CashAccount`, sans créer de faux actif négociable. Une nouvelle catégorie utilisateur de type `OTHER` ne nécessite pas de migration.
 
 ## Actifs, positions et métadonnées
 
@@ -75,7 +75,6 @@ Toutes portent `assetId` unique et une relation contrôlée avec la catégorie. 
 | `CryptoDetails` | symbol, network?, contractAddress?, stakingRate?, stakingNotes? |
 | `MetalDetails` | metalType GOLD/SILVER/OTHER, purity, weightGrams, coinType?, year?, faceValue?, faceCurrency?, country?, pricingMode, premiumType?, premiumValue?, manualGramPriceHistoryId? |
 | `SecurityDetails` | ticker, exchange?, instrumentType STOCK/ETF, isin?, brokerageNotes? |
-| `CardDetails` | game POKEMON/ONE_PIECE, setName?, cardNumber?, language, condition, grade?, gradingCompany?, certificateNumber?, year?, referenceUrl? |
 | `OtherDetails` | metadataSchemaVersion, metadata JSONB strictement validé et borné |
 
 Le poids fin est `weightGrams × purity` et reste dérivé ; pureté dans ]0,1], poids strictement positif. Les dividendes sont des transactions, les frais de courtage appartiennent à leurs achats/ventes ; ils ne sont pas dupliqués dans les métadonnées.

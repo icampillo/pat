@@ -200,28 +200,6 @@ export function AssetForm({
               </label>
             </>
           )}
-          {['POKEMON', 'ONE_PIECE'].includes(kind || '') && (
-            <>
-              {[
-                ['setName', 'Extension'],
-                ['cardNumber', 'Numéro de carte'],
-                ['language', 'Langue'],
-                ['condition', 'État'],
-                ['grade', 'Note de grading'],
-                ['gradingCompany', 'Société de grading'],
-                ['certificateNumber', 'Certification'],
-                ['year', 'Année'],
-                ['referenceUrl', 'Lien de référence HTTPS'],
-              ].map(([key, label]) => (
-                <Field
-                  key={key}
-                  name={`meta.${key}`}
-                  label={label}
-                  value={String(meta[key as keyof typeof meta] ?? '')}
-                />
-              ))}
-            </>
-          )}
           {kind === 'OTHER' && (
             <p className="muted">Décrivez les caractéristiques utiles dans les notes.</p>
           )}

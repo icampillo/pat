@@ -83,7 +83,7 @@ test('dashboard simplifié, catégories, devises, historique et mobile', async (
     '/dashboard',
     '/categories/crypto',
     '/categories/stocks',
-    '/categories/pokemon',
+    '/categories/other',
   ]) {
     await page.goto(path);
     await expect(page.locator('h1')).toBeVisible();
@@ -102,7 +102,7 @@ test('dashboard simplifié, catégories, devises, historique et mobile', async (
     ).toEqual([]);
     if (path === '/categories/stocks')
       await expect(page.getByText('Données d’acquisition incomplètes')).toBeVisible();
-    if (path === '/categories/pokemon')
+    if (path === '/categories/other')
       await expect(
         page.getByRole('heading', { name: 'Aucun actif détenu dans cette catégorie' }),
       ).toBeVisible();
@@ -115,6 +115,8 @@ test('dashboard simplifié, catégories, devises, historique et mobile', async (
       });
   }
   // Next.js can stream a 200 response before notFound() resolves after authentication.
-  await page.goto('/categories/inconnue');
-  await expect(page.getByRole('heading', { name: 'Page introuvable' })).toBeVisible();
+  for (const slug of ['inconnue', 'pokemon', 'one-piece']) {
+    await page.goto(`/categories/${slug}`);
+    await expect(page.getByRole('heading', { name: 'Page introuvable' })).toBeVisible();
+  }
 });

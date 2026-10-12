@@ -14,8 +14,6 @@ const slugs: Record<string, string> = {
   CRYPTO: 'crypto',
   METALS: 'precious-metals',
   SECURITIES: 'stocks',
-  POKEMON: 'pokemon',
-  ONE_PIECE: 'one-piece',
 };
 export const categorySlug = (key: string) => slugs[key] ?? key.toLowerCase().replaceAll('_', '-');
 export function numeric(value: unknown): number | null {
@@ -102,7 +100,12 @@ export function snapshotCategoryValues(
   return Object.fromEntries(
     categories.map((category) => {
       const held = rows.filter(
-        (row) => row?.categoryId === category.id && (numeric(row.quantity) ?? 0) > 0,
+        (row) =>
+          (row?.categoryId === category.id ||
+            // Read legacy snapshots under OTHER without rewriting saved valuations.
+            (category.key === 'OTHER' &&
+              ['POKEMON', 'ONE_PIECE'].includes(String(record(row?.category)?.key)))) &&
+          (numeric(row?.quantity) ?? 0) > 0,
       );
       const values = Object.fromEntries(
         ['Eur', 'Usd'].map((suffix) => {

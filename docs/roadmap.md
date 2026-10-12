@@ -213,7 +213,7 @@ Choix : prévisualisation persistée, confirmation explicite et validation atomi
 
 Choix : seed déterministe séparé des données réelles ; validation du parcours sur PostgreSQL et dans le navigateur.
 
-- [ ] Seed avec Bitcoin, Ethereum, ETF S&P 500, action fictive, pièce d'or, pièce d'argent, Pokémon et One Piece.
+- [ ] Seed avec Bitcoin, Ethereum, ETF S&P 500, action fictive, pièce d'or et pièce d'argent.
 - [ ] Transactions variées, liquidités, prix et change fictifs datés, et 400 jours de snapshots pour tester 1 an.
 - [ ] Seed rejouable dans le portefeuille de démonstration sans reset d'une base réelle.
 - [ ] Tests unitaires des invariants et tests par propriétés utiles.
