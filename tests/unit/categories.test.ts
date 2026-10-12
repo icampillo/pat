@@ -185,3 +185,55 @@ describe('category calculations', () => {
     expect(filterCategoryHistory(history, 'all', now)).toEqual(history.slice(0, 2));
   });
 });
+
+it('groups retired collection snapshots into OTHER without changing saved values', () => {
+  const other = { id: 'other', key: 'OTHER', label: 'Autres actifs', color: '#8190a6' };
+  const data = {
+    rows: [
+      {
+        categoryId: 'old-pokemon',
+        category: { key: 'POKEMON' },
+        quantity: '1',
+        valueEur: '10',
+        valueUsd: '12',
+      },
+      {
+        categoryId: 'old-one-piece',
+        category: { key: 'ONE_PIECE' },
+        quantity: '2',
+        valueEur: '20',
+        valueUsd: '24',
+      },
+      {
+        categoryId: 'other',
+        category: { key: 'OTHER' },
+        quantity: '1',
+        valueEur: '5',
+        valueUsd: '6',
+      },
+      {
+        categoryId: 'crypto',
+        category: { key: 'CRYPTO' },
+        quantity: '1',
+        valueEur: '100',
+        valueUsd: '120',
+      },
+      {
+        categoryId: 'sold',
+        category: { key: 'POKEMON' },
+        quantity: '0',
+        valueEur: '99',
+        valueUsd: '99',
+      },
+    ],
+  };
+  const original = structuredClone(data);
+  expect(snapshotCategoryValues(data, [other, category])).toEqual({
+    other: { valueEur: '35', valueUsd: '42' },
+    crypto: { valueEur: '100', valueUsd: '120' },
+  });
+  expect(data).toEqual(original);
+  expect(snapshotCategoryValues({ rows: [{ ...data.rows[0], valueEur: null }] }, [other])).toEqual({
+    other: { valueEur: null, valueUsd: '12' },
+  });
+});

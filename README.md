@@ -1,8 +1,12 @@
 # Patrimoine
 
-Application privée de suivi des investissements : cryptomonnaies, métaux, actions/ETF, cartes Pokémon et One Piece. Interface française, EUR/USD, PostgreSQL et calculs décimaux.
+Application privée de suivi des investissements : cryptomonnaies, métaux, actions/ETF, immobilier et autres actifs. Interface française, EUR/USD, PostgreSQL et calculs décimaux.
 
 **Migration Zerion — 8 octobre 2026.** Les nouvelles observations des wallets proviennent de l’API Zerion côté serveur. Les observations DeBank et snapshots existants sont conservés. Voir [la validation avant production](docs/zerion-validation.md).
+
+## Retrait des catégories de cartes — 12 octobre 2026
+
+Les catégories Pokémon et One Piece ne sont plus proposées. Appliquer `pnpm db:deploy` avant de démarrer cette version sur une base existante : la migration `20261012160000_remove_tcg_categories` supprime les deux catégories et reclasse leurs éventuels actifs dans **Autres actifs** du même portefeuille. Les fiches, métadonnées, images, transactions, prix et snapshots sont conservés. Les anciennes valorisations de ces catégories sont regroupées dans Autres à la lecture, sans réécriture des snapshots. Les nouvelles démonstrations contiennent six actifs. Voir [les contrôles et la procédure de mise à jour](docs/remove-tcg-categories.md).
 
 ## Ce qui fonctionne
 
