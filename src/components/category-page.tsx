@@ -206,7 +206,7 @@ export function CategoryPage({
               </tbody>
             </table>
           ) : (
-            <table>
+           <table className="category-assets-table">
               <thead>
                 <tr>
                   <th>Actif</th>

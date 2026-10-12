@@ -828,6 +828,18 @@ input::file-selector-button {
   color: var(--muted);
   margin-top: 3px;
 }
+.category-assets-table td:first-child {
+  width: 30%;
+  max-width: 320px;
+  white-space: normal;
+}
+
+.category-assets-table .asset-cell {
+  display: block;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .asset-avatar {
   width: 38px;
   height: 38px;
