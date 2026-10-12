@@ -236,3 +236,59 @@ capture annoncée dans la demande n'était pas jointe au texte reçu. Aucun acc�
 réelle, aucune migration, aucun push/déploiement. Trois outils MCP sont omis par la politique
 de cette session ; les vérifications ont été exécutées via le terminal sandbox, sans eux.
 `next-env.d.ts` et les fichiers utilisateur hors périmètre restent exclus du commit de reprise.
+
+## Sélecteur des catégories 7 j / 30 j — 2026-10-12
+
+Cause : `CategoryCard` transmettait sa période au graphique, mais `ValueChange` appelait
+systématiquement `valueChange7d` et affichait un libellé fixe. Le test navigateur imposait
+même que la variation reste inchangée après sélection de 30 j.
+
+- `categoryPeriod` pilote désormais le pourcentage, le libellé visible/accessibilité et
+  la mini-courbe. `valueChange` mutualise les références 7/30 jours, sans snapshot voisin.
+- Le filtrage existant accepte une option `accountingDays`, activée uniquement pour les
+  cards du dashboard et leur sélection initiale. Fenêtre inclusive du jour de référence
+  Europe/Paris jusqu'à `asOf`, sans point futur, valeur inventée ni comblement des trous.
+  Le graphique principal et les pages de catégories conservent leur filtrage antérieur.
+- Les valeurs historiques EUR/USD enregistrées sont utilisées telles quelles. Variation
+  de valeur détenue, achats/ventes compris, pas rendement corrigé des flux. Référence
+  absente/incomplète/nulle/négative, valeur actuelle incomplète et historique révisé
+  conservent « — » et une explication ; le zéro actuel reste une valeur valide.
+- Sélecteurs indépendants, aucune requête au changement, aucun changement de style,
+  structure des cards, dimension, animation, dépendance, API ou base de données.
+
+Tests : bascule 7 → 30 → 7 en EUR/USD sur Crypto (wallet inclus), Bourse, Métaux,
+Immobilier et Liquidités ; nombre de points et date/valeur du premier point vérifiés
+via les vrais tracés et tooltips Recharts. Cas historiques insuffisants/révisés et
+valorisations incomplètes ; bornes Paris et passages heure d'été/hiver en tests unitaires.
+
+Validation réellement exécutée :
+
+```sh
+node node_modules/vitest/vitest.mjs run tests/unit/dashboard.test.ts tests/unit/categories.test.ts tests/unit/snapshot-job.test.ts
+node /workspace/patrimoine-dashboard-fix-checks.cjs unit
+node /workspace/patrimoine-dashboard-fix-checks.cjs typecheck
+node /workspace/patrimoine-dashboard-fix-checks.cjs lint
+node /workspace/snapshot-build.cjs
+node /workspace/patrimoine-dashboard-fix-checks.cjs browser --output=/workspace/category-period-results
+node /workspace/patrimoine-dashboard-fix-checks.cjs browser --grep 'category periods update|many dynamic categories' --output=/workspace/category-period-recheck-results
+node /workspace/patrimoine-dashboard-fix-checks.cjs browser --grep 'category periods update' --output=/workspace/category-period-final-results
+```
+
+- 38 tests ciblés, puis **273 tests unitaires** : succès.
+- Typecheck (relancé après finalisation des tests), build production et Prettier ciblé : succès.
+- Lint global (également relancé) : aucune erreur ; avertissement préexistant `_valueText`
+  inutilisé dans `src/domain/wallet-display.ts:8`, fichier non modifié.
+- **37 scénarios Chromium validés au total** : 35 au passage complet, le scénario existant
+  « many dynamic categories » à la relance sans modification (mesure de débordement
+  immédiatement après redimensionnement), puis le nouveau scénario 5 catégories/EUR/USD.
+  Ce dernier test a été ajusté pour survoler le premier point (le focus clavier Recharts
+  conserve son index après bascule) et distinguer les relectures API/rechargements des
+  préchargements de liens Next déclenchés par le défilement. Aucun ajustement applicatif
+  n'a été nécessaire après ces essais. Pas de nouvelle exécution intégrale après ces
+  seules corrections du test.
+- Journaux `/workspace/category-period-{unit,typecheck,lint,build,browser,recheck,final}.log` ;
+  captures/traces sous les trois dossiers `category-period-*-results` ci-dessus.
+
+Vérifications via le terminal sandbox et Chromium local, API simulées, URL de base factice
+inaccessible. Trois outils MCP sont omis par la politique de la session, sans bloquer ces
+contrôles. Aucun commit, push, déploiement, changement de données réelles ou de `.env`.

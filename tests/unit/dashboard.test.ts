@@ -3,50 +3,58 @@ import {
   allocationRects,
   availableChartPeriod,
   snapshotCashValues,
-  valueChange7d,
+  valueChange,
 } from '../../src/domain/dashboard';
-import { buildCategoryDetails } from '../../src/domain/categories';
+import { buildCategoryDetails, filterCategoryHistory } from '../../src/domain/categories';
 import { dashboardFixture } from '../fixtures/dashboard';
 const asOf = '2026-10-09T12:00:00Z';
 const baseline = { date: '2026-10-02T12:00:00Z', value: 100 };
-describe('dashboard value changes', () => {
+describe.each([7, 30] as const)('dashboard value changes over %i days', (days) => {
+  const reference = new Date(Date.parse(asOf) - days * 86400000);
+  const baseline = { date: reference.toISOString(), value: 100 };
   it('measures held value including trades, not flow-adjusted return', () => {
-    expect(valueChange7d(150, [baseline], asOf).percent).toBe(50);
-    expect(valueChange7d(75, [baseline], asOf).percent).toBe(-25);
-    expect(valueChange7d(100, [baseline], asOf).percent).toBe(0);
+    expect(valueChange(150, [baseline], asOf, days).percent).toBe(50);
+    expect(valueChange(75, [baseline], asOf, days).percent).toBe(-25);
+    expect(valueChange(100, [baseline], asOf, days).percent).toBe(0);
   });
   it('never substitutes another interval, a partial value, zero or revised perimeter', () => {
     for (const points of [
       [],
-      [{ ...baseline, date: '2026-10-01T21:59:59Z' }],
+      [{ ...baseline, date: new Date(reference.getTime() - 86400000).toISOString() }],
+      [{ ...baseline, date: new Date(reference.getTime() + 86400000).toISOString() }],
       [{ ...baseline, value: null }],
       [{ ...baseline, value: 0 }],
       [{ ...baseline, value: -100 }],
     ]) {
-      const result = valueChange7d(150, points, asOf);
+      const result = valueChange(150, points, asOf, days);
       expect(result.percent).toBeNull();
       expect(result.reason).toBeTruthy();
     }
-    expect(valueChange7d(null, [baseline], asOf).percent).toBeNull();
-    expect(valueChange7d(150, [baseline], asOf, true).percent).toBeNull();
+    expect(valueChange(null, [baseline], asOf, days).percent).toBeNull();
+    expect(valueChange(150, [baseline], asOf, days, true).percent).toBeNull();
   });
   it('uses the saved Paris calendar day regardless of observation time', () => {
-    for (const date of ['2026-10-01T22:00:00Z', '2026-10-02T11:59:59Z', '2026-10-02T21:59:59Z']) {
-      const result = valueChange7d(150, [{ ...baseline, date }], asOf);
+    for (const hours of [-14, -0.001, 9.999]) {
+      const date = new Date(reference.getTime() + hours * 3600000).toISOString();
+      const result = valueChange(150, [{ ...baseline, date }], asOf, days);
       expect(result.percent).toBe(50);
       expect(result.baselineDate).toBe(date);
     }
-    expect(
-      valueChange7d(150, [{ ...baseline, date: '2026-10-02T22:00:00Z' }], asOf).percent,
-    ).toBeNull();
+    for (const hours of [-14.001, 10]) {
+      const date = new Date(reference.getTime() + hours * 3600000).toISOString();
+      expect(valueChange(150, [{ ...baseline, date }], asOf, days).percent).toBeNull();
+    }
+    expect(valueChange(0, [baseline], asOf, days).percent).toBe(-100);
+    expect(valueChange(150, [], asOf, days).reason).toContain(`${days} jours`);
   });
   it('uses saved category values in the requested currency, not current positions', () => {
     const state = dashboardFixture();
     const snapshot = state.snapshots.at(-2)!;
+    snapshot.capturedAt = new Date(Date.parse(state.asOf) - days * 86400000).toISOString();
     const current = buildCategoryDetails(state, state.categories[0], 'USD');
     const previous = Number(snapshot.categoryValues!.crypto.valueUsd);
     expect(
-      valueChange7d(current.category.totalValue, current.history, state.asOf).percent,
+      valueChange(current.category.totalValue, current.history, state.asOf, days).percent,
     ).toBeCloseTo(((current.category.totalValue! - previous) / previous) * 100);
     state.rows[0].valueUsd = '1234';
     expect(buildCategoryDetails(state, state.categories[0], 'USD').history).toEqual(
@@ -118,7 +126,7 @@ describe('available chart periods', () => {
     expect(availableChartPeriod([history], asOf, periods)).toBe('30d');
     expect(availableChartPeriod([history], '2026-11-09T12:00:00Z', periods)).toBe('90d');
     expect(availableChartPeriod([history], '2028-11-09T12:00:00Z', periods)).toBe('all');
-    expect(valueChange7d(130, history, asOf).percent).toBeNull();
+    expect(valueChange(130, history, asOf).percent).toBeNull();
   });
   it('ignores future or unknown valuations, and does not invent an available period', () => {
     for (const history of [
@@ -138,4 +146,37 @@ describe('available chart periods', () => {
     expect(availableChartPeriod([[], history], asOf, ['7d', '30d'])).toBe('30d');
     expect(availableChartPeriod([history], '2027-10-09T12:00:00Z', ['7d', '30d'])).toBe('7d');
   });
+});
+
+// Clock changes must not turn a Paris calendar window into elapsed 24-hour slices.
+it.each([
+  ['2026-03-30T00:30:00+02:00', '2026-03-23T00:00:00+01:00', 7],
+  ['2026-10-26T23:30:00+01:00', '2026-10-19T00:00:00+02:00', 7],
+  ['2026-03-30T00:30:00+02:00', '2026-02-28T00:00:00+01:00', 30],
+  ['2026-10-26T23:30:00+01:00', '2026-09-26T00:00:00+02:00', 30],
+] as const)('aligns category curves and references at %s over Paris days', (asOf, start, days) => {
+  const points = [
+    { date: new Date(Date.parse(start) - 1).toISOString(), value: 50 },
+    { date: start, value: 100 },
+    { date: new Date(Date.parse(start) + 86400000).toISOString(), value: null },
+    { date: asOf, value: 150 },
+    { date: new Date(Date.parse(asOf) + 1).toISOString(), value: 200 },
+  ];
+  expect(filterCategoryHistory(points, `${days}d`, asOf, true)).toEqual(points.slice(1, 4));
+  expect(valueChange(150, points, asOf, days)).toMatchObject({
+    percent: 50,
+    baselineDate: start,
+    reason: null,
+  });
+  expect(valueChange(150, [points[0], points[2]], asOf, days).percent).toBeNull();
+});
+
+it('uses the same accounting-day window for the initial category period', () => {
+  const history = [
+    { date: '2026-10-01T22:00:00Z', value: 100 },
+    { date: asOf, value: 120 },
+  ];
+  expect(availableChartPeriod([history], asOf, ['7d', '30d'], true)).toBe('7d');
+  // Other charts keep their existing elapsed-time filtering.
+  expect(availableChartPeriod([history], asOf, ['7d', '30d'])).toBe('30d');
 });

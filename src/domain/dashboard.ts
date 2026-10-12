@@ -8,55 +8,54 @@ import type { CategoryHistoryPoint } from '@/shared/types';
 import { snapshotDay } from './snapshot-day';
 
 // Prefer seven days, but do not hide saved history behind an empty initial window.
-// Only the chart's initial selection changes; seven-day value comparisons are independent.
+// The main chart and category cards keep independent selections.
 export function availableChartPeriod(
   histories: CategoryHistoryPoint[][],
   asOf: string,
   periods: string[],
+  accountingDays = false,
 ) {
   return (
     periods.find((period) =>
       histories.some(
         (history) =>
-          filterCategoryHistory(history, period, asOf).filter((point) => point.value !== null)
-            .length >= 2,
+          filterCategoryHistory(history, period, asOf, accountingDays).filter(
+            (point) => point.value !== null,
+          ).length >= 2,
       ),
     ) ?? periods[0]
   );
 }
 
-// Exact elapsed time: never relabel the nearest (or first) observation as seven days.
-export function valueChange7d(
+// Exact Paris accounting day: never substitute the nearest observation.
+export function valueChange(
   current: number | null,
   history: CategoryHistoryPoint[],
   asOf: string,
+  days: 7 | 30 = 7,
   revised = false,
 ) {
   const today = snapshotDay(asOf);
 
   const target = new Date(`${today}T00:00:00Z`);
-  target.setUTCDate(target.getUTCDate() - 7);
+  target.setUTCDate(target.getUTCDate() - days);
 
   const targetDay = target.toISOString().slice(0, 10);
 
-  const baseline = history.find(
-    (point) => snapshotDay(point.date) === targetDay,
-  );
+  const baseline = history.find((point) => snapshotDay(point.date) === targetDay);
 
   const reason = revised
     ? 'Historique révisé ou périmètre modifié : comparaison fiable indisponible.'
     : current === null
       ? 'Valorisation actuelle incomplète.'
       : !baseline || baseline.value === null
-        ? 'Aucune valorisation complète disponible 7 jours auparavant.'
+        ? `Aucune valorisation complète disponible ${days} jours auparavant.`
         : baseline.value <= 0
           ? 'Pourcentage indéfinissable : valeur de référence nulle ou négative.'
           : null;
 
   return {
-    percent: reason
-      ? null
-      : calculatePerformance(current, baseline!.value).percent,
+    percent: reason ? null : calculatePerformance(current, baseline!.value).percent,
     reason,
     baselineDate: baseline?.date ?? null,
   };

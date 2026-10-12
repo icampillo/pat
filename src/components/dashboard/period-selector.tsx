@@ -19,7 +19,7 @@ export function PeriodSelector({
     <div
       className={styles.periods}
       role="group"
-      aria-label={categories ? 'Période des courbes des catégories' : 'Période du graphique'}
+      aria-label={categories ? 'Période des catégories' : 'Période du graphique'}
     >
       {(categories ? periods.slice(0, 2) : periods).map(([key, label]) => (
         <button key={key} type="button" aria-pressed={value === key} onClick={() => onChange(key)}>

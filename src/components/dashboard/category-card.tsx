@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react';
 import Link from '@/components/workspace/link';
 import { money } from '@/components/workspace/display';
 import { calculateCategoryWeight, filterCategoryHistory } from '@/domain/categories';
-import { valueChange7d } from '@/domain/dashboard';
+import { valueChange } from '@/domain/dashboard';
 import type { CategoryHistoryPoint } from '@/shared/types';
 import { observationDate, ValueChart } from './value-chart';
 import styles from './dashboard.module.css';
@@ -30,13 +30,15 @@ export function ValueChange({
   history,
   asOf,
   revised,
+  days = 7,
 }: {
   value: number | null;
   history: CategoryHistoryPoint[];
   asOf: string;
   revised: boolean;
+  days?: 7 | 30;
 }) {
-  const change = valueChange7d(value, history, asOf, revised);
+  const change = valueChange(value, history, asOf, days, revised);
   const percent = change.percent;
   const Icon = percent !== null && percent > 0 ? ArrowUpRight : ArrowDownRight;
   const text =
@@ -57,10 +59,12 @@ export function ValueChange({
         } as CSSProperties
       }
     >
-      <summary aria-label={`Variation de valeur sur 7 jours : ${text}. Afficher l’explication`}>
+      <summary
+        aria-label={`Variation de valeur sur ${days} jours : ${text}. Afficher l’explication`}
+      >
         {percent !== null && percent !== 0 && <Icon size={16} aria-hidden="true" />}
         <span>{text}</span>
-        <span className={styles.changePeriod}>· 7 j</span>
+        <span className={styles.changePeriod}>· {days} j</span>
       </summary>
       <p>
         {change.reason ??
@@ -107,6 +111,7 @@ export function CategoryCard({
               history={category.history}
               asOf={asOf}
               revised={revised}
+              days={period === '30d' ? 30 : 7}
             />
           </div>
           <p className={styles.weight}>
@@ -116,7 +121,7 @@ export function CategoryCard({
         </div>
       </div>
       <ValueChart
-        points={filterCategoryHistory(category.history, period, asOf)}
+        points={filterCategoryHistory(category.history, period, asOf, true)}
         name={category.name}
         currency={currency}
         color={color}

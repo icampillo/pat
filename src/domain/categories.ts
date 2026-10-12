@@ -1,4 +1,5 @@
 import { decimal as d } from './money';
+import { snapshotDay } from './snapshot-day';
 import { propertyTypes, propertyUsages } from '@/shared/real-estate';
 import type {
   AppState,
@@ -72,12 +73,16 @@ export function filterCategoryHistory(
   history: CategoryHistoryPoint[],
   period: string,
   asOf: string,
+  accountingDays = false,
 ) {
   const days = ({ '7d': 7, '30d': 30, '90d': 90, '1y': 365 } as Record<string, number>)[period];
+  // Category cards use whole Paris accounting days, including the reference day.
+  const end = Date.parse(accountingDays ? snapshotDay(asOf) : asOf);
   return history.filter(
     (point) =>
       Date.parse(point.date) <= Date.parse(asOf) &&
-      (!days || Date.parse(point.date) >= Date.parse(asOf) - days * 86400000),
+      (!days ||
+        Date.parse(accountingDays ? snapshotDay(point.date) : point.date) >= end - days * 86400000),
   );
 }
 

@@ -95,7 +95,7 @@ test('older seeded history is visible without presenting thirty days as seven', 
   state.portfolio.isDemo = true;
   const reads = await openDashboard(page, state);
   const mainPeriods = page.getByRole('group', { name: 'Période du graphique', exact: true });
-  const categoryPeriods = page.getByRole('group', { name: 'Période des courbes des catégories' });
+  const categoryPeriods = page.getByRole('group', { name: 'Période des catégories' });
   for (const periods of [mainPeriods, categoryPeriods]) {
     await expect(periods.getByRole('button', { name: '30 j', exact: true })).toHaveAttribute(
       'aria-pressed',
@@ -118,7 +118,8 @@ test('older seeded history is visible without presenting thirty days as seven', 
           .evaluate((path) => (path as SVGPathElement).getTotalLength()),
       )
       .toBeGreaterThan(100);
-    await expect(card.locator('summary').first()).toContainText('—');
+    await expect(card.locator('summary').first()).toContainText('30 j');
+    await expect(card.locator('summary').first()).not.toContainText('—');
   }
   await expect(page.getByText('Pas assez de relevés sur 7 j · affichage sur 30 j.')).toHaveCount(2);
   await page.screenshot({
@@ -182,7 +183,7 @@ test('daily seed with 401 snapshots draws curves on every period', async ({ page
     }
     for (const label of ['7 j', '30 j']) {
       await page
-        .getByRole('group', { name: 'Période des courbes des catégories' })
+        .getByRole('group', { name: 'Période des catégories' })
         .getByRole('button', { name: label, exact: true })
         .click();
       for (const card of await page.getByTestId('investment-card').all()) {
@@ -206,13 +207,14 @@ test('periods, currencies, category tooltips and detail links preserve the store
   const category = page.getByTestId('investment-card').first();
   const change = category.locator('summary').first();
   const initial = await change.textContent();
-  const periods = page.getByRole('group', { name: 'Période des courbes des catégories' });
+  const periods = page.getByRole('group', { name: 'Période des catégories' });
   await expect(periods.getByRole('button', { name: '7 j', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
   await periods.getByRole('button', { name: '30 j' }).click();
-  await expect(change).toHaveText(initial!);
+  await expect(change).not.toHaveText(initial!);
+  await expect(change).toContainText('30 j');
   await change.click();
   await expect(category).toContainText('achats et ventes compris');
   await change.click();
@@ -239,6 +241,164 @@ test('periods, currencies, category tooltips and detail links preserve the store
   await expect(page).toHaveURL(/categories\/crypto$/);
   expect(reads()).toBe(1);
 });
+
+test('category periods update every value, label and recorded curve in EUR and USD without fetching', async ({
+  page,
+}) => {
+  const state = dashboardWithPropertyAndWallet();
+  const latest = state.snapshots.at(-1)!;
+  const currentEur = [29640.5, 68410.24, 14900, 120000, 16500];
+  const currentUsd = [32604.55, 75251.264, 16390, 132000, 18150];
+  // Different saved FX per day; references occur earlier in the day than the situation.
+  state.snapshots = Array.from({ length: 32 }, (_, index) => {
+    const age = 31 - index;
+    const values = currentEur.map((value, i) => ({
+      valueEur: String(value / (1 + (age * (i + 1)) / 100)),
+      valueUsd: String(currentUsd[i] / (1 + (age * (i + 2)) / 100)),
+    }));
+    return {
+      ...latest,
+      id: `period-${index}`,
+      capturedAt: new Date(Date.parse(state.asOf) - age * 86400000).toISOString(),
+      categoryValues: Object.fromEntries(
+        state.categories.map((category, i) => [category.id, values[i]]),
+      ),
+      cashValues: values[4],
+    };
+  });
+  state.asOf = '2026-10-07T21:00:00Z';
+  const reads = await openDashboard(page, state);
+  const requests: string[] = [];
+  page.on('request', (request) => {
+    // Ignore Next's unrelated link prefetches triggered by scrolling to the cards.
+    if (new URL(request.url()).pathname.startsWith('/api/') || request.isNavigationRequest())
+      requests.push(request.url());
+  });
+  const cards = page.getByTestId('investment-card');
+  await expect(cards).toHaveCount(5);
+  const periods = page.getByRole('group', { name: 'Période des catégories' });
+  const mainPeriods = page.getByRole('group', { name: 'Période du graphique', exact: true });
+  await mainPeriods.getByRole('button', { name: '3 M', exact: true }).click();
+  for (const currency of ['EUR', 'USD']) {
+    await page.getByLabel('Devise d’affichage').selectOption(currency);
+    const mainPath = await page
+      .getByRole('group', { name: 'Évolution de la valeur : Patrimoine', exact: true })
+      .locator('.recharts-area-curve')
+      .getAttribute('d');
+    for (const days of [7, 30, 7]) {
+      await periods.getByRole('button', { name: `${days} j`, exact: true }).click();
+      await expect(mainPeriods.getByRole('button', { name: '3 M', exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await expect(
+        page
+          .getByRole('group', { name: 'Évolution de la valeur : Patrimoine', exact: true })
+          .locator('.recharts-area-curve'),
+      ).toHaveAttribute('d', mainPath!);
+      for (const [i, name] of [
+        'Cryptomonnaies',
+        'Bourse',
+        'Métaux précieux',
+        'Immobilier',
+        'Liquidités',
+      ].entries()) {
+        const card = cards.filter({ has: page.getByRole('heading', { name, exact: true }) });
+        const percent = days * (i + (currency === 'EUR' ? 1 : 2));
+        const summary = card.locator('summary');
+        await expect(summary).toHaveText(`+${percent},00 %· ${days} j`);
+        await expect(summary).toHaveAttribute(
+          'aria-label',
+          `Variation de valeur sur ${days} jours : +${percent},00 %. Afficher l’explication`,
+        );
+        const chart = card.getByRole('group', {
+          name: `Évolution de la valeur : ${name}`,
+          exact: true,
+        });
+        // One original observation per day, inclusive of the exact reference day.
+        await expect(chart.locator('.recharts-area-dots circle')).toHaveCount(days + 1);
+        await chart.locator('.recharts-area-dots circle').first().hover();
+        const reference = state.snapshots[31 - days];
+        const date = new Date(reference.capturedAt).toLocaleString('fr-FR', {
+          timeZone: 'Europe/Paris',
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        });
+        const saved =
+          i === 4 ? reference.cashValues! : reference.categoryValues![state.categories[i].id];
+        await expect(chart.locator('.recharts-tooltip-wrapper')).toContainText(date);
+        await expect(chart.locator('.recharts-tooltip-wrapper')).toContainText(
+          money(Number(saved[currency === 'EUR' ? 'valueEur' : 'valueUsd']), currency),
+        );
+      }
+    }
+  }
+  // Changing the main chart never changes the selected category period.
+  await mainPeriods.getByRole('button', { name: '30 j', exact: true }).click();
+  await expect(periods.getByRole('button', { name: '7 j', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  expect(reads()).toBe(1);
+  expect(requests).toEqual([]);
+});
+
+for (const scenario of ['missing', 'null', 'zero', 'incomplete', 'revised', 'sparse'] as const) {
+  test(`category periods explain ${scenario} history without borrowing nearby references`, async ({
+    page,
+  }) => {
+    const state = dashboardDailyFixture();
+    const baseline = state.snapshots[0];
+    if (scenario === 'missing') state.snapshots.shift();
+    if (scenario === 'null') {
+      for (const values of Object.values(baseline.categoryValues!)) values.valueEur = null;
+      baseline.cashValues!.valueEur = null;
+    }
+    if (scenario === 'zero') {
+      for (const values of Object.values(baseline.categoryValues!)) values.valueEur = '0';
+      baseline.cashValues!.valueEur = '0';
+    }
+    if (scenario === 'incomplete') {
+      state.rows.forEach((row) => {
+        row.valueEur = null;
+      });
+      state.cash[0].valueEur = null;
+    }
+    if (scenario === 'revised') state.historyRevised = true;
+    if (scenario === 'sparse') state.snapshots = [state.snapshots.at(-1)!];
+    const reads = await openDashboard(page, state);
+    const periods = page.getByRole('group', { name: 'Période des catégories' });
+    for (const days of [30, 7]) {
+      await periods.getByRole('button', { name: `${days} j`, exact: true }).click();
+      for (const card of await page.getByTestId('investment-card').all()) {
+        const summary = card.locator('summary');
+        await expect(summary).toContainText(`${days} j`);
+        if (days === 7 && ['missing', 'null', 'zero'].includes(scenario)) {
+          await expect(summary).not.toContainText('—');
+          continue;
+        }
+        await expect(summary).toContainText('—');
+        await summary.click();
+        const reason =
+          scenario === 'revised'
+            ? 'Historique révisé ou périmètre modifié'
+            : scenario === 'incomplete'
+              ? 'Valorisation actuelle incomplète'
+              : scenario === 'zero'
+                ? 'valeur de référence nulle ou négative'
+                : `Aucune valorisation complète disponible ${days} jours auparavant`;
+        await expect(card).toContainText(reason);
+        await summary.click();
+        if (scenario === 'sparse') await expect(card).toContainText('Historique insuffisant');
+      }
+    }
+    expect(reads()).toBe(1);
+  });
+}
 
 // Relative coordinates stay comparable even when Playwright scrolls a tile into view.
 async function treemapGeometry(tree: Locator) {

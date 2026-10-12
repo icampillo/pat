@@ -77,6 +77,7 @@ export function DashboardPage({ state }: { state: AppState }) {
       categories.map((category) => category.history),
       state.asOf,
       ['7d', '30d'],
+      true,
     );
   const periodLabel = (
     { '30d': '30 j', '90d': '3 mois', '1y': '1 an', all: 'tout l’historique' } as Record<
