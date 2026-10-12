@@ -1669,7 +1669,7 @@ input::file-selector-button {
   max-width: 100%;
   background: var(--surface-secondary);
   border-radius: var(--radius-sm);
-  animation: skeleton-pulse 2.4s ease-in-out infinite;
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
 }
 .skeleton-plot {
   padding: 12px;
@@ -1771,7 +1771,7 @@ button[aria-busy='true']::after {
 }
 @keyframes skeleton-pulse {
   50% {
-    opacity: 0.55;
+    opacity: 0.45;
   }
 }
 @keyframes navigation-progress {
