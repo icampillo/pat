@@ -7,7 +7,12 @@ import { errorMessage } from '@/shared/errors';
 import { useState } from 'react';
 import Link from '@/components/workspace/link';
 import { assetCreationSchema, assetUpdateSchema } from '@/shared/schemas';
-import { propertyTypes, propertyUsages } from '@/shared/real-estate';
+import {
+  propertyTypes,
+  propertyUsages,
+  propertyMortgages,
+  type Mortgage,
+} from '@/shared/real-estate';
 import { monthlyPayment } from '@/domain/mortgage';
 import type { AppState, AssetView } from '@/shared/types';
 import { Field, type SaveAction } from './shared';
@@ -29,30 +34,24 @@ export function RealEstateForm({
 }) {
   const property = asset?.metadata.realEstate;
   const [usage, setUsage] = useState(property?.usage ?? 'PRIMARY_RESIDENCE');
-  const [financed, setFinanced] = useState(!!property?.mortgage);
-  const [payment, setPayment] = useState(() =>
-    property?.mortgage
-      ? monthlyPayment(
-          property.mortgage.borrowedAmount,
-          property.mortgage.annualInterestRate,
-          property.mortgage.durationMonths,
-        )
-      : '',
+  const [loans, setLoans] = useState(() => {
+    const existing = property ? propertyMortgages(property) : [];
+    return existing.map((loan, id) => ({ id, loan: loan as Mortgage | undefined }));
+  });
+  const [nextLoanId, setNextLoanId] = useState(loans.length);
+  const [estimateWarning, setEstimateWarning] = useState(
+    property?.currentValue != null && Number(property.currentValue) === 0,
   );
+  const addLoan = () => {
+    setLoans([...loans, { id: nextLoanId, loan: undefined }]);
+    setNextLoanId(nextLoanId + 1);
+  };
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const today = state.asOf.slice(0, 10);
-  const fields = (
-    group: 'property' | 'mortgage' | 'rental',
-    definitions: [string, string, boolean?][],
-  ) =>
+  const fields = (group: 'property' | 'rental', definitions: [string, string, boolean?][]) =>
     definitions.map(([key, label, optional]) => {
-      const values =
-        group === 'property'
-          ? property
-          : group === 'mortgage'
-            ? property?.mortgage
-            : property?.rental;
+      const values = group === 'property' ? property : property?.rental;
       const value =
         values && key in values ? String(values[key as keyof typeof values] ?? '') : undefined;
       return (
@@ -89,7 +88,20 @@ export function RealEstateForm({
           .map(([key, value]) => [key.slice(prefix.length + 1), String(value).trim()]),
       );
     const raw = group('property');
-    const mortgage = group('mortgage');
+    const mortgages = loans.map(({ id, loan }) => {
+      const rawLoan = group(`loan${id}`);
+      const { remainingPrincipal, balanceDate, ...parameters } = rawLoan;
+      const observations = [...(loan?.balanceObservations ?? [])];
+      if (remainingPrincipal) {
+        if (observations.at(-1)?.date === balanceDate) observations.pop();
+        observations.push({ date: balanceDate, remainingPrincipal });
+      }
+      return {
+        ...parameters,
+        durationMonths: Number(parameters.durationMonths),
+        ...(observations.length ? { balanceObservations: observations } : {}),
+      };
+    });
     const value = {
       name: fd.get('name'),
       symbol: asset?.symbol ?? String(fd.get('name')).slice(0, 100),
@@ -107,9 +119,8 @@ export function RealEstateForm({
           usage,
           currentValue: raw.currentValue || null,
           valuationDate: raw.currentValue ? raw.valuationDate || null : null,
-          mortgage: financed
-            ? { ...mortgage, durationMonths: Number(mortgage.durationMonths) }
-            : null,
+          mortgage: mortgages[0] ?? null,
+          additionalMortgages: mortgages.slice(1),
           ...(usage === 'RENTAL' ? { rental: group('rental') } : {}),
         },
       },
@@ -149,17 +160,8 @@ export function RealEstateForm({
         onSubmit={submit}
         onChange={(e) => {
           const fd = new FormData(e.currentTarget);
-          try {
-            setPayment(
-              monthlyPayment(
-                String(fd.get('mortgage.borrowedAmount')),
-                String(fd.get('mortgage.annualInterestRate')),
-                Number(fd.get('mortgage.durationMonths')),
-              ),
-            );
-          } catch {
-            setPayment('');
-          }
+          const estimate = String(fd.get('property.currentValue')).trim();
+          setEstimateWarning(estimate !== '' && Number(estimate) === 0);
         }}
       >
         <h2>{asset ? 'Modifier le bien immobilier' : 'Ajouter un bien immobilier'}</h2>
@@ -231,6 +233,17 @@ export function RealEstateForm({
             value={property?.valuationDate ?? today}
           />
         </div>
+        {estimateWarning && (
+          <p className="notice" role="status">
+            Une valeur du bien à zéro produit un patrimoine net égal à l’opposé de la dette.
+            Renseignez l’estimation du bien, pas le capital remboursé. Laissez vide si elle est
+            inconnue.
+          </p>
+        )}
+        <p className="small muted">
+          Patrimoine immobilier net = valeur actuelle × détention − capital restant dû. L’apport et
+          le capital remboursé ne sont pas ajoutés une seconde fois.
+        </p>
         <h3>2. Acquisition</h3>
         <p className="small muted">
           Montants pour le bien entier, dans la devise de la fiche ({asset?.currency ?? 'EUR'}).
@@ -254,48 +267,33 @@ export function RealEstateForm({
           Crédit immobilier
           <select
             aria-label="Crédit immobilier"
-            value={financed ? 'yes' : 'no'}
-            onChange={(e) => setFinanced(e.target.value === 'yes')}
+            value={loans.length ? 'yes' : 'no'}
+            onChange={(e) => (e.target.value === 'yes' ? addLoan() : setLoans([]))}
           >
             <option value="no">Sans crédit</option>
             <option value="yes">Prêt amortissable à taux fixe</option>
           </select>
         </label>
-        {financed && (
-          <>
-            <p className="small muted">
-              Saisissez uniquement votre dette et votre apport : aucune seconde réduction par le
-              pourcentage de détention. Première échéance un mois après le début du prêt.
-            </p>
-            <div className="form-grid">
-              {fields('mortgage', [
-                ['borrowedAmount', 'Montant emprunté attribué'],
-                ['downPayment', 'Apport personnel'],
-                ['annualInterestRate', 'Taux nominal annuel (%)'],
-                ['durationMonths', 'Durée (mois)'],
-                ['monthlyInsurance', 'Assurance emprunteur mensuelle', true],
-                ['originationFees', 'Frais de dossier / garantie', true],
-              ])}
-              <Field
-                name="mortgage.startDate"
-                label="Date de début du prêt"
-                type="date"
-                value={property?.mortgage?.startDate ?? property?.purchaseDate ?? today}
-                required
-              />
-              <label>
-                Mensualité hors assurance calculée
-                <output style={{ display: 'block' }}>
-                  {money(payment || null, asset?.currency ?? 'EUR')}
-                </output>
-                <small>
-                  Calculée depuis le montant, le taux et la durée. Dernière échéance ajustée au
-                  centime.
-                </small>
-              </label>
-            </div>
-          </>
-        )}
+        <p className="small muted">
+          Saisissez uniquement votre dette : aucune seconde réduction par le pourcentage de
+          détention. Sans relevé manuel, les échéances sont supposées payées. Avec un relevé, le
+          solde reste celui déclaré jusqu’à votre prochaine mise à jour, remboursements anticipés
+          compris.
+        </p>
+        {loans.map(({ id, loan }, index) => (
+          <MortgageFields
+            key={id}
+            prefix={`loan${id}`}
+            loan={loan}
+            index={index}
+            today={today}
+            currency={asset?.currency ?? 'EUR'}
+            remove={() => setLoans(loans.filter((item) => item.id !== id))}
+          />
+        ))}
+        <button type="button" className="btn" disabled={loans.length >= 20} onClick={addLoan}>
+          Ajouter un crédit
+        </button>
         {usage === 'RENTAL' && (
           <>
             <h3>4. Location</h3>
@@ -336,5 +334,101 @@ export function RealEstateForm({
         </div>
       </form>
     </div>
+  );
+}
+
+function MortgageFields({
+  prefix,
+  loan,
+  index,
+  today,
+  currency,
+  remove,
+}: {
+  prefix: string;
+  loan?: Mortgage;
+  index: number;
+  today: string;
+  currency: string;
+  remove: () => void;
+}) {
+  const [payment, setPayment] = useState(() =>
+    loan ? monthlyPayment(loan.borrowedAmount, loan.annualInterestRate, loan.durationMonths) : '',
+  );
+  const observation = loan?.balanceObservations?.at(-1);
+  return (
+    <fieldset
+      className="panel detail-panel"
+      style={{ minWidth: 0 }}
+      onChange={(event) => {
+        const fd = new FormData(event.currentTarget.closest('form')!);
+        try {
+          setPayment(
+            monthlyPayment(
+              String(fd.get(`${prefix}.borrowedAmount`)),
+              String(fd.get(`${prefix}.annualInterestRate`)),
+              Number(fd.get(`${prefix}.durationMonths`)),
+            ),
+          );
+        } catch {
+          setPayment('');
+        }
+      }}
+    >
+      <legend>Crédit {index + 1}</legend>
+      <div className="form-grid">
+        {(
+          [
+            ['borrowedAmount', 'Montant emprunté attribué', false],
+            ['downPayment', 'Apport personnel', false],
+            ['annualInterestRate', 'Taux nominal annuel (%)', false],
+            ['durationMonths', 'Durée (mois)', false],
+            ['monthlyInsurance', 'Assurance emprunteur mensuelle', true],
+            ['originationFees', 'Frais de dossier / garantie', true],
+          ] as const
+        ).map(([key, label, optional]) => (
+          <Field
+            key={key}
+            name={`${prefix}.${key}`}
+            label={label}
+            type="number"
+            value={String(loan?.[key] ?? (optional ? '0' : ''))}
+            required={!optional}
+          />
+        ))}
+        <Field
+          name={`${prefix}.startDate`}
+          label="Date de début du prêt"
+          type="date"
+          value={loan?.startDate ?? today}
+          required
+        />
+        <label>
+          Mensualité hors assurance calculée
+          <output style={{ display: 'block' }}>{money(payment || null, currency)}</output>
+          <small>Échéancier théorique initial, dernière échéance ajustée au centime.</small>
+        </label>
+        <Field
+          name={`${prefix}.remainingPrincipal`}
+          label="Capital restant dû actuel"
+          type="number"
+          help={
+            observation
+              ? `Dernier relevé : ${money(observation.remainingPrincipal, currency)} au ${observation.date}. Laissez vide pour le conserver.`
+              : 'Facultatif : solde du relevé bancaire, hors intérêts et assurance. Zéro signifie prêt soldé.'
+          }
+        />
+        <Field
+          name={`${prefix}.balanceDate`}
+          label="Date du relevé de capital"
+          type="date"
+          value={today}
+          required
+        />
+      </div>
+      <button type="button" className="btn" onClick={remove}>
+        Retirer le crédit {index + 1}
+      </button>
+    </fieldset>
   );
 }

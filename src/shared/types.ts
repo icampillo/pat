@@ -62,7 +62,7 @@ export type SnapshotView = {
 };
 export type CategoryHistoryPoint = { date: string; value: number | null };
 export type AssetCategorySummary = {
-  realEstate?: { grossValue: number | null; debt: number | null };
+  realEstate?: RealEstateSummary;
   id: string;
   slug: string;
   name: string;
@@ -75,9 +75,7 @@ export type AssetCategorySummary = {
   baselineDate: string | null;
 };
 export type CategoryPosition = {
-  realEstate?: {
-    grossValue: number | null;
-    debt: number | null;
+  realEstate?: RealEstateSummary & {
     ownershipPercent: string;
     description: string;
   };
@@ -142,4 +140,13 @@ export type AppState = {
   };
   fxRate: { eurUsd: string; observedAt: string; source: string } | null;
   flows: { amount: string; date: string }[];
+};
+
+export type RealEstateSummary = {
+  grossValue: number | null;
+  debt: number | null;
+  borrowedAmount: number | null;
+  principalPaid: number | null;
+  purchaseValue: number | null;
+  grossGain: number | null;
 };

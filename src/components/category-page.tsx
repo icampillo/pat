@@ -36,6 +36,10 @@ export function CategoryPage({
     `color-mix(in srgb, ${color} ${100 - (index % 5) * 14}%, white)`;
   const assets = sortByValue(details.assets, (asset) => asset.value);
   const estate = category.realEstate;
+  const repaymentProgress =
+    estate?.borrowedAmount && estate.principalPaid !== null
+      ? (estate.principalPaid / estate.borrowedAmount) * 100
+      : null;
   const points = filterCategoryHistory(details.history, period, asOf);
   const slices = assets
     .map((asset, index) => ({
@@ -50,7 +54,7 @@ export function CategoryPage({
     <div style={categoryStyle(category.slug)}>
       <div className="metrics category-metrics">
         <section className="metric">
-          <div className="metric-top">{estate ? 'Valeur nette immobilière' : 'Valeur totale'}</div>
+          <div className="metric-top">{estate ? 'Patrimoine immobilier net' : 'Valeur totale'}</div>
           <strong>{categoryMoney(category.totalValue, currency)}</strong>
           <p>
             {category.assetCount} {estate ? 'bien' : 'position'}
@@ -60,13 +64,27 @@ export function CategoryPage({
         </section>
         <section className="metric">
           <div className="metric-top">
-            {estate ? 'Évolution de l’equity sur 30 jours' : 'Performance 30 jours'}
+            {estate ? 'Capital déjà remboursé' : 'Performance 30 jours'}
           </div>
-          <Performance30d category={category} currency={currency} />
+          {estate ? (
+            <>
+              <strong>{categoryMoney(estate.principalPaid, currency)}</strong>
+              {repaymentProgress !== null && (
+                <label>
+                  {categoryPercent(repaymentProgress)} du capital initial
+                  <progress max={100} value={repaymentProgress} />
+                </label>
+              )}
+            </>
+          ) : (
+            <Performance30d category={category} currency={currency} />
+          )}
           <p>
-            {category.baselineDate
-              ? `Snapshot du ${new Date(category.baselineDate).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`
-              : 'Historique indisponible'}
+            {estate
+              ? `Montant initial : ${categoryMoney(estate.borrowedAmount, currency)}`
+              : category.baselineDate
+                ? `Snapshot du ${new Date(category.baselineDate).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`
+                : 'Historique indisponible'}
           </p>
         </section>
         <section className="metric">
@@ -83,7 +101,7 @@ export function CategoryPage({
           </p>
         </section>
         <section className="metric">
-          <div className="metric-top">{estate ? 'Dette immobilière' : 'Plus-value latente'}</div>
+          <div className="metric-top">{estate ? 'Capital restant dû' : 'Plus-value latente'}</div>
           <strong className={trendClass(details.unrealizedPnL)}>
             {estate
               ? categoryMoney(estate.debt, currency)
@@ -96,6 +114,30 @@ export function CategoryPage({
           </p>
         </section>
       </div>
+      {estate && (
+        <section className="panel detail-panel">
+          <h2>Valorisation immobilière</h2>
+          <dl className="details-list">
+            <div>
+              <dt>Valeur d’achat détenue, hors frais</dt>
+              <dd>{categoryMoney(estate.purchaseValue, currency)}</dd>
+            </div>
+            <div>
+              <dt>Valeur actuelle estimée détenue</dt>
+              <dd>{categoryMoney(estate.grossValue, currency)}</dd>
+            </div>
+            <div>
+              <dt>Plus-value / moins-value latente, hors frais</dt>
+              <dd>{signedMoney(estate.grossGain, currency)}</dd>
+            </div>
+          </dl>
+          <p className="small muted">
+            Le patrimoine net est la valeur brute détenue moins le capital restant dû. Il inclut
+            l’apport, les remboursements et la variation de valeur du bien, sans les additionner une
+            seconde fois.
+          </p>
+        </section>
+      )}
       <div className="charts-grid">
         <section className="panel evolution">
           <div className="section-title">
@@ -178,7 +220,7 @@ export function CategoryPage({
                   <th>Bien / usage</th>
                   <th>Détention</th>
                   <th className="num">Brut détenu</th>
-                  <th className="num">Dette</th>
+                  <th className="num">Capital restant dû</th>
                   <th className="num" aria-sort="descending">
                     Valeur nette
                   </th>
@@ -206,7 +248,7 @@ export function CategoryPage({
               </tbody>
             </table>
           ) : (
-           <table className="category-assets-table">
+            <table className="category-assets-table">
               <thead>
                 <tr>
                   <th>Actif</th>

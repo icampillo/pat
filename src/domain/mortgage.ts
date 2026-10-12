@@ -71,16 +71,25 @@ export function mortgageAt(loan: Mortgage, at: Date, schedule = amortization(loa
   const paid = schedule.filter((row) => row.date <= day);
   const sum = (rows: Instalment[], key: 'principal' | 'interest' | 'insurance') =>
     rows.reduce((total, row) => total.add(row[key]), d(0));
-  const principalPaid = sum(paid, 'principal');
+  const observation = loan.balanceObservations?.findLast((item) => item.date <= day);
+  const remainingPrincipal =
+    day < loan.startDate
+      ? d(0)
+      : observation
+        ? d(observation.remainingPrincipal)
+        : d(loan.borrowedAmount).sub(sum(paid, 'principal'));
+  // A bank statement is authoritative until the next statement. Do not silently
+  // amortize a manually entered balance or infer interest from an early repayment.
+  const principalPaid =
+    day < loan.startDate ? d(0) : d(loan.borrowedAmount).sub(remainingPrincipal);
   const interestPaid = sum(paid, 'interest');
   const totalInterest = sum(schedule, 'interest');
   const insurancePaid = sum(paid, 'insurance');
   const totalInsurance = sum(schedule, 'insurance');
   return {
-    remainingPrincipal: (day < loan.startDate
-      ? d(0)
-      : d(loan.borrowedAmount).sub(principalPaid)
-    ).toFixed(2),
+    remainingPrincipal: remainingPrincipal.toFixed(2),
+    balanceSource: observation ? ('MANUAL' as const) : ('SCHEDULE' as const),
+    balanceDate: observation?.date ?? null,
     principalPaid: principalPaid.toFixed(2),
     interestPaid: interestPaid.toFixed(2),
     interestRemaining: totalInterest.sub(interestPaid).toFixed(2),
@@ -106,6 +115,6 @@ export function mortgageAt(loan: Mortgage, at: Date, schedule = amortization(loa
       loan.annualInterestRate,
       loan.durationMonths,
     ),
-    active: day >= loan.startDate && paid.length < schedule.length,
+    active: day >= loan.startDate && remainingPrincipal.gt(0),
   };
 }

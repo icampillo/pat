@@ -1,9 +1,10 @@
 'use client';
 import { TableScroll } from '@/components/ui/table-scroll';
 import { sortByValue } from '@/domain/value-sort';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
+import { decimal as d } from '@/domain/money';
 import { amortization } from '@/domain/mortgage';
-import { propertyTypes, propertyUsages } from '@/shared/real-estate';
+import { propertyTypes, propertyUsages, propertyMortgages } from '@/shared/real-estate';
 import type { AssetView } from '@/shared/types';
 import { date, money } from './workspace/display';
 import { PriceHistoryList } from './assets/price-history';
@@ -12,10 +13,11 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
   const property = asset.metadata.realEstate!;
   const value = asset.realEstate!;
   const [page, setPage] = useState(0);
-  const rows = useMemo(
-    () => (property.mortgage ? amortization(property.mortgage) : []),
-    [property.mortgage],
-  );
+  const [loanIndex, setLoanIndex] = useState(0);
+  const loans = propertyMortgages(property);
+  const loan = loans[loanIndex];
+  const finance = value.mortgages[loanIndex];
+  const rows = loan ? amortization(loan) : [];
   const amount = (v: string | null) => money(v, asset.currency);
   const metrics = (items: [string, string][]) => (
     <dl className="details-list">
@@ -27,16 +29,14 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
       ))}
     </dl>
   );
-  const loan = property.mortgage;
-  const finance = value.mortgage;
   return (
     <>
       <div className="metrics">
         {[
-          ['Valeur actuelle du bien entier', asset.price],
+          ['Capital déjà remboursé', value.principalPaid],
           ['Valeur brute détenue', value.ownedValue],
-          ['Dette attribuée', value.remainingPrincipal],
-          ['Valeur nette', value.equity],
+          ['Capital restant dû', value.remainingPrincipal],
+          ['Patrimoine immobilier net', value.equity],
         ].map(([label, result]) => (
           <section className="metric" key={label}>
             <div className="metric-top">{label}</div>
@@ -44,6 +44,19 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
           </section>
         ))}
       </div>
+      {asset.price === null && (
+        <p className="notice">
+          Valeur actuelle inconnue : renseignez une estimation pour calculer le patrimoine net.
+        </p>
+      )}
+      {asset.price !== null &&
+        Number(asset.price) === 0 &&
+        Number(value.remainingPrincipal) > 0 && (
+          <p className="notice">
+            La valeur du bien est enregistrée à zéro : le patrimoine net correspond donc à l’opposé
+            de la dette. Vérifiez l’estimation du bien.
+          </p>
+        )}
       <div className="detail-grid">
         <section className="panel detail-panel">
           <h2>Vue générale</h2>
@@ -57,11 +70,13 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
             ['Détention', `${property.ownershipPercent} %`],
             ['Acquisition', date(property.purchaseDate)],
             ['Prix d’acquisition du bien', amount(property.purchasePrice)],
+            ['Valeur actuelle estimée du bien entier', amount(asset.price)],
+            ['Montant initial des crédits', amount(value.borrowedAmount)],
             ['Frais d’acquisition', amount(property.acquisitionFees)],
             ['Travaux initiaux', amount(property.initialRenovations)],
             ['Coût d’acquisition du bien', amount(value.acquisitionCost)],
             ['Prix d’acquisition détenu', amount(value.acquisitionOwnedValue)],
-            ['Plus-value brute sur la part détenue', amount(value.grossGain)],
+            ['Plus-value / moins-value latente, hors frais', amount(value.grossGain)],
             ['Dernière estimation', asset.priceDate ? date(asset.priceDate) : 'Inconnue'],
           ])}
           <p className="small muted">
@@ -73,6 +88,33 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
         </section>
         <section className="panel detail-panel">
           <h2>Financement</h2>
+          {value.progressPercent !== null && (
+            <label>
+              Capital remboursé, tous crédits :{' '}
+              {Number(value.progressPercent).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}{' '}
+              %
+              <progress max={100} value={Number(value.progressPercent)} />
+            </label>
+          )}
+          {loans.length > 1 && (
+            <label>
+              Crédit affiché
+              <select
+                aria-label="Crédit affiché"
+                value={loanIndex}
+                onChange={(event) => {
+                  setLoanIndex(Number(event.target.value));
+                  setPage(0);
+                }}
+              >
+                {loans.map((item, index) => (
+                  <option key={index} value={index}>
+                    Crédit {index + 1} · {amount(item.borrowedAmount)} · {date(item.startDate)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {loan && finance ? (
             <>
               {metrics([
@@ -85,17 +127,23 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
                 ['Assurance mensuelle', amount(loan.monthlyInsurance)],
                 ['Capital remboursé', amount(finance.principalPaid)],
                 ['Capital restant dû', amount(finance.remainingPrincipal)],
-                ['Intérêts déjà payés', amount(finance.interestPaid)],
+                [
+                  'Source du solde',
+                  finance.balanceSource === 'MANUAL'
+                    ? `Relevé manuel du ${date(finance.balanceDate!)}`
+                    : 'Échéancier automatique',
+                ],
+                ['Intérêts payés estimés (contrat initial)', amount(finance.interestPaid)],
                 ['Intérêts futurs estimés', amount(finance.interestRemaining)],
                 ['Intérêts totaux', amount(finance.totalInterest)],
-                ['Assurance déjà payée', amount(finance.insurancePaid)],
+                ['Assurance payée estimée (contrat initial)', amount(finance.insurancePaid)],
                 ['Assurance restante', amount(finance.insuranceRemaining)],
                 ['Assurance totale estimée', amount(finance.totalInsurance)],
                 ['Frais de dossier / garantie', amount(loan.originationFees)],
                 ['Coûts déjà supportés (hors capital)', amount(finance.costsPaid)],
                 ['Coûts futurs prévisionnels', amount(finance.costsRemaining)],
                 ['Coût total prévisionnel du crédit', amount(finance.totalCost)],
-                ['Échéances restantes', String(finance.remainingPayments)],
+                ['Échéances restantes du contrat initial', String(finance.remainingPayments)],
                 ['Fin théorique', date(finance.endDate)],
               ])}
               <label>
@@ -103,9 +151,39 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
                 <progress max={100} value={Number(finance.progressPercent)} />
               </label>
               <p className="small muted">
-                Échéances supposées payées à la date prévue. Prêt à taux fixe, sans remboursement
-                anticipé. Les coûts excluent le remboursement du capital.
+                {finance.balanceSource === 'MANUAL'
+                  ? 'Capital issu du dernier relevé, remboursements anticipés inclus. Ce solde reste fixe jusqu’au prochain relevé. Intérêts, assurance, mensualité et dates ci-dessus restent les prévisions du contrat initial, non recalculées après remboursement anticipé.'
+                  : 'Échéances supposées payées à la date prévue. Prêt à taux fixe. Les coûts excluent le remboursement du capital.'}
               </p>
+              {!!loan.balanceObservations?.length && (
+                <>
+                  <h3>Historique des relevés de capital</h3>
+                  <TableScroll label="Relevés de capital restant dû">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Capital restant dû</th>
+                          <th>Capital déjà remboursé</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loan.balanceObservations.map((item) => (
+                          <tr key={item.date}>
+                            <td>{date(item.date)}</td>
+                            <td>{amount(item.remainingPrincipal)}</td>
+                            <td>
+                              {amount(
+                                d(loan.borrowedAmount).sub(item.remainingPrincipal).toFixed(2),
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </TableScroll>
+                </>
+              )}
             </>
           ) : (
             <p>Bien financé sans crédit.</p>
@@ -117,7 +195,10 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
           <div className="section-title">
             <div>
               <h2>Plan d’amortissement</h2>
-              <p>12 échéances par page · montants en {asset.currency}</p>
+              <p>
+                Prévision du contrat initial · crédit {loanIndex + 1} · 12 échéances par page ·{' '}
+                {asset.currency}
+              </p>
             </div>
             <div className="heading-actions">
               <button className="btn" disabled={page === 0} onClick={() => setPage(page - 1)}>
@@ -203,13 +284,21 @@ export function RealEstateDetail({ asset }: { asset: AssetView }) {
               'Rendement brut',
               value.rental.grossYield === null
                 ? '—'
-                : new Intl.NumberFormat('fr-FR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value.rental.grossYield) / 100),
+                : new Intl.NumberFormat('fr-FR', {
+                    style: 'percent',
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  }).format(Number(value.rental.grossYield) / 100),
             ],
             [
               'Rendement net avant fiscalité',
               value.rental.netYield === null
                 ? '—'
-                : new Intl.NumberFormat('fr-FR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value.rental.netYield) / 100),
+                : new Intl.NumberFormat('fr-FR', {
+                    style: 'percent',
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  }).format(Number(value.rental.netYield) / 100),
             ],
             ['Cash-flow mensuel de votre part', amount(value.rental.monthlyCashFlow)],
           ])}

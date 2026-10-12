@@ -151,3 +151,103 @@ describe('property valuation and rental estimates', () => {
     expect(realEstateSchema.safeParse({ ...property, ownershipPercent: '0' }).success).toBe(true);
   });
 });
+
+describe('manual balances and multiple mortgages', () => {
+  const observed = mortgageSchema.parse({
+    ...loan,
+    borrowedAmount: '240000',
+    balanceObservations: [
+      { date: '2021-01-31', remainingPrincipal: '225000' },
+      { date: '2022-01-31', remainingPrincipal: '180000' },
+      { date: '2023-01-31', remainingPrincipal: '0' },
+    ],
+  });
+  it('uses dated bank balances including early repayments, without adding repayments to equity', () => {
+    const home = {
+      ...property,
+      purchasePrice: '250000',
+      currentValue: '260000',
+      mortgage: observed,
+    };
+    expect(realEstateAt(home, new Date('2021-01-31'))).toMatchObject({
+      ownedValue: '260000',
+      remainingPrincipal: '225000',
+      borrowedAmount: '240000',
+      principalPaid: '15000',
+      equity: '35000',
+      grossGain: '10000',
+      progressPercent: '6.25',
+    });
+    expect(realEstateAt(home, new Date('2021-12-31')).remainingPrincipal).toBe('225000');
+    expect(realEstateAt(home, new Date('2022-01-31'))).toMatchObject({
+      principalPaid: '60000',
+      equity: '80000',
+    });
+    expect(realEstateAt(home, new Date('2023-01-31'))).toMatchObject({
+      principalPaid: '240000',
+      equity: '260000',
+    });
+    expect(mortgageAt(observed, new Date('2023-01-31')).active).toBe(false);
+    expect(mortgageAt(observed, new Date('2020-12-31')).remainingPrincipal).toBe(
+      mortgageAt({ ...observed, balanceObservations: [] }, new Date('2020-12-31'))
+        .remainingPrincipal,
+    );
+    expect(mortgageAt(observed, new Date('2019-01-01'))).toMatchObject({
+      principalPaid: '0.00',
+      remainingPrincipal: '0.00',
+    });
+  });
+  it('aggregates each attributed debt once and retains negative or unknown net values', () => {
+    const extra = mortgageSchema.parse({
+      ...loan,
+      borrowedAmount: '20000',
+      balanceObservations: [{ date: '2021-01-31', remainingPrincipal: '10000' }],
+    });
+    const home = {
+      ...property,
+      currentValue: '260000',
+      ownershipPercent: '50',
+      mortgage: observed,
+      additionalMortgages: [extra],
+    };
+    expect(realEstateAt(home, new Date('2021-01-31'))).toMatchObject({
+      ownedValue: '130000',
+      remainingPrincipal: '235000',
+      borrowedAmount: '260000',
+      principalPaid: '25000',
+      equity: '-105000',
+    });
+    expect(
+      realEstateAt({ ...home, currentValue: null, valuationDate: null }, new Date('2021-01-31'))
+        .equity,
+    ).toBeNull();
+    expect(realEstateAt({ ...home, currentValue: '0' }, new Date('2021-01-31')).equity).toBe(
+      '-235000',
+    );
+    expect(
+      realEstateAt({ ...home, mortgage: null }, new Date('2021-01-31')).remainingPrincipal,
+    ).toBe('10000');
+  });
+  it('reproduces minus 240000 only when the owned value is zero, not when it is unknown', () => {
+    const home = { ...property, mortgage: { ...loan, borrowedAmount: '240000' } };
+    const at = new Date('2020-01-31');
+    expect(realEstateAt({ ...home, currentValue: '0' }, at).equity).toBe('-240000');
+    expect(
+      realEstateAt({ ...home, currentValue: null, valuationDate: null }, at).equity,
+    ).toBeNull();
+    expect(realEstateAt({ ...home, currentValue: '260000' }, at).equity).toBe('20000');
+  });
+  it('rejects invalid observations instead of accepting interest as repaid principal', () => {
+    for (const balanceObservations of [
+      [{ date: '2021-01-01', remainingPrincipal: '240001' }],
+      [{ date: '2021-01-01', remainingPrincipal: '-1' }],
+      [{ date: '2019-01-01', remainingPrincipal: '200000' }],
+      [{ date: '2999-01-01', remainingPrincipal: '200000' }],
+      [
+        { date: '2021-01-01', remainingPrincipal: '200000' },
+        { date: '2021-01-01', remainingPrincipal: '190000' },
+      ],
+    ])
+      expect(mortgageSchema.safeParse({ ...observed, balanceObservations }).success).toBe(false);
+  });
+});

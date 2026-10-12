@@ -33,8 +33,39 @@ export const mortgageSchema = z
     startDate: z.iso.date(),
     monthlyInsurance: amount.default('0'),
     originationFees: amount.default('0'),
+    balanceObservations: z
+      .array(
+        z
+          .object({
+            date: pastDate,
+            remainingPrincipal: amount,
+          })
+          .strict(),
+      )
+      .max(1000)
+      .optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((loan, ctx) => {
+    for (const [index, observation] of (loan.balanceObservations ?? []).entries()) {
+      if (
+        observation.date < loan.startDate ||
+        (index > 0 && observation.date <= loan.balanceObservations![index - 1].date)
+      )
+        ctx.addIssue({
+          code: 'custom',
+          path: ['balanceObservations', index, 'date'],
+          message:
+            'Les relevés doivent suivre le début du prêt et être strictement chronologiques.',
+        });
+      if (d(observation.remainingPrincipal).gt(loan.borrowedAmount))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['balanceObservations', index, 'remainingPrincipal'],
+          message: 'Le capital restant dû ne peut pas dépasser le montant initial de ce prêt.',
+        });
+    }
+  });
 export type Mortgage = z.infer<typeof mortgageSchema>;
 export const rentalSchema = z
   .object({
@@ -64,6 +95,7 @@ export const realEstateSchema = z
     valuationDate: pastDate.nullable(),
     ownershipPercent: percent,
     mortgage: mortgageSchema.nullable(),
+    additionalMortgages: z.array(mortgageSchema).max(19).optional(),
     rental: rentalSchema.optional(),
   })
   .strict()
@@ -94,3 +126,11 @@ export const realEstateSchema = z
       });
   });
 export type RealEstate = z.infer<typeof realEstateSchema>;
+
+// Keep legacy single-loan records readable without a database migration.
+export function propertyMortgages(property: RealEstate): Mortgage[] {
+  return [
+    ...(property.mortgage ? [property.mortgage] : []),
+    ...(property.additionalMortgages ?? []),
+  ];
+}

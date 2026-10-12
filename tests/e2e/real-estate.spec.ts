@@ -41,7 +41,7 @@ test('creates and edits a rental property, shows net wealth and paginated amorti
   await page
     .getByLabel('Date de début du prêt', { exact: true })
     .fill(new Date().toISOString().slice(0, 10));
-  await expect(page.locator('output')).toContainText('998.28');
+  await expect(page.locator('output')).toContainText('998,28');
   await page.getByLabel('Usage', { exact: true }).selectOption('RENTAL');
   await page.getByLabel('Loyer mensuel hors charges', { exact: true }).fill('1500');
   await page.getByLabel('Charges mensuelles non récupérables', { exact: true }).fill('100');
@@ -52,7 +52,7 @@ test('creates and edits a rental property, shows net wealth and paginated amorti
   await expect(
     page.getByRole('heading', { name: 'Location · estimation avant fiscalité' }),
   ).toBeVisible();
-  const schedule = page.getByRole('region', { name: 'Plan d’amortissement', exact: true });
+  const schedule = page.getByRole('region', { name: 'Échéancier du crédit', exact: true });
   await expect(schedule.locator('tbody tr')).toHaveCount(12);
   await page.getByRole('button', { name: 'Suivant', exact: true }).click();
   await expect(schedule.locator('tbody tr').first().locator('td').first()).toHaveText('13');
@@ -116,4 +116,54 @@ test('creates and edits a rental property, shows net wealth and paginated amorti
     false,
   );
   await page.screenshot({ path: '.local/screenshots/real-estate-form-mobile.png', fullPage: true });
+  await page.getByLabel('Valeur actuelle du bien entier').fill('260000');
+  await page.getByLabel('Prix d’acquisition', { exact: true }).fill('250000');
+  await page.getByLabel('Montant emprunté attribué', { exact: true }).fill('240000');
+  await page.getByLabel('Apport personnel', { exact: true }).fill('10000');
+  await page.getByLabel('Date de début du prêt', { exact: true }).fill('2020-01-01');
+  await page.getByLabel('Capital restant dû actuel', { exact: true }).fill('225000');
+  await page.getByLabel('Date du relevé de capital', { exact: true }).fill('2021-01-31');
+  await page.getByRole('button', { name: 'Enregistrer le bien' }).click();
+  await expect(page.locator('.metrics .metric').last()).toContainText('35 000');
+  await expect(page.locator('.metrics .metric').first()).toContainText('15 000');
+  await expect(page.getByRole('region', { name: 'Relevés de capital restant dû' })).toContainText(
+    '225 000',
+  );
+  await page.getByRole('button', { name: 'Modifier', exact: true }).click();
+  await page.getByRole('button', { name: 'Ajouter un crédit', exact: true }).click();
+  const secondLoan = page.getByRole('group', { name: 'Crédit 2', exact: true });
+  await secondLoan.getByLabel('Montant emprunté attribué', { exact: true }).fill('20000');
+  await secondLoan.getByLabel('Apport personnel', { exact: true }).fill('0');
+  await secondLoan.getByLabel('Taux nominal annuel (%)', { exact: true }).fill('0');
+  await secondLoan.getByLabel('Durée (mois)', { exact: true }).fill('120');
+  await secondLoan.getByLabel('Date de début du prêt', { exact: true }).fill('2020-01-01');
+  await secondLoan.getByLabel('Capital restant dû actuel', { exact: true }).fill('10000');
+  await secondLoan.getByLabel('Date du relevé de capital', { exact: true }).fill('2021-01-31');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(
+    false,
+  );
+  await page.getByRole('button', { name: 'Enregistrer le bien' }).click();
+  await expect(page.locator('.metrics .metric').last()).toContainText('25 000');
+  await page.getByLabel('Crédit affiché').selectOption('1');
+  await expect(page.getByRole('region', { name: 'Relevés de capital restant dû' })).toContainText(
+    '10 000',
+  );
+  await page.reload();
+  await expect(page.locator('.metrics .metric').last()).toContainText('25 000');
+  await page.goto('/dashboard');
+  await expect(card).toContainText('25 000');
+  await expect(card).toContainText('235 000');
+  await card.click();
+  await expect(page.locator('.category-metrics')).toContainText('Capital déjà remboursé');
+  await expect(page.locator('.category-metrics')).toContainText('25 000');
+  await expect(page.locator('.category-metrics progress')).toHaveAttribute(
+    'value',
+    String((25000 / 260000) * 100),
+  );
+  await page.screenshot({
+    path: '.local/screenshots/real-estate-manual-multiple.png',
+    fullPage: true,
+  });
+  const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+  expect(axe.violations.map((v) => v.id)).toEqual([]);
 });

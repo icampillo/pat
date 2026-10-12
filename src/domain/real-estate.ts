@@ -1,6 +1,6 @@
 import { decimal as d, precise } from './money';
 import { mortgageAt } from './mortgage';
-import type { RealEstate } from '@/shared/real-estate';
+import { propertyMortgages, type RealEstate } from '@/shared/real-estate';
 
 export function realEstateAt(
   property: RealEstate,
@@ -11,8 +11,17 @@ export function realEstateAt(
 ) {
   const share = d(property.ownershipPercent).div(100);
   const ownedValue = currentValue === null ? null : d(currentValue).mul(share);
-  const mortgage = property.mortgage ? mortgageAt(property.mortgage, at) : null;
-  const debt = mortgage?.remainingPrincipal ?? '0';
+  const loans = propertyMortgages(property);
+  const mortgages = loans.map((loan) => mortgageAt(loan, at));
+  const mortgage = property.mortgage ? mortgages[0] : null;
+  const debt = precise(mortgages.reduce((sum, loan) => sum.add(loan.remainingPrincipal), d(0)));
+  const borrowedAmount = loans.reduce((sum, loan) => sum.add(loan.borrowedAmount), d(0));
+  const principalPaid = mortgages.reduce((sum, loan) => sum.add(loan.principalPaid), d(0));
+  const monthlyDebtService = mortgages.reduce(
+    (sum, loan, index) =>
+      loan.active ? sum.add(loan.monthlyPayment).add(loans[index].monthlyInsurance) : sum,
+    d(0),
+  );
   const acquisitionCost = d(property.purchasePrice)
     .add(property.acquisitionFees)
     .add(property.initialRenovations);
@@ -29,6 +38,12 @@ export function realEstateAt(
   return {
     ownedValue: ownedValue === null ? null : precise(ownedValue),
     remainingPrincipal: debt,
+    borrowedAmount: precise(borrowedAmount),
+    principalPaid: precise(principalPaid),
+    progressPercent: borrowedAmount.isZero()
+      ? null
+      : precise(principalPaid.div(borrowedAmount).mul(100)),
+    mortgages,
     equity: ownedValue === null ? null : precise(ownedValue.sub(debt)),
     grossGain:
       ownedValue === null ? null : precise(ownedValue.sub(d(property.purchasePrice).mul(share))),
@@ -48,12 +63,7 @@ export function realEstateAt(
               : precise(annualRent.sub(expenses).div(acquisitionCost).mul(100)),
             // Rent and operating expenses describe the whole property; debt is already attributed.
             monthlyCashFlow: precise(
-              annualRent
-                .sub(expenses)
-                .div(12)
-                .mul(share)
-                .sub(mortgage?.active ? mortgage.monthlyPayment : 0)
-                .sub(mortgage?.active ? property.mortgage!.monthlyInsurance : 0),
+              annualRent.sub(expenses).div(12).mul(share).sub(monthlyDebtService),
             ),
           }
         : null,

@@ -257,3 +257,84 @@ it('backfills existing portfolios idempotently without altering other categories
     }),
   ).toEqual(before);
 });
+
+it('keeps manual multi-loan equity consistent across the portfolio, category and immutable captures', async () => {
+  const owner = await setup();
+  const home = {
+    ...property,
+    currentValue: '260000',
+    purchasePrice: '250000',
+    mortgage: {
+      ...loan,
+      borrowedAmount: '240000',
+      balanceObservations: [{ date: '2021-01-31', remainingPrincipal: '225000' }],
+    },
+  };
+  const update = (realEstate: unknown, version: string) =>
+    command(
+      owner.userId,
+      'PATCH',
+      ['assets', owner.asset.id],
+      { ...owner.input, metadata: { realEstate } },
+      randomUUID(),
+      version,
+    );
+  await update(home, '1');
+  const snapshot = await runSnapshot(owner.portfolioId, new Date('2021-01-31'));
+  expect(String(snapshot!.totalEur)).toBe('35000');
+  const saved = JSON.stringify(snapshot);
+  let state = await getState(owner.userId);
+  expect(state.totals.valueEur).toBe('35000');
+  expect(buildCategoryDetails(state, owner.category, 'EUR').category).toMatchObject({
+    totalValue: 35000,
+    realEstate: {
+      grossValue: 260000,
+      debt: 225000,
+      borrowedAmount: 240000,
+      principalPaid: 15000,
+      grossGain: 10000,
+    },
+  });
+  const extra = {
+    ...loan,
+    borrowedAmount: '20000',
+    balanceObservations: [{ date: '2022-01-31', remainingPrincipal: '10000' }],
+  };
+  await update(
+    {
+      ...home,
+      mortgage: {
+        ...home.mortgage,
+        balanceObservations: [
+          ...home.mortgage.balanceObservations,
+          { date: '2022-01-31', remainingPrincipal: '200000' },
+        ],
+      },
+      additionalMortgages: [extra],
+    },
+    '2',
+  );
+  await command(
+    owner.userId,
+    'POST',
+    ['assets'],
+    {
+      ...owner.input,
+      name: 'Second bien',
+      metadata: { realEstate: { ...property, currentValue: '100000' } },
+    },
+    randomUUID(),
+    null,
+  );
+  state = await getState(owner.userId);
+  expect(state.totals.valueEur).toBe('150000');
+  expect(buildCategoryDetails(state, owner.category, 'EUR').category).toMatchObject({
+    totalValue: 150000,
+    realEstate: { grossValue: 360000, debt: 210000, borrowedAmount: 260000, principalPaid: 50000 },
+  });
+  expect(
+    JSON.stringify(await db().portfolioSnapshot.findUnique({ where: { id: snapshot!.id } })),
+  ).toBe(saved);
+  expect(state.snapshots[0].categoryValues[owner.category.id].valueEur).toBe('35000');
+  expect(await db().transaction.count({ where: { portfolioId: owner.portfolioId } })).toBe(0);
+});

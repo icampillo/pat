@@ -155,6 +155,10 @@ function positions(
             realEstate: {
               grossValue: convert(asset.realEstate.ownedValue, asset.currency),
               debt: convert(asset.realEstate.remainingPrincipal, asset.currency),
+              borrowedAmount: convert(asset.realEstate.borrowedAmount, asset.currency),
+              principalPaid: convert(asset.realEstate.principalPaid, asset.currency),
+              purchaseValue: convert(asset.realEstate.acquisitionOwnedValue, asset.currency),
+              grossGain: convert(asset.realEstate.grossGain, asset.currency),
               ownershipPercent: asset.metadata.realEstate.ownershipPercent,
               description: `${propertyTypes[asset.metadata.realEstate.propertyType]} · ${propertyUsages[asset.metadata.realEstate.usage]}`,
             },
@@ -260,6 +264,16 @@ export function buildCategoryDetails(
                 assets.map((asset) => asset.realEstate?.grossValue),
               ),
               debt: calculateCategoryValue(assets.map((asset) => asset.realEstate?.debt)),
+              borrowedAmount: calculateCategoryValue(
+                assets.map((asset) => asset.realEstate?.borrowedAmount),
+              ),
+              principalPaid: calculateCategoryValue(
+                assets.map((asset) => asset.realEstate?.principalPaid),
+              ),
+              purchaseValue: calculateCategoryValue(
+                assets.map((asset) => asset.realEstate?.purchaseValue),
+              ),
+              grossGain: calculateCategoryValue(assets.map((asset) => asset.realEstate?.grossGain)),
             },
           }
         : {}),
