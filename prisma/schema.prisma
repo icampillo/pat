@@ -226,6 +226,8 @@ model PortfolioSnapshot {
   investedEur Decimal? @db.Decimal(38,18)
   netFlowsEur Decimal @db.Decimal(38,18)
   data Json
+  // Derived only from immutable data; null until the resumable backfill runs.
+  summary Json?
   @@unique([portfolioId, dailyKey])
   @@unique([referenceOwnerId, referenceDay])
   @@index([portfolioId, capturedAt(sort: Desc)])

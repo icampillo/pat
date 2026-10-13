@@ -1,7 +1,7 @@
 'use client';
 import { errorMessage } from '@/shared/errors';
 import type { SaveAction } from '@/components/forms';
-import type { AppState } from '@/shared/types';
+import type { WalletsState } from '@/shared/types';
 import Link from '@/components/workspace/link';
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -12,7 +12,7 @@ import { PageHeading } from '@/components/workspace/page-heading';
 import { WalletAddForm } from './add-form';
 import { WalletConnectionCard } from './connection-card';
 import { WalletPositions } from './positions';
-export function WalletsPage({ state, save }: { state: AppState; save: SaveAction }) {
+export function WalletsPage({ state, save }: { state: WalletsState; save: SaveAction }) {
   const { wallets, config } = state.onchain;
   const params = useSearchParams();
   const [adding, setAdding] = useState(Boolean(params.get('address')));

@@ -1,5 +1,7 @@
 # Historique automatique — 9 octobre 2026
 
+> Lecture optimisée le 13 octobre : [résumés immuables, migration additive et reprise des historiques](neon-performance-phase2.md). La création quotidienne et les références d’origine restent inchangées.
+
 ## Architecture et décisions
 
 Le code initial utilisait une contrainte nullable `(portfolioId, dailyKey)` seulement pour les captures quotidiennes. Les boutons, la commande CLI, les imports Bourse et changements de wallets produisaient aussi des captures sans clé. Le lecteur mélangeait ces points ; les catégories ajoutaient la valeur courante en mémoire.

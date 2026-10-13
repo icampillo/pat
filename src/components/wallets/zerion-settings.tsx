@@ -2,11 +2,11 @@
 import { BusyLabel } from '@/components/ui/busy-label';
 import { errorMessage } from '@/shared/errors';
 import type { SaveAction } from '@/components/forms';
-import type { AppState } from '@/shared/types';
+import type { SettingsState } from '@/shared/types';
 import { KeyRound } from 'lucide-react';
 import { useState } from 'react';
 
-export function ZerionSettings({ state, save }: { state: AppState; save: SaveAction }) {
+export function ZerionSettings({ state, save }: { state: SettingsState; save: SaveAction }) {
   const config = state.onchain.config;
   const [busy, setBusy] = useState(false),
     [message, setMessage] = useState('');

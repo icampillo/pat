@@ -1,7 +1,14 @@
 'use client';
 import { errorMessage } from '@/shared/errors';
 import type { SaveAction } from '@/components/forms';
-import type { AppState } from '@/shared/types';
+import {
+  coversScope,
+  pageReadScope,
+  type AppState,
+  type SettingsState,
+  type WalletsState,
+  type WorkspaceState,
+} from '@/shared/types';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   createContext,
@@ -12,11 +19,12 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { createWorkspaceStore } from './data-store';
+import { startWalletPolling } from './wallet-polling';
 import { readApiResponse } from './api';
 import { WorkspaceLoading } from './loading';
 
 type WorkspaceContextValue = {
-  state: AppState;
+  state: WorkspaceState;
   userName: string;
   currency: 'EUR' | 'USD';
   setCurrency: (currency: 'EUR' | 'USD') => void;
@@ -27,9 +35,16 @@ type WorkspaceContextValue = {
   setFlash: (message: string) => void;
 };
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
-export function useWorkspace() {
+type ContextWith<T> = Omit<WorkspaceContextValue, 'state'> & { state: T };
+export function useWorkspace(): ContextWith<AppState>;
+export function useWorkspace(scope: 'settings'): ContextWith<SettingsState>;
+export function useWorkspace(scope: 'wallets'): ContextWith<WalletsState>;
+export function useWorkspace(scope: 'base'): WorkspaceContextValue;
+export function useWorkspace(scope: 'full' | 'settings' | 'wallets' | 'base' = 'full') {
   const context = useContext(WorkspaceContext);
   if (!context) throw new Error('WorkspaceProvider requis.');
+  if (scope !== 'base' && !coversScope(context.state, scope))
+    throw new Error('Données de page non chargées.');
   return context;
 }
 export function WorkspaceProvider({
@@ -45,45 +60,38 @@ export function WorkspaceProvider({
   const {
     data: state,
     error,
+    walletError,
     unauthorized,
   } = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const [selectedCurrency, setCurrency] = useState<'EUR' | 'USD' | null>(null);
   const [flash, setFlash] = useState('');
   const [marketWarning, setMarketWarning] = useState('');
-  const hasState = Boolean(state);
+  const requiredScope = pageReadScope(pathname);
+  const hasState = coversScope(state, requiredScope);
   const [busy, setBusy] = useState(false);
   const pending = useRef(new Map<string, string>());
-  const syncing =
-    state?.onchain.config.enabled &&
-    state.onchain.wallets.some(
-      (wallet) => wallet.enabled && ['PENDING', 'SYNCING'].includes(wallet.status),
-    );
 
   useEffect(() => {
     if (unauthorized) router.replace('/login');
   }, [unauthorized, router]);
   useEffect(() => {
-    if (document.visibilityState === 'visible') void store.refresh();
-  }, [pathname, store]);
+    if (document.visibilityState === 'visible') void store.selectScope(requiredScope);
+  }, [requiredScope, pathname, store]);
   useEffect(() => {
     const revalidate = () => {
-      if (document.visibilityState === 'visible') void store.refresh();
+      if (document.visibilityState === 'visible') void store.revalidate();
     };
-    const timer = setInterval(
-      () => {
-        if (document.visibilityState === 'visible' && !store.getSnapshot().loading)
-          void store.refresh(Boolean(syncing));
-      },
-      syncing ? 5_000 : 60_000,
-    );
+    const timer = setInterval(revalidate, 60_000);
+    const stopPolling = startWalletPolling(store);
     window.addEventListener('focus', revalidate);
     document.addEventListener('visibilitychange', revalidate);
     return () => {
       clearInterval(timer);
+      stopPolling();
       window.removeEventListener('focus', revalidate);
       document.removeEventListener('visibilitychange', revalidate);
     };
-  }, [store, syncing]);
+  }, [store]);
   useEffect(() => {
     if (!hasState) return;
     let active = true;
@@ -99,8 +107,6 @@ export function WorkspaceProvider({
           setMarketWarning(
             'Actualisation des cours indisponible ; dernières valeurs et dates conservées.',
           );
-      } finally {
-        if (active) await store.refresh(true);
       }
     })();
     return () => {
@@ -125,17 +131,31 @@ export function WorkspaceProvider({
       },
       body: JSON.stringify(data),
     });
-    const result = await readApiResponse<{ id?: string }>(
-      res,
-      'Confirmation d’enregistrement indisponible. Vérifiez les données avant de réessayer.',
-    );
+    const result = await readApiResponse<{
+      id?: string;
+      rates?: number;
+      prices?: number;
+      securities?: { prices: number };
+    }>(res, 'Confirmation d’enregistrement indisponible. Vérifiez les données avant de réessayer.');
     pending.current.delete(signature);
     setFlash(
       route.startsWith('securities/') || route.endsWith('/preview')
         ? ''
         : 'Enregistrement effectué.',
     );
-    if (!route.endsWith('/preview')) await store.refresh(true);
+    const quoteRefresh = route === 'market/refresh' || route === 'securities/refresh';
+    if (
+      !route.endsWith('/preview') &&
+      (!quoteRefresh || result.rates || result.prices || result.securities?.prices)
+    )
+      await store.invalidate(
+        route.startsWith('wallets') ||
+          route === 'zerion/config' ||
+          route === 'market/refresh' ||
+          route === 'securities/refresh'
+          ? 'live'
+          : 'full',
+      );
     return result;
   };
   async function run(action: () => Promise<unknown>) {
@@ -150,7 +170,7 @@ export function WorkspaceProvider({
     }
   }
 
-  if (!state)
+  if (!state || !hasState)
     return error ? (
       <main className="error-page">
         <p role="alert">{error}</p>
@@ -183,6 +203,11 @@ export function WorkspaceProvider({
             <button className="text-link" onClick={() => void store.refresh(true)}>
               Réessayer
             </button>
+          </div>
+        )}
+        {walletError && (
+          <div className="workspace-refresh refresh-error" role="status">
+            {walletError}
           </div>
         )}
         {marketWarning && (

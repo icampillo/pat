@@ -1,29 +1,27 @@
-import { snapshotCashValues } from '@/domain/dashboard';
+import { measureRead } from './performance';
+import { summarizeSnapshot } from '@/domain/snapshot-summary';
+import { snapshotHistory } from './snapshot-history';
+import { Prisma } from '@/generated/prisma/client';
 import { importAccounts } from './import-accounts';
 import { snapshotDay } from '@/domain/snapshot-day';
 import { db } from './db';
-import type { Transaction } from '@/generated/prisma/client';
+import type { Transaction, PriceHistory } from '@/generated/prisma/client';
 import { replay } from '@/domain/ledger';
 import { decimal as d, precise } from '@/domain/money';
 import { AppError } from './errors';
 import { walletState } from './wallet-state';
 import { realEstateAt } from '@/domain/real-estate';
-import { snapshotCategoryValues, performance30d, numeric } from '@/domain/categories';
+import { performance30d, numeric } from '@/domain/categories';
 import { metadataSchema } from '@/shared/schemas';
 import { json, owned, toLedger, type TxDb } from './portfolio-store';
 
 export async function valuation(tx: TxDb, portfolioId: string, at = new Date()) {
-  const [assets, transactions, rate] = await Promise.all([
+  const [assets, transactions, rate, latestPrices] = await Promise.all([
     tx.asset.findMany({
       where: { portfolioId },
       include: {
         category: true,
         image: { select: { updatedAt: true } },
-        prices: {
-          where: { observedAt: { lte: at } },
-          orderBy: [{ observedAt: 'desc' }, { createdAt: 'desc' }],
-          take: 1,
-        },
       },
       orderBy: { name: 'asc' },
     }),
@@ -32,7 +30,15 @@ export async function valuation(tx: TxDb, portfolioId: string, at = new Date()) 
       where: { portfolioId, observedAt: { lte: at } },
       orderBy: { observedAt: 'desc' },
     }),
+    tx.$queryRaw<PriceHistory[]>(Prisma.sql`
+      SELECT p.* FROM "Asset" a CROSS JOIN LATERAL (
+        SELECT * FROM "PriceHistory" WHERE "assetId" = a.id AND "portfolioId" = ${portfolioId}::uuid
+          AND "observedAt" <= ${at}
+        ORDER BY "observedAt" DESC, "createdAt" DESC LIMIT 1
+      ) p WHERE a."portfolioId" = ${portfolioId}::uuid
+    `),
   ]);
+  const pricesByAsset = new Map(latestPrices.map((price) => [price.assetId, price]));
   const ledger = replay(transactions.map(toLedger));
   const assetNames = new Map(assets.map((asset) => [asset.id, asset.name]));
   const fx = rate ? d(String(rate.eurUsd)) : null;
@@ -46,7 +52,9 @@ export async function valuation(tx: TxDb, portfolioId: string, at = new Date()) 
     unknownCostEur = false,
     incompleteCostBasis = false,
     unknownCostUsd = false;
-  const rows = assets.map((asset) => {
+  const rows = assets.map((savedAsset) => {
+    const latest = pricesByAsset.get(savedAsset.id);
+    const asset = { ...savedAsset, prices: latest ? [latest] : [] };
     if (asset.category.key === 'REAL_ESTATE') {
       const property = metadataSchema.parse(asset.metadata).realEstate;
       if (!property) throw new AppError('REAL_ESTATE_METADATA', 'Fiche immobilière invalide.');
@@ -283,6 +291,7 @@ export async function capture(
       investedEur: state.totals.costEur,
       netFlowsEur: state.totals.netFlowsEur,
       data: json({ ...state, transactions: undefined }),
+      summary: json(summarizeSnapshot(state)),
     },
   });
 }
@@ -320,106 +329,99 @@ export async function runSnapshot(portfolioId: string, at = new Date()) {
   }
   throw new Error('Snapshot retry exhausted');
 }
-export async function getState(userId: string) {
-  return db().$transaction(
-    async (tx) => {
-      const portfolio = await owned(userId, tx);
-      const asOf = new Date();
-      const [state, categories, snapshots, walletHistory] = await Promise.all([
-        valuation(tx, portfolio.id, asOf),
-        tx.assetCategory.findMany({
-          where: { portfolioId: portfolio.id },
-          orderBy: { key: 'asc' },
-        }),
-        tx.portfolioSnapshot.findMany({
-          where: { referenceOwnerId: userId, referenceDay: { not: null } },
-          orderBy: { capturedAt: 'desc' },
-          take: 600,
-          select: {
-            id: true,
-            capturedAt: true,
-            referenceDay: true,
-            kind: true,
-            totalEur: true,
-            totalUsd: true,
-            investedEur: true,
-            ledgerVersion: true,
-            data: true,
-          },
-        }),
-        tx.walletConnection.count({ where: { portfolioId: portfolio.id } }),
-      ]);
-      const target = new Date(asOf.getTime() - 30 * 86400000);
-      const quoted = state.rows.filter((row) => row.priceDate && d(row.quantity).gt(0));
-      const priceCandidates = quoted.length
-        ? (
-            await Promise.all(
-              ['before', 'after'].map((side) =>
-                tx.priceHistory.findMany({
-                  where: {
-                    portfolioId: portfolio.id,
-                    observedAt: side === 'before' ? { lte: target } : { gt: target, lte: asOf },
-                    OR: quoted.map((row) => ({
-                      assetId: row.id,
-                      observedAt: { lt: new Date(row.priceDate!) },
-                    })),
-                  },
-                  distinct: ['assetId'],
-                  orderBy: [
-                    { assetId: 'asc' },
-                    { observedAt: side === 'before' ? 'desc' : 'asc' },
-                    { createdAt: 'desc' },
-                  ],
-                  select: { assetId: true, price: true, observedAt: true },
-                }),
-              ),
-            )
-          ).flat()
-        : [];
-      const revisions = await tx.transactionRevision.count({
-        where: { transaction: { portfolioId: portfolio.id }, version: { gt: 1 } },
-      });
-      const retrospective = snapshots.some(
-        (s) =>
-          s.kind !== 'SEED' &&
-          state.transactions.some(
-            (t: Transaction) =>
-              new Date(t.createdAt).getTime() > s.capturedAt.getTime() &&
-              new Date(t.occurredAt).getTime() <= s.capturedAt.getTime(),
-          ),
-      );
-      const accounts = importAccounts(
-        portfolio.id,
-        await tx.platform.findMany({ where: { portfolioId: portfolio.id } }),
-        state.rows,
-      );
-      return json({
-        accounts,
-        portfolio,
-        ...state,
-        rows: state.rows.map((row) => ({
-          ...row,
-          change30dPercent: performance30d(
-            numeric(row.price),
-            priceCandidates
-              .filter((price) => price.assetId === row.id)
-              .map((price) => ({
-                date: price.observedAt.toISOString(),
-                value: Number(price.price),
-              })),
-            asOf.toISOString(),
-          ).percent,
-        })),
-        categories,
-        snapshots: snapshots.reverse().map(({ data, ...snapshot }) => ({
-          ...snapshot,
-          categoryValues: snapshotCategoryValues(data, categories),
-          cashValues: snapshotCashValues(data),
-        })),
-        asOf: asOf.toISOString(),
-        historyRevised: revisions > 0 || retrospective || walletHistory > 0,
-      });
-    },
-    { isolationLevel: 'RepeatableRead', timeout: 20_000 },
+export async function getState(userId: string, includeHistory = true) {
+  return measureRead(includeHistory ? 'portfolio.full' : 'portfolio.live', () =>
+    db().$transaction(
+      async (tx) => {
+        const portfolio = await owned(userId, tx);
+        const asOf = new Date();
+        const [state, categories, walletHistory] = await Promise.all([
+          valuation(tx, portfolio.id, asOf),
+          tx.assetCategory.findMany({
+            where: { portfolioId: portfolio.id },
+            orderBy: { key: 'asc' },
+          }),
+          tx.walletConnection.count({ where: { portfolioId: portfolio.id } }),
+        ]);
+        const snapshots = includeHistory ? await snapshotHistory(tx, userId, categories) : [];
+        const target = new Date(asOf.getTime() - 30 * 86400000);
+        const quoted = state.rows.filter((row) => row.priceDate && d(row.quantity).gt(0));
+        // Prisma distinct can deduplicate in Node after transferring the entire price history.
+        // Indexed lateral probes return at most two real observations per quoted asset.
+        const priceCandidates = quoted.length
+          ? await tx.$queryRaw<
+              {
+                assetId: string;
+                price: Prisma.Decimal;
+                observedAt: Date;
+              }[]
+            >(Prisma.sql`
+          SELECT q.id AS "assetId", p.price, p."observedAt"
+          FROM (VALUES ${Prisma.join(
+            quoted.map(
+              (row) => Prisma.sql`(${row.id}::uuid, ${new Date(row.priceDate!)}::timestamptz)`,
+            ),
+          )}) AS q(id, latest)
+          CROSS JOIN LATERAL (
+            (SELECT price, "observedAt" FROM "PriceHistory"
+             WHERE "portfolioId" = ${portfolio.id}::uuid AND "assetId" = q.id
+               AND "observedAt" <= ${target} AND "observedAt" < q.latest
+             ORDER BY "observedAt" DESC, "createdAt" DESC LIMIT 1)
+            UNION ALL
+            (SELECT price, "observedAt" FROM "PriceHistory"
+             WHERE "portfolioId" = ${portfolio.id}::uuid AND "assetId" = q.id
+               AND "observedAt" > ${target} AND "observedAt" <= ${asOf} AND "observedAt" < q.latest
+             ORDER BY "observedAt" ASC, "createdAt" DESC LIMIT 1)
+          ) p
+        `)
+          : [];
+        const revisions = await tx.transactionRevision.count({
+          where: { transaction: { portfolioId: portfolio.id }, version: { gt: 1 } },
+        });
+        const retrospective = snapshots.some(
+          (s) =>
+            s.kind !== 'SEED' &&
+            state.transactions.some(
+              (t: Transaction) =>
+                new Date(t.createdAt).getTime() > s.capturedAt.getTime() &&
+                new Date(t.occurredAt).getTime() <= s.capturedAt.getTime(),
+            ),
+        );
+        const accounts = importAccounts(
+          portfolio.id,
+          await tx.platform.findMany({ where: { portfolioId: portfolio.id } }),
+          state.rows,
+        );
+        return json({
+          accounts,
+          portfolio,
+          ...state,
+          rows: state.rows.map((row) => ({
+            ...row,
+            change30dPercent: performance30d(
+              numeric(row.price),
+              priceCandidates
+                .filter((price) => price.assetId === row.id)
+                .map((price) => ({
+                  date: price.observedAt.toISOString(),
+                  value: Number(price.price),
+                })),
+              asOf.toISOString(),
+            ).percent,
+          })),
+          categories,
+          ...(includeHistory
+            ? {
+                snapshots,
+              }
+            : {}),
+          asOf: asOf.toISOString(),
+          ...(includeHistory || revisions > 0 || walletHistory > 0
+            ? { historyRevised: revisions > 0 || retrospective || walletHistory > 0 }
+            : {}),
+        });
+      },
+      { isolationLevel: 'RepeatableRead', timeout: 20_000 },
+    ),
   );
 }

@@ -1,11 +1,12 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { scopedWorkspaceFixture } from '../fixtures/workspace';
 import { applicationUiFixture } from '../fixtures/application-ui';
 
 async function mockState(page: Page, state = applicationUiFixture()) {
   await page.route('**/api/v1/market/refresh', () => {});
-  await page.route('**/api/v1/state', route => route.fulfill({ json: { data: state } }));
-  await page.route('**/api/v1/assets/*/prices', route => route.fulfill({ json: { data: [] } }));
+  await page.route('**/api/v1/state*', route => route.fulfill({ json: { data: scopedWorkspaceFixture(state, route.request().url()) } }));
+  await page.route('**/api/v1/assets/*/prices', route => route.fulfill({ json: { data: { items: [], nextCursor: null } } }));
 }
 async function noOverflow(page: Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
@@ -162,7 +163,7 @@ test('empty states, initial error and reduced-motion loading are readable on mob
   state.rows=[];state.transactions=[];state.snapshots=[];state.onchain.wallets=[];
   await mockState(page,state);
   for(const [path,title] of [['/portfolio','Portefeuille'],['/activity','Activité · Transactions'],['/activity?view=history','Activité · Historique du patrimoine'],['/wallets','Wallets DeFi']])await inspect(page,path,title);
-  await page.route('**/api/v1/state',route=>route.fulfill({status:503,json:{error:{message:'Service temporairement indisponible'}}}));
+  await page.route('**/api/v1/state*',route=>route.fulfill({status:503,json:{error:{message:'Service temporairement indisponible'}}}));
   await page.goto('/portfolio');
   await expect(page.getByRole('alert')).toContainText('Service temporairement indisponible');
   await accessible(page);

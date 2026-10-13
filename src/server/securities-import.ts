@@ -56,7 +56,7 @@ export async function previewSecurities(
   } catch (error) {
     throw new AppError('CSV_INVALID', (error as Error).message, 422);
   }
-  const initial = await getState(userId);
+  const initial = await getState(userId, false);
   const hash = createHash('sha256')
     .update(
       `securities-positions:${asOf}:${platform}:${boursoCurrency}:${csv

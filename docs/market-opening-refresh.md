@@ -9,7 +9,7 @@ Maintenant :
 1. La lecture d’état existante reste une lecture de base sans appel fournisseur. Le dashboard affiche ses dernières valeurs dès sa réception.
 2. Le provider du layout persistant lance séparément `POST /api/v1/market/refresh`, après le premier affichage des données. Le store conserve une seule promesse par ouverture, y compris lors du rejeu des effets React Strict Mode. Navigation, focus et timers de lecture ne relancent pas le marché ; un rechargement complet constitue une nouvelle ouverture.
 3. L’endpoint authentifié et protégé par contrôle d’origine attend le service existant dans la requête HTTP indépendante (`runtime=nodejs`, `maxDuration=300`). Pas de travail détaché non garanti par Vercel, pas de timer serveur, pas de nouveau worker ni dépendance.
-4. À la fin, même après un échec partiel, `store.refresh(true)` recharge `/api/v1/state`. Les anciennes données restent affichées pendant cette lecture. Aucun rechargement de page, blocage des actions ou snapshot.
+4. Depuis le 13 octobre 2026, une écriture effective de taux/prix déclenche `store.invalidate('live')` : relecture de `/api/v1/state?scope=live` sans snapshots. Un résultat inchangé ou un échec sans écriture ne relit pas le portefeuille. Une réussite partielle avec écritures est revalidée. Les anciennes données et captures restent affichées. Voir [l’audit Neon](neon-performance.md).
 
 ## Cache et concurrence PostgreSQL
 

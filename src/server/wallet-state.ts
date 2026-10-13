@@ -1,4 +1,7 @@
-import type { Prisma } from '@/generated/prisma/client';
+import { db } from './db';
+import { owned } from './portfolio-store';
+import type { WalletSyncStatus } from '@/shared/wallets';
+import { Prisma } from '@/generated/prisma/client';
 import type { OnchainState, WalletData } from '@/shared/wallets';
 import { zerionConfigured } from './zerion';
 import { decimal as d, precise } from '@/domain/money';
@@ -15,16 +18,27 @@ export async function walletState(
   const rows = await tx.walletConnection.findMany({
     where: { portfolioId, deletedAt: null, createdAt: { lte: at } },
     orderBy: { createdAt: 'asc' },
-    include: {
-      observations: {
-        where: { invalidatedAt: null, fetchedAt: { lte: at } },
-        orderBy: { fetchedAt: 'desc' },
-        take: 1,
-      },
-    },
   });
+  // Per-parent LIMIT is executed by PostgreSQL, not by Prisma's relation materializer.
+  const observations = rows.length
+    ? await tx.$queryRaw<
+        {
+          walletId: string;
+          fetchedAt: Date;
+          data: unknown;
+        }[]
+      >(Prisma.sql`
+    SELECT w.id AS "walletId", o."fetchedAt", o.data FROM "WalletConnection" w
+    CROSS JOIN LATERAL (
+      SELECT "fetchedAt", data FROM "WalletObservation" WHERE "walletId" = w.id
+        AND "invalidatedAt" IS NULL AND "fetchedAt" <= ${at}
+      ORDER BY "fetchedAt" DESC LIMIT 1
+    ) o WHERE w."portfolioId" = ${portfolioId}::uuid AND w."deletedAt" IS NULL AND w."createdAt" <= ${at}
+  `)
+    : [];
+  const latest = new Map(observations.map((observation) => [observation.walletId, observation]));
   const wallets = rows.map((w) => {
-    const last = w.observations[0];
+    const last = latest.get(w.id);
     return {
       id: w.id,
       address: w.address,
@@ -61,5 +75,35 @@ export async function walletState(
     ).length,
     valueUsd: missing ? null : precise(total),
     valueEur: missing ? null : total.isZero() ? '0' : eurUsd ? precise(total.div(eurUsd)) : null,
+  };
+}
+
+export async function walletSyncStatus(userId: string): Promise<WalletSyncStatus> {
+  const portfolio = await owned(userId);
+  const [config, wallets] = await Promise.all([
+    db().walletSyncConfig.findUnique({
+      where: { portfolioId: portfolio.id },
+      select: { enabled: true },
+    }),
+    db().walletConnection.findMany({
+      where: { portfolioId: portfolio.id, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        enabled: true,
+        status: true,
+        errorCode: true,
+        lastSuccessAt: true,
+        nextSyncAt: true,
+      },
+    }),
+  ]);
+  return {
+    enabled: config?.enabled ?? true,
+    wallets: wallets.map((wallet) => ({
+      ...wallet,
+      lastSuccessAt: wallet.lastSuccessAt?.toISOString() ?? null,
+      nextSyncAt: wallet.nextSyncAt.toISOString(),
+    })),
   };
 }

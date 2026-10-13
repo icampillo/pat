@@ -3,15 +3,15 @@ import { type SaveAction } from '@/components/forms';
 import { ImportPanel } from '@/components/import-panel';
 import { SecuritiesImportPanel } from '@/components/securities-import-panel';
 import { ZerionSettings } from '@/components/wallets';
-import type { AppState } from '@/shared/types';
+import type { SettingsState } from '@/shared/types';
 import { Download } from 'lucide-react';
 
 import { useWorkspace } from '@/components/workspace/context';
 import { date } from '@/components/workspace/display';
 import { PageHeading } from '@/components/workspace/page-heading';
 
-export function SettingsPage({ state }: { state: AppState }) {
-  const { save, run, busy } = useWorkspace();
+export function SettingsPage({ state }: { state: SettingsState }) {
+  const { save, run, busy } = useWorkspace('settings');
   return (
     <>
       <PageHeading view="settings" title="Paramètres" />
@@ -25,7 +25,7 @@ function SettingsContent({
   run,
   busy,
 }: {
-  state: AppState;
+  state: SettingsState;
   save: SaveAction;
   run: (action: () => Promise<unknown>) => Promise<void>;
   busy: boolean;

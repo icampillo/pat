@@ -56,10 +56,11 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   // Close on commit, not on click: a slow destination keeps its native Link status mounted.
   if (mobileLocation !== null && !mobile) setMobileLocation(null);
   const setMobile = (open: boolean) => setMobileLocation(open ? location : null);
-  const { state, userName, currency, setCurrency } = useWorkspace();
+  const { state, userName, currency, setCurrency } = useWorkspace('base');
   const pageTitle =
     view === 'categories'
-      ? state.categories.find((c) => categorySlug(c.key) === slug)?.label
+      ? ('categories' in state ? state.categories : []).find((c) => categorySlug(c.key) === slug)
+          ?.label
       : titles[view];
   const sidebar = (
     <>
@@ -179,7 +180,8 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
                 <span className={shellStyles.status}>
                   <i />
                   {state.portfolio.isDemo
-                    ? state.onchain.wallets.length || state.totals.incompleteCostBasis
+                    ? state.onchain.wallets.length ||
+                      ('totals' in state ? state.totals.incompleteCostBasis : state.personalData)
                       ? 'Démo + données personnelles'
                       : 'Données de démonstration'
                     : state.portfolio.name}
@@ -196,7 +198,8 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
           <div className="topbar-right">
             {state.portfolio.isDemo && !dashboard && (
               <span className="demo-badge">
-                {state.onchain.wallets.length || state.totals.incompleteCostBasis
+                {state.onchain.wallets.length ||
+                ('totals' in state ? state.totals.incompleteCostBasis : state.personalData)
                   ? 'DÉMO + DONNÉES PERSONNELLES'
                   : 'DONNÉES FICTIVES'}
               </span>
@@ -220,7 +223,8 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
             <span>Patrimoine · Votre espace personnel</span>
             <span>
               {state.portfolio.isDemo
-                ? state.onchain.wallets.length || state.totals.incompleteCostBasis
+                ? state.onchain.wallets.length ||
+                  ('totals' in state ? state.totals.incompleteCostBasis : state.personalData)
                   ? 'Démonstration encore présente · wallets et inventaires importés personnels'
                   : 'Prix et historiques de démonstration fictifs'
                 : state.onchain.wallets.length

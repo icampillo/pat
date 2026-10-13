@@ -150,3 +150,24 @@ export type RealEstateSummary = {
   purchaseValue: number | null;
   grossGain: number | null;
 };
+
+// Scoped responses omit unrelated financial fields, never replace them with invented zeros.
+export type SettingsState = Pick<AppState, 'portfolio' | 'asOf' | 'fxRate' | 'accounts'> & {
+  personalData?: boolean;
+  onchain: {
+    config: AppState['onchain']['config'];
+    wallets: import('./wallets').WalletSyncStatus['wallets'];
+  };
+};
+export type WalletsState = Omit<SettingsState, 'onchain'> & Pick<AppState, 'onchain'>;
+export type WorkspaceState = AppState | SettingsState | WalletsState;
+export type ReadScope = 'full' | 'live' | 'settings' | 'wallets';
+export function pageReadScope(pathname: string): ReadScope {
+  return pathname === '/settings' ? 'settings' : pathname === '/wallets' ? 'wallets' : 'full';
+}
+export function coversScope(state: WorkspaceState | undefined, scope: ReadScope): boolean {
+  if (!state) return false;
+  if ('rows' in state) return scope !== 'full' || 'snapshots' in state;
+  if (scope === 'settings') return 'accounts' in state;
+  return scope === 'wallets' && 'includedCount' in state.onchain;
+}

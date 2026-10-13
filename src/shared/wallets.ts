@@ -103,3 +103,14 @@ export const positionLabels: Record<string, string> = {
   Rewards: 'Récompenses',
   Perpetuals: 'Perpétuels',
 };
+
+// Deliberately excludes addresses, balances and observation JSON.
+export type WalletSyncStatus = {
+  enabled: boolean;
+  wallets: Pick<
+    WalletView,
+    'id' | 'enabled' | 'status' | 'errorCode' | 'lastSuccessAt' | 'nextSyncAt'
+  >[];
+};
+export const walletIsSyncing = (wallet: { enabled: boolean; status: string }) =>
+  wallet.enabled && ['PENDING', 'SYNCING'].includes(wallet.status);

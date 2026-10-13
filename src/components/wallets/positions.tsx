@@ -3,7 +3,7 @@ import { TableScroll } from '@/components/ui/table-scroll';
 import { sortByValue } from '@/domain/value-sort';
 import { decimal as d } from '@/domain/money';
 import { showWalletValue } from '@/domain/wallet-display';
-import type { AppState } from '@/shared/types';
+import type { WalletsState } from '@/shared/types';
 import type { WalletToken } from '@/shared/wallets';
 import { positionLabels } from '@/shared/wallets';
 import { useState } from 'react';
@@ -26,7 +26,7 @@ function TokenList({ tokens, empty }: { tokens: WalletToken[]; empty: string }) 
   );
 }
 
-export function WalletPositions({ state }: { state: AppState }) {
+export function WalletPositions({ state }: { state: WalletsState }) {
   const { wallets } = state.onchain;
   const [selected, setSelected] = useState('all'),
     [chain, setChain] = useState('all'),

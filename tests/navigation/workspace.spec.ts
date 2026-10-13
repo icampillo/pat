@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { workspaceFixture } from '../fixtures/workspace';
+import { workspaceFixture, scopedWorkspaceFixture } from '../fixtures/workspace';
 
 // These scenarios isolate state/navigation; market completion is covered in market-opening.spec.
 test.beforeEach(async ({ page }) => {
@@ -29,10 +29,10 @@ test('loads once, navigates without data reads and does not prefetch asset rows'
   page.on('request', (request) => {
     if (request.url().includes('/assets/test-asset')) detailRequests++;
   });
-  await page.route('**/api/v1/state', async (route) => {
+  await page.route('**/api/v1/state*', async (route) => {
     reads++;
     await initial.promise;
-    await route.fulfill({ json: { data: state } });
+    await route.fulfill({ json: { data: scopedWorkspaceFixture(state, route.request().url()) } });
   });
   await page.goto('/dashboard');
   await expect(page.getByRole('status', { name: 'Chargement de votre patrimoine' })).toBeVisible();
@@ -68,9 +68,11 @@ test('loads once, navigates without data reads and does not prefetch asset rows'
 test('shows link feedback on a slow route and reuses data for detail pages', async ({ page }) => {
   const delayed = gate();
   let reads = 0;
-  await page.route('**/api/v1/state', (route) => {
+  await page.route('**/api/v1/state*', (route) => {
     reads++;
-    return route.fulfill({ json: { data: workspaceFixture() } });
+    return route.fulfill({
+      json: { data: scopedWorkspaceFixture(workspaceFixture(), route.request().url()) },
+    });
   });
   await page.route('**/assets/test-asset?*', async (route) => {
     await delayed.promise;
@@ -93,10 +95,10 @@ test('revalidates once after saving, keeps content visible and shares new state 
   const state = workspaceFixture();
   const saved = gate();
   let reads = 0;
-  await page.route('**/api/v1/state', async (route) => {
+  await page.route('**/api/v1/state*', async (route) => {
     reads++;
     if (reads > 1) await saved.promise;
-    await route.fulfill({ json: { data: state } });
+    await route.fulfill({ json: { data: scopedWorkspaceFixture(state, route.request().url()) } });
   });
   await page.route('**/api/v1/settings', async (route) => {
     expect(route.request().headers()['idempotency-key']).toBeTruthy();
@@ -112,23 +114,26 @@ test('revalidates once after saving, keeps content visible and shares new state 
   await expect(page.getByText('Actualisation…', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Paramètres', exact: true })).toBeVisible();
   saved.release();
-  await expect(page.locator('.portfolio-switch')).toContainText('Nom actualisé');
+  await expect(page.getByRole('button', { name: 'Enregistrer les préférences' })).toBeEnabled();
   await page
     .getByRole('navigation', { name: 'Navigation principale' })
     .getByRole('link', { name: 'Tableau de bord' })
     .click();
   await expect(page.getByRole('heading', { name: 'Vue d’ensemble' })).toBeVisible();
-  expect(reads).toBe(2);
+  await expect(page.getByText('Nom actualisé', { exact: true })).toBeVisible();
+  expect(reads).toBe(3);
 });
 
 test('retries initial failure and clears private content on session expiry', async ({ page }) => {
   let reads = 0;
-  await page.route('**/api/v1/state', (route) => {
+  await page.route('**/api/v1/state*', (route) => {
     reads++;
     return reads === 1
       ? route.fulfill({ status: 503, json: { error: { message: 'Service indisponible' } } })
       : reads === 2
-        ? route.fulfill({ json: { data: workspaceFixture() } })
+        ? route.fulfill({
+            json: { data: scopedWorkspaceFixture(workspaceFixture(), route.request().url()) },
+          })
         : route.fulfill({ status: 401, json: { error: { message: 'Session expirée' } } });
   });
   await page.goto('/dashboard');
@@ -147,10 +152,12 @@ test('keeps navigation responsive during stale refresh and skips polling in hidd
 }) => {
   const refresh = gate();
   let reads = 0;
-  await page.route('**/api/v1/state', async (route) => {
+  await page.route('**/api/v1/state*', async (route) => {
     reads++;
     if (reads > 1) await refresh.promise;
-    await route.fulfill({ json: { data: workspaceFixture() } });
+    await route.fulfill({
+      json: { data: scopedWorkspaceFixture(workspaceFixture(), route.request().url()) },
+    });
   });
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'Vue d’ensemble' })).toBeVisible();

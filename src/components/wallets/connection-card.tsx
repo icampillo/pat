@@ -1,4 +1,5 @@
 'use client';
+import { WalletHistory } from './history';
 import type { SaveAction } from '@/components/forms';
 import { Confirm } from '@/components/ui/confirm';
 import { decimal as d } from '@/domain/money';
@@ -116,6 +117,7 @@ export function WalletConnectionCard({
             </span>
           </div>
         )}
+        <WalletHistory key={`${w.id}:${w.lastSuccessAt}`} id={w.id} />
         <div className="wallet-actions">
           <button
             aria-busy={busy || w.status === 'SYNCING'}

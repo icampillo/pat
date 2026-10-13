@@ -85,3 +85,37 @@ export function workspaceFixture(): AppState & { userName: string } {
     },
   };
 }
+
+// Match real scoped contracts: missing fields must not be hidden by a full-state mock.
+export function scopedWorkspaceFixture(state: AppState & { userName?: string }, url: string) {
+  const scope = new URL(url).searchParams.get('scope');
+  const { portfolio, asOf, fxRate, userName, onchain } = state;
+  if (scope === 'wallets') return { portfolio, asOf, fxRate, userName, onchain };
+  if (scope === 'settings')
+    return {
+      portfolio,
+      asOf,
+      fxRate,
+      userName,
+      accounts: state.accounts ?? [],
+      onchain: {
+        config: onchain.config,
+        wallets: onchain.wallets.map(
+          ({ id, enabled, status, errorCode, lastSuccessAt, nextSyncAt }) => ({
+            id,
+            enabled,
+            status,
+            errorCode,
+            lastSuccessAt,
+            nextSyncAt,
+          }),
+        ),
+      },
+    };
+  if (scope === 'live') {
+    const result: Partial<typeof state> = { ...state };
+    delete result.snapshots;
+    return result;
+  }
+  return state;
+}

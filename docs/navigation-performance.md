@@ -1,5 +1,7 @@
 # Navigation et chargement — 6 octobre 2026
 
+> Mise à jour du 13 octobre 2026 : [audit Neon, polling léger et résultats](neon-performance.md). Voir aussi la [phase 2 : résumés et portées par page](neon-performance-phase2.md). Le texte ci-dessous décrit la première intervention ; le polling à 5 s et les annulations après mutation ont depuis été remplacés.
+
 ## Diagnostic
 
 L'utilisateur signale une navigation très lente malgré le faible volume de données.

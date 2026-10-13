@@ -23,7 +23,7 @@ Voir [le schéma Prisma](../prisma/schema.prisma) et les migrations dans prisma/
 - Les quantités et coûts sont recalculés depuis le journal. Il n’existe pas de seconde table de soldes susceptible de diverger.
 - Une reprise d’inventaire peut marquer `Asset.metadata.costBasis = UNKNOWN`. Les quantités sont portées par un ajustement initial ; son prix nul de stockage n’est pas interprété comme un coût d’achat gratuit. La valorisation renvoie les coûts, moyennes et gains inconnus à `null`, et `totals.incompleteCostBasis` empêche les performances trompeuses, même après une cession. `PortfolioSnapshot.investedEur` accepte `null`. La levée de ce marqueur suppose de renseigner les coûts dans les opérations.
 - Une transaction conserve sa projection courante et des révisions immuables. Son annulation conserve la ligne et ajoute une révision. L’archivage d’un actif conserve sa fiche, ses opérations (y compris annulées), révisions, prix, image, snapshots et audits. Aucune purge définitive n’est exposée, même pour une fiche vide.
-- Les snapshots stockent les détails des positions, liquidités, prix, taux et catégories dans un JSON immuable, avec les totaux décimaux dans leur en-tête. Ils ne sont pas reconstruits silencieusement après une correction rétroactive.
+- Les snapshots stockent les détails des positions, liquidités, prix, taux et catégories dans un JSON immuable, avec les totaux décimaux dans leur en-tête. Ils ne sont pas reconstruits silencieusement après une correction rétroactive. Un résumé versionné, écrit dans la même transaction, sert aux courbes ; les JSON d’origine ne sont pas modifiés par sa reprise.
 - Les images normalisées sont conservées dans AssetImage, en base. Les sauvegardes PostgreSQL incluent donc les images. Le JSON métier les exporte en base64 WebP.
 
 Des clés étrangères composites empêchent de rattacher une transaction, un prix, une image ou une catégorie au portefeuille d’un autre actif. Les contraintes SQL supplémentaires bornent les types, devises et signes autorisés. Les références externes et clés d’idempotence sont uniques par portefeuille.
@@ -34,12 +34,17 @@ Toutes les routes ci-dessous exigent une session. Les mutations exigent aussi un
 
 | Méthode    | Route après /api/v1       | Fonction                                                                                                       |
 | ---------- | ------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| GET        | /state                    | Portefeuille, positions, journal, catégories, taux, 600 captures les plus récentes et `userName` de la session |
+| GET        | /state                    | Portefeuille, positions, journal, catégories, taux, résumés de toutes les références quotidiennes et `userName` de la session |
+| GET        | /state?scope=live         | Même valorisation, sans requête ni champ snapshots ; conserver l’historique client |
+| GET        | /state?scope=settings    | Préférences, comptes d’import, taux et statuts wallets scalaires ; pas de journal ni d’historique |
+| GET        | /state?scope=wallets     | Portefeuille, taux et dernières positions wallets ; pas de journal ni de snapshots |
+| GET        | /wallets/:id/history     | Dernier relevé réel par jour Europe/Paris, montant USD et date uniquement |
+| GET        | /wallets/status           | Statuts scalaires des wallets du propriétaire, sans adresses, observations ni valorisation |
 | POST       | /assets                   | Création d’une fiche                                                                                           |
 | PATCH      | /assets/:id               | Remplacement validé de la fiche, If-Match obligatoire                                                          |
 | DELETE     | /assets/:id               | Alias d’archivage confirmé, position soldée, If-Match ; aucune destruction                                     |
 | POST       | /assets/:id/prices        | Prix manuel, ou calcul de métal à partir de gramPrice et premium                                               |
-| GET        | /assets/:id/prices        | 500 observations de prix les plus récentes                                                                     |
+| GET        | /assets/:id/prices        | 50 observations de prix par page ; `{ items, nextCursor }`, curseur date/UUID                                                                     |
 | POST       | /assets/:id/refresh       | Vérification de la source et fallback vers la dernière observation                                             |
 | GET / POST | /assets/:id/image         | Lecture privée ou chargement d’une image encodée en base64                                                     |
 | POST       | /transactions             | Création et validation du journal                                                                              |
@@ -138,4 +143,4 @@ Le [workflow CI GitHub](ci.md) est défini pour les pushes et pull requests vers
 
 Les points suivants restent des évolutions : administration des catégories/plateformes, pagination serveur du journal, sélection de plusieurs portefeuilles, import de fiches d’actifs, intégrations de marché, conversion du rendement ajusté en USD, règles fiscales et rétention automatique des lots/idempotences. La comparaison après flux reste une estimation Modified Dietz en EUR ; elle est masquée lorsque le journal a des révisions ou des ajouts rétroactifs par rapport aux captures. Les variations brutes de l’historique incluent les apports et retraits.
 
-L’écran historique affiche les 600 références quotidiennes les plus récentes ; son export contient l’intégralité. Le filtre « Tout » concerne les captures chargées. Les snapshots quotidiens nécessitent le cron Vercel ou une planification externe de `pnpm workers snapshot`, indépendamment du navigateur. La version locale n’installe pas de tâche planifiée système. Aucun hébergement, compte financier ou service payant n’a été créé.
+L’écran historique reçoit les résumés de toutes les références quotidiennes ; « Tout » ne tronque plus à 600 jours. Les captures JSON intégrales restent accessibles par détail et export. La migration additive et la reprise explicite sont documentées dans [l’optimisation Neon phase 2](neon-performance-phase2.md). Les snapshots quotidiens nécessitent le cron Vercel ou une planification externe de `pnpm workers snapshot`, indépendamment du navigateur. La version locale n’installe pas de tâche planifiée système. Aucun hébergement, compte financier ou service payant n’a été créé.

@@ -3,6 +3,6 @@ import { WalletsRoutePage } from '@/components/pages/wallets';
 import { useWorkspace } from '@/components/workspace/context';
 
 export default function Page() {
-  const { state } = useWorkspace();
+  const { state } = useWorkspace('wallets');
   return <WalletsRoutePage state={state} />;
 }

@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { workspaceFixture } from '../fixtures/workspace';
+import { workspaceFixture, scopedWorkspaceFixture } from '../fixtures/workspace';
 
 function gate() {
   let release!: () => void;
@@ -56,9 +56,11 @@ for (const width of [1440, 375]) {
       await page.setViewportSize({ width, height: 900 });
       await page.emulateMedia({ reducedMotion: 'reduce' });
       const initial = gate();
-      await page.route('**/api/v1/state', async (route) => {
+      await page.route('**/api/v1/state*', async (route) => {
         await initial.promise;
-        await route.fulfill({ json: { data: workspaceFixture() } });
+        await route.fulfill({
+          json: { data: scopedWorkspaceFixture(workspaceFixture(), route.request().url()) },
+        });
       });
       await page.goto(path);
       const skeleton = page.getByRole('status', { name: 'Chargement de votre patrimoine' });
@@ -113,8 +115,10 @@ for (const width of [1440, 375]) {
       page,
     }) => {
       await page.setViewportSize({ width, height: 900 });
-      await page.route('**/api/v1/state', (route) =>
-        route.fulfill({ json: { data: workspaceFixture() } }),
+      await page.route('**/api/v1/state*', (route) =>
+        route.fulfill({
+          json: { data: scopedWorkspaceFixture(workspaceFixture(), route.request().url()) },
+        }),
       );
       const delayed = gate();
       const path =
@@ -168,8 +172,10 @@ for (const width of [1440, 375]) {
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.route('**/api/v1/state', (route) =>
-      route.fulfill({ json: { data: workspaceFixture() } }),
+    await page.route('**/api/v1/state*', (route) =>
+      route.fulfill({
+        json: { data: scopedWorkspaceFixture(workspaceFixture(), route.request().url()) },
+      }),
     );
     const saving = gate();
     await page.route('**/api/v1/zerion/config', async (route) => {
@@ -201,12 +207,13 @@ test('silent refresh preserves content and filters, including failure and retry'
   const state = workspaceFixture();
   const refreshing = gate();
   let reads = 0;
-  await page.route('**/api/v1/state', async (route) => {
+  await page.route('**/api/v1/state*', async (route) => {
     reads++;
     if (reads === 2) {
       await refreshing.promise;
       await route.fulfill({ status: 503, json: { error: { message: 'Réseau indisponible' } } });
-    } else await route.fulfill({ json: { data: state } });
+    } else
+      await route.fulfill({ json: { data: scopedWorkspaceFixture(state, route.request().url()) } });
   });
   await page.goto('/portfolio');
   const filter = page.getByRole('textbox', { name: 'Rechercher un actif' });
@@ -223,19 +230,23 @@ test('silent refresh preserves content and filters, including failure and retry'
     page.locator('.workspace-loading, .navigation-progress, .workspace-refresh'),
   ).toHaveCount(0);
   refreshing.release();
-  await expect(page.getByRole('alert')).toContainText('Les dernières données restent affichées');
+  await expect(page.locator('.workspace-notifications').getByRole('alert')).toContainText(
+    'Les dernières données restent affichées',
+  );
   expect(await content.boundingBox()).toEqual(before);
   await page.getByRole('button', { name: 'Réessayer' }).click();
   await expect.poll(() => reads).toBe(3);
-  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.locator('.workspace-notifications').getByRole('alert')).toHaveCount(0);
   await expect(filter).toHaveValue('Bitcoin');
   expect(await content.boundingBox()).toEqual(before);
   await expectNoShifts(page);
 });
 
 test('instant navigation never paints a progress indicator', async ({ page }) => {
-  await page.route('**/api/v1/state', (route) =>
-    route.fulfill({ json: { data: workspaceFixture() } }),
+  await page.route('**/api/v1/state*', (route) =>
+    route.fulfill({
+      json: { data: scopedWorkspaceFixture(workspaceFixture(), route.request().url()) },
+    }),
   );
   await page.goto('/dashboard');
   await expect(page.getByTestId('wealth-total')).toBeVisible();
@@ -250,8 +261,10 @@ test('instant navigation never paints a progress indicator', async ({ page }) =>
 
 test('mobile drawer keeps slow navigation feedback until the route commits', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.route('**/api/v1/state', (route) =>
-    route.fulfill({ json: { data: workspaceFixture() } }),
+  await page.route('**/api/v1/state*', (route) =>
+    route.fulfill({
+      json: { data: scopedWorkspaceFixture(workspaceFixture(), route.request().url()) },
+    }),
   );
   const delayed = gate();
   await page.route('**/settings?*', async (route) => {

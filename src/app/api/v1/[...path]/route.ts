@@ -1,6 +1,10 @@
+import { measureHttp } from '@/server/performance';
 import { after } from 'next/server';
 import { auth } from '@/server/auth';
 import { command } from '@/server/portfolio';
+import { walletSyncStatus } from '@/server/wallet-state';
+import { assetPrices, walletHistory } from '@/server/detail-history';
+import { getPageState } from '@/server/page-state';
 import { getState } from '@/server/portfolio-query';
 import { owned } from '@/server/portfolio-store';
 import { body, errorResponse, response } from '@/server/http';
@@ -29,18 +33,29 @@ async function handle(request: Request, context: { params: Promise<{ path: strin
       if (path.length === 3 && path[0] === 'assets' && path[2] === 'image')
         return await getImage(session.user.id, path[1]);
       if (path[0] === 'exports' && path[1]) return await exportData(session.user.id, path[1]);
-      if (path.length === 1 && path[0] === 'state')
-        return response({ ...(await getState(session.user.id)), userName: session.user.name });
-      if (path[0] === 'assets' && path[1] && path[2] === 'prices') {
-        const p = await owned(session.user.id);
-        return response(
-          await db().priceHistory.findMany({
-            where: { portfolioId: p.id, assetId: path[1] },
-            orderBy: { observedAt: 'desc' },
-            take: 500,
-          }),
-        );
+      if (path.join('/') === 'wallets/status')
+        return response(await walletSyncStatus(session.user.id));
+      if (path.length === 1 && path[0] === 'state') {
+        const scope = new URL(request.url).searchParams.get('scope') ?? 'full';
+        if (!['full', 'live', 'settings', 'wallets'].includes(scope))
+          throw new AppError('INVALID_SCOPE', 'Portée de lecture invalide.', 400);
+        return response({
+          ...(scope === 'settings' || scope === 'wallets'
+            ? await getPageState(session.user.id, scope)
+            : await getState(session.user.id, scope !== 'live')),
+          userName: session.user.name,
+        });
       }
+      if (path.length === 3 && path[0] === 'assets' && path[2] === 'prices')
+        return response(
+          await assetPrices(
+            session.user.id,
+            path[1],
+            new URL(request.url).searchParams.get('cursor'),
+          ),
+        );
+      if (path.length === 3 && path[0] === 'wallets' && path[2] === 'history')
+        return response(await walletHistory(session.user.id, path[1]));
       if (path[0] === 'snapshots' && path[1]) {
         const p = await owned(session.user.id);
         const snapshot = await db().portfolioSnapshot.findFirst({
@@ -188,7 +203,9 @@ async function handle(request: Request, context: { params: Promise<{ path: strin
     return errorResponse(error);
   }
 }
-export const GET = handle;
-export const POST = handle;
-export const PATCH = handle;
-export const DELETE = handle;
+const measured: typeof handle = (request, context) =>
+  measureHttp(request, () => handle(request, context));
+export const GET = measured;
+export const POST = measured;
+export const PATCH = measured;
+export const DELETE = measured;

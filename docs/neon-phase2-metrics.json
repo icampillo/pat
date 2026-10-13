@@ -1,0 +1,62 @@
+{
+  "fixture": {
+    "assets": 12,
+    "prices": 5040,
+    "wallets": 3,
+    "observations": 360,
+    "snapshots": 600,
+    "snapshotJsonBytes": 35850
+  },
+  "metrics": {
+    "before": {
+      "sqlStatements": 20,
+      "dataRows": 11066,
+      "dataRowBytes": 26533645,
+      "httpBytes": 447578,
+      "ms": 227.3403989999997,
+      "medianMs": 227.3403989999997,
+      "minMs": 222.17794800000001,
+      "maxMs": 236.91154300000017
+    },
+    "projection": {
+      "sqlStatements": 19,
+      "dataRows": 677,
+      "dataRowBytes": 1277924,
+      "httpBytes": 447578,
+      "ms": 126.16423699999996,
+      "medianMs": 119.89780299999984,
+      "minMs": 118.26599199999964,
+      "maxMs": 126.16423699999996
+    },
+    "summary": {
+      "sqlStatements": 19,
+      "dataRows": 677,
+      "dataRowBytes": 317324,
+      "httpBytes": 447578,
+      "ms": 22.20075900000029,
+      "medianMs": 23.523525999999947,
+      "minMs": 22.028983999999582,
+      "maxMs": 28.11217300000044
+    },
+    "settings": {
+      "sqlStatements": 10,
+      "dataRows": 8,
+      "dataRowBytes": 690,
+      "httpBytes": 1165,
+      "ms": 3.8616839999995136,
+      "medianMs": 3.4056879999998273,
+      "minMs": 3.319752999999764,
+      "maxMs": 3.8616839999995136
+    },
+    "wallets": {
+      "sqlStatements": 9,
+      "dataRows": 9,
+      "dataRowBytes": 14809,
+      "httpBytes": 14220,
+      "ms": 3.6715759999997317,
+      "medianMs": 3.6715759999997317,
+      "minMs": 3.48156199999994,
+      "maxMs": 4.844004999999925
+    }
+  }
+}

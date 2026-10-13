@@ -48,7 +48,7 @@ export function PageHeading({
   categoryKey?: string;
   subtitle?: string;
 }) {
-  const { flash, setFlash } = useWorkspace();
+  const { flash, setFlash } = useWorkspace('base');
   const Icon = categoryKey
     ? categoryAppearance(categoryKey).Icon
     : (icons[view as keyof typeof icons] ?? Layers3);

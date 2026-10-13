@@ -91,7 +91,7 @@ export async function walletCommand(
         throw new AppError('COOLDOWN', 'Attendez cinq minutes entre deux synchronisations.', 429);
       await tx.walletConnection.update({
         where: { id: wallet.id },
-        data: { nextSyncAt: new Date() },
+        data: { nextSyncAt: new Date(), status: 'PENDING' },
       });
       return { id: wallet.id, queued: true };
     }

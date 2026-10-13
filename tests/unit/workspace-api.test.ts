@@ -5,22 +5,26 @@ import { workspaceFixture } from '../fixtures/workspace';
 const mocks = vi.hoisted(() => ({
   session: vi.fn(),
   read: vi.fn(),
+  page: vi.fn(),
   command: vi.fn(),
   after: vi.fn(),
   owned: vi.fn(),
   sync: vi.fn(),
   walletCommand: vi.fn(),
   syncWallet: vi.fn(),
+  status: vi.fn(),
 }));
 vi.mock('@/server/wallets', () => ({
   walletCommand: mocks.walletCommand,
   syncWallet: mocks.syncWallet,
 }));
+vi.mock('@/server/wallet-state', () => ({ walletSyncStatus: mocks.status }));
 vi.mock('next/server', () => ({ after: mocks.after }));
 vi.mock('@/server/portfolio', () => ({ command: mocks.command }));
 vi.mock('@/server/portfolio-store', () => ({ owned: mocks.owned }));
 vi.mock('@/server/market', () => ({ syncMarketData: mocks.sync }));
 vi.mock('@/server/auth', () => ({ auth: () => ({ api: { getSession: mocks.session } }) }));
+vi.mock('@/server/page-state', () => ({ getPageState: mocks.page }));
 vi.mock('@/server/portfolio-query', () => ({ getState: mocks.read }));
 import { GET, PATCH, POST } from '@/app/api/v1/[...path]/route';
 
@@ -45,7 +49,7 @@ it('scopes every read to the authenticated owner and prevents shared HTTP cachin
     const response = await read();
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('private, no-store');
-    expect(mocks.read).toHaveBeenLastCalledWith(id);
+    expect(mocks.read).toHaveBeenLastCalledWith(id, true);
     expect((await response.json()).data.userName).toBe(id);
   }
 });
@@ -139,4 +143,47 @@ it('does not schedule a wallet rejected by ownership checks', async () => {
   expect((await refreshWallet()).status).toBe(404);
   expect(mocks.after).not.toHaveBeenCalled();
   vi.unstubAllEnvs();
+});
+
+it('authenticates and owner-scopes lightweight status without a global read', async () => {
+  const readStatus = () =>
+    GET(new Request('http://localhost/api/v1/wallets/status'), {
+      params: Promise.resolve({ path: ['wallets', 'status'] }),
+    });
+  mocks.session.mockResolvedValue(null);
+  expect((await readStatus()).status).toBe(401);
+  expect(mocks.status).not.toHaveBeenCalled();
+  mocks.session.mockResolvedValue({ user: { id: 'owner' } });
+  mocks.status.mockResolvedValue({ enabled: true, wallets: [] });
+  const result = await readStatus();
+  expect(result.headers.get('cache-control')).toBe('private, no-store');
+  expect(await result.json()).toEqual({ data: { enabled: true, wallets: [] } });
+  expect(mocks.status).toHaveBeenCalledWith('owner');
+  expect(mocks.read).not.toHaveBeenCalled();
+});
+it('supports authenticated live reads without historical snapshots', async () => {
+  mocks.session.mockResolvedValue({ user: { id: 'owner' } });
+  mocks.read.mockResolvedValue({});
+  expect(
+    (
+      await GET(new Request('http://localhost/api/v1/state?scope=live'), {
+        params: Promise.resolve({ path: ['state'] }),
+      })
+    ).status,
+  ).toBe(200);
+  expect(mocks.read).toHaveBeenCalledWith('owner', false);
+});
+
+it('authenticates scoped pages, rejects unknown scopes, and never calls the global read', async () => {
+  for (const scope of ['settings', 'wallets']) {
+    const request = () => GET(new Request(`http://localhost/api/v1/state?scope=${scope}`), { params: Promise.resolve({ path: ['state'] }) });
+    mocks.session.mockResolvedValue(null);
+    expect((await request()).status).toBe(401);
+    mocks.session.mockResolvedValue({ user: { id: 'owner' } });
+    mocks.page.mockResolvedValue({});
+    expect((await request()).status).toBe(200);
+    expect(mocks.page).toHaveBeenLastCalledWith('owner', scope);
+  }
+  expect(mocks.read).not.toHaveBeenCalled();
+  expect((await GET(new Request('http://localhost/api/v1/state?scope=unknown'), { params: Promise.resolve({ path: ['state'] }) })).status).toBe(400);
 });
