@@ -176,12 +176,6 @@ export function DashboardPage({ state }: { state: AppState }) {
               Valorisation incomplète · certains prix ou taux de change sont indisponibles.
             </p>
           )}
-          {state.historyRevised && (
-            <p className={styles.notice}>
-              Historique révisé ou périmètre modifié : captures conservées telles qu’enregistrées,
-              variations comparables indisponibles.
-            </p>
-          )}
         </section>
         <AllocationTreemap categories={allocationCategories} total={total} currency={currency} />
       </div>
