@@ -831,11 +831,10 @@ input::file-selector-button {
 }
 .category-assets-table td:first-child {
   width: 30%;
+  min-width: 240px;
   max-width: 320px;
   white-space: normal;
 }
-
-
 .category-assets-table .asset-cell {
   display: block;
   min-width: 0;
