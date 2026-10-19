@@ -10,7 +10,7 @@ import { getPageState } from '@/server/page-state';
 import { backfillSnapshotSummaries } from '@/server/snapshot-history';
 import { json } from '@/server/portfolio-store';
 import { filterCategoryHistory, buildCategoryDetails } from '@/domain/categories';
-import { valueChange } from '@/domain/dashboard';
+import { valueChange } from '@/domain/categories';
 import type { AppState } from '@/shared/types';
 configureTestDatabase();
 afterAll(async () => {

@@ -5,9 +5,10 @@ import type { CSSProperties } from 'react';
 import Link from '@/components/workspace/link';
 import { money } from '@/components/workspace/display';
 import { calculateCategoryWeight, filterCategoryHistory } from '@/domain/categories';
-import { valueChange } from '@/domain/dashboard';
+import { valueChange } from '@/domain/categories';
+import { valueChangeExplanation } from '@/components/asset-category-card';
 import type { CategoryHistoryPoint } from '@/shared/types';
-import { observationDate, ValueChart } from './value-chart';
+import { ValueChart } from './value-chart';
 import styles from './dashboard.module.css';
 
 export type DashboardCategory = {
@@ -36,9 +37,9 @@ export function ValueChange({
   history: CategoryHistoryPoint[];
   asOf: string;
   revised: boolean;
-  days?: 7 | 30;
+  days?: number;
 }) {
-  const change = valueChange(value, history, asOf, days, revised);
+  const change = valueChange(value, history, asOf, days);
   const percent = change.percent;
   const Icon = percent !== null && percent > 0 ? ArrowUpRight : ArrowDownRight;
   const text =
@@ -64,11 +65,13 @@ export function ValueChange({
       >
         {percent !== null && percent !== 0 && <Icon size={16} aria-hidden="true" />}
         <span>{text}</span>
-        <span className={styles.changePeriod}>· {days} j</span>
+        <span className={styles.changePeriod}>
+          · {change.actualDays !== null && change.actualDays !== days ? '≈ ' : ''}
+          {days} j
+        </span>
       </summary>
       <p>
-        {change.reason ??
-          `Variation de valeur détenue entre le ${observationDate(change.baselineDate!)} et le ${observationDate(asOf)} (Europe/Paris), achats et ventes compris. Ce n’est pas un rendement corrigé des flux.`}
+        {valueChangeExplanation(change.baselineDate, change.reason, change.actualDays, revised)}
       </p>
     </details>
   );

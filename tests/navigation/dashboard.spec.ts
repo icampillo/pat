@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { buildCategoryDetails, valueChange } from '../../src/domain/categories';
 import AxeBuilder from '@axe-core/playwright';
 import { dashboardDailyFixture, dashboardWithPropertyAndWallet } from '../fixtures/dashboard';
 const money = (value: number, currency = 'EUR') =>
@@ -16,9 +17,10 @@ async function openDashboard(page: Page, state = dashboardDailyFixture()) {
   return () => reads;
 }
 async function noOverflow(page: Page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-    true,
-  );
+  // Recharts updates ResponsiveContainer through ResizeObserver after viewport changes.
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
+    .toBe(true);
 }
 // Check rendered geometry, not only visibility: a tiny treemap is still visible.
 async function expectTreemapToFillCard(page: Page) {
@@ -348,7 +350,7 @@ test('category periods update every value, label and recorded curve in EUR and U
 });
 
 for (const scenario of ['missing', 'null', 'zero', 'incomplete', 'revised', 'sparse'] as const) {
-  test(`category periods explain ${scenario} history without borrowing nearby references`, async ({
+  test(`category periods explain ${scenario} history with bounded nearby references`, async ({
     page,
   }) => {
     const state = dashboardDailyFixture();
@@ -377,20 +379,28 @@ for (const scenario of ['missing', 'null', 'zero', 'incomplete', 'revised', 'spa
       for (const card of await page.getByTestId('investment-card').all()) {
         const summary = card.locator('summary');
         await expect(summary).toContainText(`${days} j`);
-        if (days === 7 && ['missing', 'null', 'zero'].includes(scenario)) {
+        if (
+          ['missing', 'null', 'revised'].includes(scenario) ||
+          (days === 7 && scenario === 'zero')
+        ) {
           await expect(summary).not.toContainText('—');
+          if (days === 30 && ['missing', 'null'].includes(scenario))
+            await expect(summary).toContainText('≈ 30 j');
+          await summary.click();
+          await expect(card).toContainText('Ce n’est pas un rendement corrigé des flux');
+          if (scenario === 'revised')
+            await expect(card).toContainText('Historique révisé ou périmètre modifié');
+          await summary.click();
           continue;
         }
         await expect(summary).toContainText('—');
         await summary.click();
         const reason =
-          scenario === 'revised'
-            ? 'Historique révisé ou périmètre modifié'
-            : scenario === 'incomplete'
-              ? 'Valorisation actuelle incomplète'
-              : scenario === 'zero'
-                ? 'valeur de référence nulle ou négative'
-                : `Aucune valorisation complète disponible ${days} jours auparavant`;
+          scenario === 'incomplete'
+            ? 'Valorisation actuelle incomplète'
+            : scenario === 'zero'
+              ? 'valeur de référence nulle ou négative'
+              : `Aucune valorisation complète disponible autour de ${days} jours auparavant`;
         await expect(card).toContainText(reason);
         await summary.click();
         if (scenario === 'sparse') await expect(card).toContainText('Historique insuffisant');
@@ -772,3 +782,94 @@ for (const width of [1440, 768, 390, 320]) {
     });
   });
 }
+
+test('global percentage follows the selected chart period, independently of categories', async ({
+  page,
+}) => {
+  const state = dashboardDailyFixture();
+  state.historyRevised = true;
+  const reads = await openDashboard(page, state);
+  const wealth = page.getByRole('region', { name: 'Valeur totale de votre patrimoine' });
+  const periods = page.getByRole('group', { name: 'Période du graphique', exact: true });
+  for (const currency of ['EUR', 'USD'] as const) {
+    await page.getByLabel('Devise d’affichage').selectOption(currency);
+    for (const [label, days] of [
+      ['30 j', 30],
+      ['3 M', 90],
+      ['1 A', 365],
+      ['7 j', 7],
+    ] as const) {
+      await periods.getByRole('button', { name: label, exact: true }).click();
+      const summary = wealth.locator('summary').first();
+      await expect(summary).toHaveAttribute('aria-label', new RegExp('sur ' + days + ' jours'));
+      const change = valueChange(
+        Number(currency === 'EUR' ? state.totals.valueEur : state.totals.valueUsd),
+        state.snapshots.map((snapshot) => ({
+          date: snapshot.capturedAt,
+          value: Number(currency === 'EUR' ? snapshot.totalEur : snapshot.totalUsd),
+        })),
+        state.asOf,
+        days,
+      );
+      const formatted =
+        change.percent === null
+          ? '—'
+          : (change.percent > 0 ? '+' : change.percent < 0 ? '−' : '') +
+            new Intl.NumberFormat('fr-FR', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }).format(Math.abs(change.percent)) +
+            ' %';
+      await expect(summary).toContainText(formatted);
+      await expect(
+        page
+          .getByRole('group', { name: 'Période des catégories' })
+          .getByRole('button', { name: '7 j', exact: true }),
+      ).toHaveAttribute('aria-pressed', 'true');
+    }
+    await periods.getByRole('button', { name: 'Tout', exact: true }).click();
+    await expect(wealth.getByLabel(/Variation de valeur/)).toHaveCount(0);
+  }
+  expect(reads()).toBe(1);
+});
+
+test('wallet changes stay visible and match the category page despite different history lengths', async ({
+  page,
+}) => {
+  const state = dashboardWithPropertyAndWallet();
+  state.historyRevised = true;
+  // Only this category lacks the 30-day reference; it still has a valid 7-day baseline.
+  for (const snapshot of state.snapshots.slice(0, -2))
+    snapshot.categoryValues!.stocks = { valueEur: null, valueUsd: null };
+  const reads = await openDashboard(page, state);
+  const cards = page.getByTestId('investment-card');
+  const crypto = cards.filter({
+    has: page.getByRole('heading', { name: 'Cryptomonnaies', exact: true }),
+  });
+  const stocks = cards.filter({ has: page.getByRole('heading', { name: 'Bourse', exact: true }) });
+  await expect(stocks.locator('summary')).not.toContainText('—');
+  await page
+    .getByRole('group', { name: 'Période des catégories' })
+    .getByRole('button', { name: '30 j' })
+    .click();
+  await expect(stocks.locator('summary')).toContainText('—');
+  await expect(crypto.locator('summary')).not.toContainText('—');
+  await expect(crypto.locator('summary')).toContainText('≈ 30 j');
+  await crypto.locator('summary').click();
+  await expect(crypto).toContainText('28 jours comptables');
+  await expect(crypto).toContainText('Historique révisé ou périmètre modifié');
+  const category = buildCategoryDetails(state, state.categories[0], 'EUR').category;
+  await crypto.getByRole('link', { name: 'Cryptomonnaies' }).click();
+  const performance = page.locator('.category-performance');
+  await expect(performance).toContainText(
+    new Intl.NumberFormat('fr-FR', {
+      style: 'percent',
+      maximumFractionDigits: 1,
+      signDisplay: 'exceptZero',
+    }).format(category.change30dPercent! / 100),
+  );
+  await expect(performance).toHaveAttribute('title', /28 jours comptables/);
+  await expect(performance).toHaveAttribute('title', /Ce n’est pas un rendement corrigé des flux/);
+  await expect(performance).toHaveAttribute('title', /Historique révisé/);
+  expect(reads()).toBe(1);
+});

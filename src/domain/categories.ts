@@ -33,13 +33,13 @@ export function calculateCategoryWeight(value: number | null, total: number | nu
     : Number(d(value).div(total).mul(100));
 }
 export function calculatePerformance(current: number | null, previous: number | null) {
-  const absolute = current === null || previous === null ? null : Number(d(current).sub(previous));
+  const absolute = current === null || previous === null ? null : d(current).sub(previous);
   return {
-    absolute,
+    absolute: absolute === null ? null : Number(absolute),
     percent:
       absolute === null || previous === null || previous <= 0
         ? null
-        : Number(d(absolute).div(previous).mul(100)),
+        : Number(absolute.div(previous).mul(100)),
   };
 }
 export function calculateUnrealizedPnL(value: number | null, costs: (number | null | undefined)[]) {
@@ -47,33 +47,80 @@ export function calculateUnrealizedPnL(value: number | null, costs: (number | nu
   const result = calculatePerformance(value, investedCapital);
   return { investedCapital, unrealizedPnL: result.absolute, unrealizedPnLPercent: result.percent };
 }
-// A current observation alone is not a historical comparison. Ties prefer the older snapshot.
-export function performance30d(
+// One selection rule for saved valuations (global/category) and observed asset prices.
+// Compare Paris accounting dates, not elapsed 24-hour slices across clock changes.
+// A missing day may use a nearby complete observation, never an unbounded substitute.
+export function valueChange(
   current: number | null,
   history: CategoryHistoryPoint[],
   asOf: string,
+  days = 30,
 ) {
-  const now = Date.parse(asOf),
-    target = now - 30 * 86400000;
-  const baseline = history
-    .filter((point) => point.value !== null && Date.parse(point.date) < now)
-    .sort(
-      (a, b) =>
-        Math.abs(Date.parse(a.date) - target) - Math.abs(Date.parse(b.date) - target) ||
-        Date.parse(a.date) - Date.parse(b.date),
-    )[0];
+  const unavailable = (reason: string) => ({
+    absolute: null,
+    percent: null,
+    baselineDate: null,
+    actualDays: null,
+    reason,
+  });
+  const now = Date.parse(asOf);
+  if (!Number.isFinite(now) || !Number.isInteger(days) || days <= 0)
+    return unavailable('Date de situation ou période invalide.');
+  const today = Date.parse(snapshotDay(asOf));
+  const target = today - days * 86400000;
+  const tolerance = Math.min(3, Math.ceil(days / 7)) * 86400000;
+  let baseline: CategoryHistoryPoint | undefined;
+  let baselineTime = Infinity;
+  let distance = Infinity;
+  let actualDays: number | null = null;
+  for (const point of history) {
+    const time = Date.parse(point.date);
+    if (
+      point.value === null ||
+      !Number.isFinite(point.value) ||
+      !Number.isFinite(time) ||
+      time > now
+    )
+      continue;
+    const day = Date.parse(snapshotDay(point.date));
+    if (day >= today) continue;
+    const gap = Math.abs(day - target);
+    if (gap <= tolerance && (gap < distance || (gap === distance && time < baselineTime))) {
+      baseline = point;
+      baselineTime = time;
+      distance = gap;
+      actualDays = (today - day) / 86400000;
+    }
+  }
+  const reason =
+    current === null || !Number.isFinite(current)
+      ? 'Valorisation actuelle incomplète.'
+      : !baseline
+        ? `Aucune valorisation complète disponible autour de ${days} jours auparavant (tolérance ±${tolerance / 86400000} j).`
+        : baseline.value! <= 0
+          ? 'Pourcentage indéfinissable : valeur de référence nulle ou négative.'
+          : null;
   return {
-    ...calculatePerformance(current, baseline?.value ?? null),
+    ...calculatePerformance(Number.isFinite(current) ? current : null, baseline?.value ?? null),
     baselineDate: baseline?.date ?? null,
+    actualDays,
+    reason,
   };
 }
+
+export const historyPeriodDays: Record<string, number | undefined> = {
+  '7d': 7,
+  '30d': 30,
+  '90d': 90,
+  '1y': 365,
+};
 export function filterCategoryHistory(
   history: CategoryHistoryPoint[],
   period: string,
   asOf: string,
   accountingDays = false,
 ) {
-  const days = ({ '7d': 7, '30d': 30, '90d': 90, '1y': 365 } as Record<string, number>)[period];
+  const days = historyPeriodDays[period];
   // Category cards use whole Paris accounting days, including the reference day.
   const end = Date.parse(accountingDays ? snapshotDay(asOf) : asOf);
   return history.filter(
@@ -257,7 +304,7 @@ export function buildCategoryDetails(
     }))
     .filter((point) => Date.parse(point.date) <= Date.parse(state.asOf))
     .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
-  const performance = performance30d(totalValue, history, state.asOf);
+  const performance = valueChange(totalValue, history, state.asOf, 30);
   return {
     category: {
       ...(category.key === 'REAL_ESTATE'
@@ -293,6 +340,9 @@ export function buildCategoryDetails(
       change30dAbsolute: performance.absolute,
       change30dPercent: performance.percent,
       baselineDate: performance.baselineDate,
+      change30dReason: performance.reason,
+      change30dDays: performance.actualDays,
+      historyRevised: state.historyRevised,
     },
     ...calculateUnrealizedPnL(
       totalValue,

@@ -1,7 +1,8 @@
 // Fixed accounting timezone, independent of browser and portfolio settings.
 export const SNAPSHOT_TIMEZONE = 'Europe/Paris';
+const dayFormatter = new Intl.DateTimeFormat('sv-SE', { timeZone: SNAPSHOT_TIMEZONE });
 export function snapshotDay(at: Date | string) {
-  return new Intl.DateTimeFormat('sv-SE', { timeZone: SNAPSHOT_TIMEZONE }).format(new Date(at));
+  return dayFormatter.format(new Date(at));
 }
 
 // A null separator marks a missing day; no value is synthesized or carried forward.

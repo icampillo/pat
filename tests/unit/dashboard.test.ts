@@ -3,10 +3,14 @@ import {
   allocationRects,
   availableChartPeriod,
   snapshotCashValues,
-  valueChange,
 } from '../../src/domain/dashboard';
-import { buildCategoryDetails, filterCategoryHistory } from '../../src/domain/categories';
-import { dashboardFixture } from '../fixtures/dashboard';
+import {
+  buildCategoryDetails,
+  filterCategoryHistory,
+  valueChange,
+} from '../../src/domain/categories';
+import { canCalculatePortfolioPerformance } from '../../src/domain/portfolio-performance';
+import { dashboardFixture, dashboardWithPropertyAndWallet } from '../fixtures/dashboard';
 const asOf = '2026-10-09T12:00:00Z';
 const baseline = { date: '2026-10-02T12:00:00Z', value: 100 };
 describe.each([7, 30] as const)('dashboard value changes over %i days', (days) => {
@@ -17,11 +21,11 @@ describe.each([7, 30] as const)('dashboard value changes over %i days', (days) =
     expect(valueChange(75, [baseline], asOf, days).percent).toBe(-25);
     expect(valueChange(100, [baseline], asOf, days).percent).toBe(0);
   });
-  it('never substitutes another interval, a partial value, zero or revised perimeter', () => {
+  it('rejects missing, distant or incomplete history and nonpositive percentage baselines', () => {
     for (const points of [
       [],
-      [{ ...baseline, date: new Date(reference.getTime() - 86400000).toISOString() }],
-      [{ ...baseline, date: new Date(reference.getTime() + 86400000).toISOString() }],
+      [{ ...baseline, date: new Date(reference.getTime() - 4 * 86400000).toISOString() }],
+      [{ ...baseline, date: new Date(reference.getTime() + 4 * 86400000).toISOString() }],
       [{ ...baseline, value: null }],
       [{ ...baseline, value: 0 }],
       [{ ...baseline, value: -100 }],
@@ -31,7 +35,6 @@ describe.each([7, 30] as const)('dashboard value changes over %i days', (days) =
       expect(result.reason).toBeTruthy();
     }
     expect(valueChange(null, [baseline], asOf, days).percent).toBeNull();
-    expect(valueChange(150, [baseline], asOf, days, true).percent).toBeNull();
   });
   it('uses the saved Paris calendar day regardless of observation time', () => {
     for (const hours of [-14, -0.001, 9.999]) {
@@ -42,7 +45,7 @@ describe.each([7, 30] as const)('dashboard value changes over %i days', (days) =
     }
     for (const hours of [-14.001, 10]) {
       const date = new Date(reference.getTime() + hours * 3600000).toISOString();
-      expect(valueChange(150, [{ ...baseline, date }], asOf, days).percent).toBeNull();
+      expect(valueChange(150, [{ ...baseline, date }], asOf, days).percent).toBe(50);
     }
     expect(valueChange(0, [baseline], asOf, days).percent).toBe(-100);
     expect(valueChange(150, [], asOf, days).reason).toContain(`${days} jours`);
@@ -126,7 +129,7 @@ describe('available chart periods', () => {
     expect(availableChartPeriod([history], asOf, periods)).toBe('30d');
     expect(availableChartPeriod([history], '2026-11-09T12:00:00Z', periods)).toBe('90d');
     expect(availableChartPeriod([history], '2028-11-09T12:00:00Z', periods)).toBe('all');
-    expect(valueChange(130, history, asOf).percent).toBeNull();
+    expect(valueChange(130, history, asOf, 7).percent).toBeNull();
   });
   it('ignores future or unknown valuations, and does not invent an available period', () => {
     for (const history of [
@@ -168,7 +171,11 @@ it.each([
     baselineDate: start,
     reason: null,
   });
-  expect(valueChange(150, [points[0], points[2]], asOf, days).percent).toBeNull();
+  expect(valueChange(150, [points[0], points[2]], asOf, days)).toMatchObject({
+    percent: 200,
+    actualDays: days + 1,
+    baselineDate: points[0].date,
+  });
 });
 
 it('uses the same accounting-day window for the initial category period', () => {
@@ -179,4 +186,45 @@ it('uses the same accounting-day window for the initial category period', () => 
   expect(availableChartPeriod([history], asOf, ['7d', '30d'], true)).toBe('7d');
   // Other charts keep their existing elapsed-time filtering.
   expect(availableChartPeriod([history], asOf, ['7d', '30d'])).toBe('30d');
+});
+
+it.each(['EUR', 'USD'] as const)(
+  'keeps category/dashboard changes consistent with wallets and revisions in %s',
+  (currency) => {
+    const state = dashboardWithPropertyAndWallet();
+    state.historyRevised = true;
+    const before = structuredClone(state);
+    const detail = buildCategoryDetails(state, state.categories[0], currency);
+    const change = valueChange(detail.category.totalValue, detail.history, state.asOf, 30);
+    expect(change.percent).not.toBeNull();
+    expect(detail.category).toMatchObject({
+      change30dPercent: change.percent,
+      change30dAbsolute: change.absolute,
+      baselineDate: change.baselineDate,
+      change30dReason: null,
+      historyRevised: true,
+    });
+    const field = currency === 'EUR' ? 'totalEur' : 'totalUsd';
+    const global = valueChange(
+      Number(currency === 'EUR' ? state.totals.valueEur : state.totals.valueUsd),
+      state.snapshots.map((s) => ({ date: s.capturedAt, value: Number(s[field]) })),
+      state.asOf,
+      7,
+    );
+    expect(global.percent).not.toBeNull();
+    expect(canCalculatePortfolioPerformance(state, currency)).toBe(false);
+    expect(state).toEqual(before);
+  },
+);
+
+it('does not borrow one category’s history to fill another category', () => {
+  const state = dashboardFixture();
+  for (const snapshot of state.snapshots)
+    snapshot.categoryValues!.stocks = { valueEur: null, valueUsd: null };
+  const crypto = buildCategoryDetails(state, state.categories[0], 'EUR');
+  const stocks = buildCategoryDetails(state, state.categories[1], 'EUR');
+  expect(
+    valueChange(crypto.category.totalValue, crypto.history, state.asOf, 7).percent,
+  ).not.toBeNull();
+  expect(valueChange(stocks.category.totalValue, stocks.history, state.asOf, 7).percent).toBeNull();
 });

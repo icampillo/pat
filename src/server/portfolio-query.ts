@@ -11,7 +11,7 @@ import { decimal as d, precise } from '@/domain/money';
 import { AppError } from './errors';
 import { walletState } from './wallet-state';
 import { realEstateAt } from '@/domain/real-estate';
-import { performance30d, numeric } from '@/domain/categories';
+import { valueChange, numeric } from '@/domain/categories';
 import { metadataSchema } from '@/shared/schemas';
 import { json, owned, toLedger, type TxDb } from './portfolio-store';
 
@@ -398,7 +398,7 @@ export async function getState(userId: string, includeHistory = true) {
           ...state,
           rows: state.rows.map((row) => ({
             ...row,
-            change30dPercent: performance30d(
+            change30dPercent: valueChange(
               numeric(row.price),
               priceCandidates
                 .filter((price) => price.assetId === row.id)
@@ -416,6 +416,7 @@ export async function getState(userId: string, includeHistory = true) {
               }
             : {}),
           asOf: asOf.toISOString(),
+          // Conservative signal for flow-adjusted returns; it does not invalidate saved value changes.
           ...(includeHistory || revisions > 0 || walletHistory > 0
             ? { historyRevised: revisions > 0 || retrospective || walletHistory > 0 }
             : {}),

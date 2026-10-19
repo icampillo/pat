@@ -6,7 +6,7 @@ import {
   calculatePerformance,
   calculateUnrealizedPnL,
   filterCategoryHistory,
-  performance30d,
+  valueChange,
   snapshotCategoryValues,
 } from '../../src/domain/categories';
 import type { AppState, AssetView } from '../../src/shared/types';
@@ -60,23 +60,25 @@ describe('category calculations', () => {
       { date: '2026-08-24T12:00:00Z', value: null },
       { date: '2026-09-22T12:00:00Z', value: 140 },
     ];
-    expect(performance30d(150, history, now)).toEqual({
+    expect(valueChange(150, history, now)).toEqual({
       absolute: 30,
       percent: 25,
       baselineDate: history[1].date,
+      actualDays: 29,
+      reason: null,
     });
     expect(
-      performance30d(150, [...history, { date: '2026-08-24T12:00:00Z', value: 100 }], now).percent,
+      valueChange(150, [...history, { date: '2026-08-24T12:00:00Z', value: 100 }], now).percent,
     ).toBe(50);
   });
   it('returns null for missing historical data, and no percentage for zero baseline', () => {
-    expect(performance30d(10, [], now)).toEqual({
+    expect(valueChange(10, [], now)).toMatchObject({
       absolute: null,
       percent: null,
       baselineDate: null,
     });
     expect(
-      performance30d(
+      valueChange(
         10,
         [
           { date: now, value: 10 },
@@ -236,4 +238,82 @@ it('groups retired collection snapshots into OTHER without changing saved values
   expect(snapshotCategoryValues({ rows: [{ ...data.rows[0], valueEur: null }] }, [other])).toEqual({
     other: { valueEur: null, valueUsd: '12' },
   });
+});
+
+describe.each([7, 30, 90, 365])('value reference at %i Paris days', (days) => {
+  const target = Date.parse(now) - days * 86400000;
+  const point = (offset: number, value: number | null = 100) => ({
+    date: new Date(target + offset * 86400000).toISOString(),
+    value,
+  });
+  const tolerance = Math.min(3, Math.ceil(days / 7));
+  it('prefers the exact day, then the older equally close complete observation without mutation', () => {
+    const history = [point(1, 80), point(-1), point(0, null)];
+    const original = structuredClone(history);
+    expect(valueChange(150, history, now, days)).toMatchObject({
+      percent: 50,
+      absolute: 50,
+      baselineDate: history[1].date,
+      actualDays: days + 1,
+      reason: null,
+    });
+    expect(valueChange(150, [...history, point(0, 120)], now, days).percent).toBe(25);
+    expect(valueChange(150, history.toReversed(), now, days).baselineDate).toBe(history[1].date);
+    expect(history).toEqual(original);
+  });
+  it('bounds both sides of the reference window', () => {
+    for (const sign of [-1, 1]) {
+      expect(valueChange(150, [point(sign * tolerance)], now, days).percent).toBe(50);
+      expect(valueChange(150, [point(sign * (tolerance + 1))], now, days)).toMatchObject({
+        percent: null,
+        absolute: null,
+        baselineDate: null,
+      });
+    }
+  });
+  it('retains absolute changes with zero/negative references without hiding them behind another snapshot', () => {
+    for (const value of [0, -100]) {
+      expect(valueChange(50, [point(0, value), point(-1)], now, days)).toMatchObject({
+        absolute: 50 - value,
+        percent: null,
+        baselineDate: point(0).date,
+        reason: 'Pourcentage indéfinissable : valeur de référence nulle ou négative.',
+      });
+    }
+    expect(valueChange(-50, [point(0)], now, days)).toMatchObject({
+      percent: -150,
+      absolute: -150,
+    });
+    expect(valueChange(0, [point(0)], now, days).percent).toBe(-100);
+  });
+  it('rejects incomplete current values, invalid observations, same-day and future observations', () => {
+    for (const current of [null, NaN, Infinity])
+      expect(valueChange(current, [point(0)], now, days)).toMatchObject({
+        percent: null,
+        absolute: null,
+        reason: 'Valorisation actuelle incomplète.',
+      });
+    expect(
+      valueChange(
+        100,
+        [
+          point(0, NaN),
+          { date: 'invalid', value: 1 },
+          { date: now, value: 1 },
+          { date: '2099-01-01', value: 1 },
+        ],
+        now,
+        days,
+      ).percent,
+    ).toBeNull();
+  });
+});
+it('does not round decimal differences before computing percentages', () => {
+  const history = [{ date: '2026-08-24T12:00:00Z', value: 0.1 }];
+  expect(valueChange(0.3, history, now)).toMatchObject({ absolute: 0.2, percent: 200 });
+});
+it('returns explicit unavailability for invalid dates and periods', () => {
+  for (const days of [0, -1, 1.5, NaN])
+    expect(valueChange(1, [], now, days).reason).toBe('Date de situation ou période invalide.');
+  expect(valueChange(1, [], 'invalid', 7).percent).toBeNull();
 });

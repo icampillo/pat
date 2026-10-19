@@ -1,6 +1,7 @@
 import type { AppState } from '@/shared/types';
 
-// Shared with the dashboard: these perimeters lack comparable, complete flows.
+// Flow-adjusted returns only: these perimeters lack comparable, complete flows.
+// Simple changes in saved value remain meaningful and do not use this guard.
 export function canCalculatePortfolioPerformance(state: AppState, currency: 'EUR' | 'USD') {
   return (
     currency === 'EUR' &&

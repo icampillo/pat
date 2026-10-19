@@ -18,6 +18,7 @@ import {
   buildCategoryDetails,
   calculateCategoryValue,
   filterCategoryHistory,
+  historyPeriodDays,
   numeric,
 } from '@/domain/categories';
 import type { AppState } from '@/shared/types';
@@ -70,7 +71,8 @@ export function DashboardPage({ state }: { state: AppState }) {
     });
   const period =
     selectedPeriod ??
-    availableChartPeriod([history], state.asOf, ['7d', '30d', '90d', '1y', 'all']);
+    availableChartPeriod([history], state.asOf, ['7d', '30d', '90d', '1y', 'all'], true);
+  const days = historyPeriodDays[period];
   const categoryPeriod =
     selectedCategoryPeriod ??
     availableChartPeriod(
@@ -127,12 +129,15 @@ export function DashboardPage({ state }: { state: AppState }) {
                 <strong className={styles.total} data-testid="wealth-total">
                   {money(total, currency)}
                 </strong>
-                <ValueChange
-                  value={total}
-                  history={history}
-                  asOf={state.asOf}
-                  revised={state.historyRevised}
-                />
+                {days !== undefined && (
+                  <ValueChange
+                    days={days}
+                    value={total}
+                    history={history}
+                    asOf={state.asOf}
+                    revised={state.historyRevised}
+                  />
+                )}
               </div>
             </div>
             <PortfolioAnalysisDialog
@@ -150,7 +155,7 @@ export function DashboardPage({ state }: { state: AppState }) {
             </p>
           )}
           <ValueChart
-            points={filterCategoryHistory(history, period, state.asOf)}
+            points={filterCategoryHistory(history, period, state.asOf, true)}
             currency={currency}
             name="Patrimoine"
           />

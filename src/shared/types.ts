@@ -73,6 +73,9 @@ export type AssetCategorySummary = {
   change30dPercent: number | null;
   change30dAbsolute: number | null;
   baselineDate: string | null;
+  change30dReason: string | null;
+  change30dDays: number | null;
+  historyRevised: boolean;
 };
 export type CategoryPosition = {
   realEstate?: RealEstateSummary & {

@@ -25,6 +25,7 @@ vi.mock('@/server/portfolio-store', async (original) => ({
   owned: mocks.owned,
 }));
 import { getState } from '@/server/portfolio-query';
+import { valueChange } from '@/domain/categories';
 import { walletSyncStatus } from '@/server/wallet-state';
 beforeEach(() => {
   vi.resetAllMocks();
@@ -82,4 +83,17 @@ it('omits snapshot SQL entirely in live mode, retaining the exact valuation and 
   const { asOf: liveAsOf, ...liveValues } = live;
   expect(liveAsOf).toBeTruthy();
   expect(liveValues).toEqual(values);
+});
+
+it('preserves the conservative revision signal for connected wallets without blocking value comparisons', async () => {
+  mocks.tx.walletConnection.count.mockResolvedValue(1);
+  const state = await getState('owner');
+  expect(state.historyRevised).toBe(true);
+  expect(
+    valueChange(150, [{ date: '2026-09-19T12:00:00Z', value: 100 }], '2026-10-19T12:00:00Z', 30),
+  ).toMatchObject({
+    percent: 50,
+    absolute: 50,
+    reason: null,
+  });
 });

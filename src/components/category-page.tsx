@@ -40,7 +40,7 @@ export function CategoryPage({
     estate?.borrowedAmount && estate.principalPaid !== null
       ? (estate.principalPaid / estate.borrowedAmount) * 100
       : null;
-  const points = filterCategoryHistory(details.history, period, asOf);
+  const points = filterCategoryHistory(details.history, period, asOf, true);
   const slices = assets
     .map((asset, index) => ({
       name: asset.name,
@@ -82,9 +82,10 @@ export function CategoryPage({
           <p>
             {estate
               ? `Montant initial : ${categoryMoney(estate.borrowedAmount, currency)}`
-              : category.baselineDate
-                ? `Snapshot du ${new Date(category.baselineDate).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`
-                : 'Historique indisponible'}
+              : (category.change30dReason ??
+                (category.baselineDate
+                  ? `Snapshot du ${new Date(category.baselineDate).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`
+                  : 'Historique indisponible'))}
           </p>
         </section>
         <section className="metric">

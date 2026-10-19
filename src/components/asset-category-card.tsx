@@ -20,6 +20,23 @@ export const trendClass = (value: number | null) =>
   value === null || value === 0 ? 'muted' : value > 0 ? 'positive' : 'negative';
 export const signedMoney = (value: number | null, currency: string) =>
   `${value !== null && value > 0 ? '+' : ''}${categoryMoney(value, currency)}`;
+export function valueChangeExplanation(
+  baselineDate: string | null,
+  reason: string | null,
+  actualDays: number | null,
+  revised: boolean,
+) {
+  return [
+    reason,
+    baselineDate &&
+      `Référence : snapshot du ${new Date(baselineDate).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })} (Europe/Paris), soit ${actualDays} jours comptables auparavant.`,
+    'Variation de valeur détenue, achats et ventes compris, ainsi que dépôts, retraits et changements de périmètre. Ce n’est pas un rendement corrigé des flux.',
+    revised &&
+      'Historique révisé ou périmètre modifié : les valorisations enregistrées sont conservées, sans retraitement des flux.',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
 export function Performance30d({
   category,
   currency,
@@ -30,14 +47,18 @@ export function Performance30d({
   return (
     <div
       className={`category-performance ${trendClass(category.change30dAbsolute)}`}
-      title={
-        category.baselineDate
-          ? `Comparaison au snapshot du ${new Date(category.baselineDate).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`
-          : 'Historique indisponible'
-      }
+      title={valueChangeExplanation(
+        category.baselineDate,
+        category.change30dReason,
+        category.change30dDays,
+        category.historyRevised,
+      )}
     >
       <span>
-        {categoryPercent(category.change30dPercent, true)} <span className="muted">sur 30j</span>
+        {categoryPercent(category.change30dPercent, true)}{' '}
+        <span className="muted">
+          sur {category.change30dDays !== null && category.change30dDays !== 30 ? '≈ ' : ''}30j
+        </span>
       </span>
       <small>{signedMoney(category.change30dAbsolute, currency)}</small>
       {category.realEstate && (
@@ -78,16 +99,19 @@ export function AssetCategoryCard({
         </strong>
         <div
           className="flex flex-wrap items-center gap-2"
-          title={
-            category.baselineDate
-              ? `Comparaison au snapshot du ${new Date(category.baselineDate).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`
-              : 'Historique indisponible'
-          }
+          title={valueChangeExplanation(
+            category.baselineDate,
+            category.change30dReason,
+            category.change30dDays,
+            category.historyRevised,
+          )}
         >
           <PerformanceBadge value={category.change30dPercent}>
             {categoryPercent(category.change30dPercent, true)}
           </PerformanceBadge>
-          <span className="text-xs text-(--muted)">sur 30j</span>
+          <span className="text-xs text-(--muted)">
+            sur {category.change30dDays !== null && category.change30dDays !== 30 ? '≈ ' : ''}30j
+          </span>
           <span className="text-xs text-(--muted) tabular-nums">
             {signedMoney(category.change30dAbsolute, currency)}
           </span>
