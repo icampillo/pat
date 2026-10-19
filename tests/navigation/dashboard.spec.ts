@@ -877,7 +877,7 @@ test('wallet changes stay visible and match the category page despite different 
   expect(reads()).toBe(1);
 });
 
-test('short histories use the oldest snapshot and display the real duration across views', async ({
+test('short histories use the oldest snapshot and keep the category page labelled 30 days', async ({
   page,
 }) => {
   const state = dashboardDailyFixture();
@@ -908,6 +908,11 @@ test('short histories use the oldest snapshot and display the real duration acro
   await expect(crypto).toContainText('8 jours comptables auparavant');
   await crypto.getByRole('link', { name: 'Cryptomonnaies' }).click();
   await expect(page.locator('.category-performance')).toContainText('+100 %');
-  await expect(page.locator('.category-performance')).toContainText('sur 8j');
+  await expect(page.locator('.category-metrics')).toContainText('Performance 30 jours');
+  await expect(page.locator('.category-performance')).toContainText('sur 30j');
+  await expect(page.locator('.category-performance')).toHaveAttribute(
+    'title',
+    /8 jours comptables auparavant/,
+  );
   expect(reads()).toBe(1);
 });

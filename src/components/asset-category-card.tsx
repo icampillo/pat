@@ -55,8 +55,7 @@ export function Performance30d({
       )}
     >
       <span>
-        {categoryPercent(category.change30dPercent, true)}{' '}
-        <span className="muted">sur {category.change30dDays ?? 30}j</span>
+        {categoryPercent(category.change30dPercent, true)} <span className="muted">sur 30j</span>
       </span>
       <small>{signedMoney(category.change30dAbsolute, currency)}</small>
       {category.realEstate && (
