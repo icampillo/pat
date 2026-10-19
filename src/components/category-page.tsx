@@ -64,7 +64,9 @@ export function CategoryPage({
         </section>
         <section className="metric">
           <div className="metric-top">
-            {estate ? 'Capital déjà remboursé' : 'Performance 30 jours'}
+            {estate
+              ? 'Capital déjà remboursé'
+              : `Performance ${category.change30dDays ?? 30} jours`}
           </div>
           {estate ? (
             <>

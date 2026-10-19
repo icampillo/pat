@@ -25,7 +25,6 @@ describe.each([7, 30] as const)('dashboard value changes over %i days', (days) =
     for (const points of [
       [],
       [{ ...baseline, date: new Date(reference.getTime() - 4 * 86400000).toISOString() }],
-      [{ ...baseline, date: new Date(reference.getTime() + 4 * 86400000).toISOString() }],
       [{ ...baseline, value: null }],
       [{ ...baseline, value: 0 }],
       [{ ...baseline, value: -100 }],

@@ -49,7 +49,7 @@ export function calculateUnrealizedPnL(value: number | null, costs: (number | nu
 }
 // One selection rule for saved valuations (global/category) and observed asset prices.
 // Compare Paris accounting dates, not elapsed 24-hour slices across clock changes.
-// A missing day may use a nearby complete observation, never an unbounded substitute.
+// Prefer a nearby reference; short usable histories fall back to their oldest observation.
 export function valueChange(
   current: number | null,
   history: CategoryHistoryPoint[],
@@ -71,6 +71,8 @@ export function valueChange(
   const tolerance = Math.min(3, Math.ceil(days / 7)) * 86400000;
   let baseline: CategoryHistoryPoint | undefined;
   let baselineTime = Infinity;
+  let oldest: CategoryHistoryPoint | undefined;
+  let oldestTime = Infinity;
   let distance = Infinity;
   let actualDays: number | null = null;
   for (const point of history) {
@@ -84,6 +86,10 @@ export function valueChange(
       continue;
     const day = Date.parse(snapshotDay(point.date));
     if (day >= today) continue;
+    if (time < oldestTime) {
+      oldest = point;
+      oldestTime = time;
+    }
     const gap = Math.abs(day - target);
     if (gap <= tolerance && (gap < distance || (gap === distance && time < baselineTime))) {
       baseline = point;
@@ -91,6 +97,11 @@ export function valueChange(
       distance = gap;
       actualDays = (today - day) / 86400000;
     }
+  }
+  // A gap in a longer history is not a short history: keep the age limit in that case.
+  if (!baseline && oldest && Date.parse(snapshotDay(oldest.date)) > target) {
+    baseline = oldest;
+    actualDays = (today - Date.parse(snapshotDay(oldest.date))) / 86400000;
   }
   const reason =
     current === null || !Number.isFinite(current)

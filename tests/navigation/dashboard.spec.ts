@@ -378,14 +378,13 @@ for (const scenario of ['missing', 'null', 'zero', 'incomplete', 'revised', 'spa
       await periods.getByRole('button', { name: `${days} j`, exact: true }).click();
       for (const card of await page.getByTestId('investment-card').all()) {
         const summary = card.locator('summary');
-        await expect(summary).toContainText(`${days} j`);
+        const actualDays = days === 30 && ['missing', 'null'].includes(scenario) ? 29 : days;
+        await expect(summary).toContainText(`${actualDays} j`);
         if (
           ['missing', 'null', 'revised'].includes(scenario) ||
           (days === 7 && scenario === 'zero')
         ) {
           await expect(summary).not.toContainText('—');
-          if (days === 30 && ['missing', 'null'].includes(scenario))
-            await expect(summary).toContainText('≈ 30 j');
           await summary.click();
           await expect(card).toContainText('Ce n’est pas un rendement corrigé des flux');
           if (scenario === 'revised')
@@ -801,7 +800,10 @@ test('global percentage follows the selected chart period, independently of cate
     ] as const) {
       await periods.getByRole('button', { name: label, exact: true }).click();
       const summary = wealth.locator('summary').first();
-      await expect(summary).toHaveAttribute('aria-label', new RegExp('sur ' + days + ' jours'));
+      await expect(summary).toHaveAttribute(
+        'aria-label',
+        new RegExp('sur ' + Math.min(days, 30) + ' jours'),
+      );
       const change = valueChange(
         Number(currency === 'EUR' ? state.totals.valueEur : state.totals.valueUsd),
         state.snapshots.map((snapshot) => ({
@@ -852,9 +854,10 @@ test('wallet changes stay visible and match the category page despite different 
     .getByRole('group', { name: 'Période des catégories' })
     .getByRole('button', { name: '30 j' })
     .click();
-  await expect(stocks.locator('summary')).toContainText('—');
+  await expect(stocks.locator('summary')).not.toContainText('—');
+  await expect(stocks.locator('summary')).toContainText('7 j');
   await expect(crypto.locator('summary')).not.toContainText('—');
-  await expect(crypto.locator('summary')).toContainText('≈ 30 j');
+  await expect(crypto.locator('summary')).toContainText('28 j');
   await crypto.locator('summary').click();
   await expect(crypto).toContainText('28 jours comptables');
   await expect(crypto).toContainText('Historique révisé ou périmètre modifié');
@@ -871,5 +874,40 @@ test('wallet changes stay visible and match the category page despite different 
   await expect(performance).toHaveAttribute('title', /28 jours comptables/);
   await expect(performance).toHaveAttribute('title', /Ce n’est pas un rendement corrigé des flux/);
   await expect(performance).toHaveAttribute('title', /Historique révisé/);
+  expect(reads()).toBe(1);
+});
+
+test('short histories use the oldest snapshot and display the real duration across views', async ({
+  page,
+}) => {
+  const state = dashboardDailyFixture();
+  state.snapshots = state.snapshots.slice(-9); // Eight days of history, not thirty.
+  const oldest = state.snapshots[0];
+  oldest.totalEur = String(Number(state.totals.valueEur) / 2);
+  oldest.categoryValues!.crypto.valueEur = String(Number(state.rows[0].valueEur) / 2);
+  const reads = await openDashboard(page, state);
+  await page
+    .getByRole('group', { name: 'Période du graphique', exact: true })
+    .getByRole('button', { name: '30 j', exact: true })
+    .click();
+  const wealth = page.getByRole('region', { name: 'Valeur totale de votre patrimoine' });
+  await expect(wealth.locator('summary').first()).toHaveAttribute(
+    'aria-label',
+    'Variation de valeur sur 8 jours : +100,00 %. Afficher l’explication',
+  );
+  await page
+    .getByRole('group', { name: 'Période des catégories' })
+    .getByRole('button', { name: '30 j', exact: true })
+    .click();
+  const crypto = page.getByTestId('investment-card').filter({
+    has: page.getByRole('heading', { name: 'Cryptomonnaies', exact: true }),
+  });
+  await expect(crypto.locator('summary')).toContainText('+100,00 %');
+  await expect(crypto.locator('summary')).toContainText('8 j');
+  await crypto.locator('summary').click();
+  await expect(crypto).toContainText('8 jours comptables auparavant');
+  await crypto.getByRole('link', { name: 'Cryptomonnaies' }).click();
+  await expect(page.locator('.category-performance')).toContainText('+100 %');
+  await expect(page.locator('.category-performance')).toContainText('sur 8j');
   expect(reads()).toBe(1);
 });

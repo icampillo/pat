@@ -56,9 +56,7 @@ export function Performance30d({
     >
       <span>
         {categoryPercent(category.change30dPercent, true)}{' '}
-        <span className="muted">
-          sur {category.change30dDays !== null && category.change30dDays !== 30 ? '≈ ' : ''}30j
-        </span>
+        <span className="muted">sur {category.change30dDays ?? 30}j</span>
       </span>
       <small>{signedMoney(category.change30dAbsolute, currency)}</small>
       {category.realEstate && (
@@ -109,9 +107,7 @@ export function AssetCategoryCard({
           <PerformanceBadge value={category.change30dPercent}>
             {categoryPercent(category.change30dPercent, true)}
           </PerformanceBadge>
-          <span className="text-xs text-(--muted)">
-            sur {category.change30dDays !== null && category.change30dDays !== 30 ? '≈ ' : ''}30j
-          </span>
+          <span className="text-xs text-(--muted)">sur {category.change30dDays ?? 30}j</span>
           <span className="text-xs text-(--muted) tabular-nums">
             {signedMoney(category.change30dAbsolute, currency)}
           </span>

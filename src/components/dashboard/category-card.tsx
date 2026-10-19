@@ -61,14 +61,11 @@ export function ValueChange({
       }
     >
       <summary
-        aria-label={`Variation de valeur sur ${days} jours : ${text}. Afficher l’explication`}
+        aria-label={`Variation de valeur sur ${change.actualDays ?? days} jours : ${text}. Afficher l’explication`}
       >
         {percent !== null && percent !== 0 && <Icon size={16} aria-hidden="true" />}
         <span>{text}</span>
-        <span className={styles.changePeriod}>
-          · {change.actualDays !== null && change.actualDays !== days ? '≈ ' : ''}
-          {days} j
-        </span>
+        <span className={styles.changePeriod}>· {change.actualDays ?? days} j</span>
       </summary>
       <p>
         {valueChangeExplanation(change.baselineDate, change.reason, change.actualDays, revised)}

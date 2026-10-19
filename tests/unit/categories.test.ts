@@ -261,15 +261,38 @@ describe.each([7, 30, 90, 365])('value reference at %i Paris days', (days) => {
     expect(valueChange(150, history.toReversed(), now, days).baselineDate).toBe(history[1].date);
     expect(history).toEqual(original);
   });
-  it('bounds both sides of the reference window', () => {
-    for (const sign of [-1, 1]) {
+  it('bounds old references and gaps in longer histories', () => {
+    for (const sign of [-1, 1])
       expect(valueChange(150, [point(sign * tolerance)], now, days).percent).toBe(50);
-      expect(valueChange(150, [point(sign * (tolerance + 1))], now, days)).toMatchObject({
+    for (const history of [[point(-tolerance - 1)], [point(-days), point(tolerance + 1)]])
+      expect(valueChange(150, history, now, days)).toMatchObject({
         percent: null,
         absolute: null,
         baselineDate: null,
       });
-    }
+  });
+  it('uses the oldest complete observation for short histories, independent of ordering', () => {
+    const oldest = point(tolerance + 1);
+    const history = [point(days - 1, 120), point(0, null), oldest, { date: now, value: 150 }];
+    const original = structuredClone(history);
+    for (const points of [history, history.toReversed()])
+      expect(valueChange(150, points, now, days)).toMatchObject({
+        percent: 50,
+        absolute: 50,
+        baselineDate: oldest.date,
+        actualDays: days - tolerance - 1,
+        reason: null,
+      });
+    expect(history).toEqual(original);
+    for (const value of [0, -100])
+      expect(
+        valueChange(150, [{ ...oldest, value }, point(days - 1, 120)], now, days),
+      ).toMatchObject({
+        percent: null,
+        absolute: 150 - value,
+        baselineDate: oldest.date,
+      });
+    expect(valueChange(null, [oldest], now, days).percent).toBeNull();
   });
   it('retains absolute changes with zero/negative references without hiding them behind another snapshot', () => {
     for (const value of [0, -100]) {

@@ -426,22 +426,27 @@ describe('period performance', () => {
     state.snapshots = [snapshot('2026-09-07T12:00:00.000Z', '1000')];
     expect(buildPortfolioContext(state).portfolio.performance).toBeUndefined();
   });
-  it.each(['revised', 'wallet', 'unknown-cost', 'immobilier', 'usd', 'missing-baseline'])(
-    'suppresses unreliable performance: %s',
-    (reason) => {
-      const state = portfolio([1100]);
-      state.snapshots = [snapshot('2026-09-06T12:00:00.000Z', '1000')];
-      if (reason === 'revised') state.historyRevised = true;
-      if (reason === 'wallet') state.snapshots[0].kind = 'WALLET';
-      if (reason === 'unknown-cost') state.totals.incompleteCostBasis = true;
-      if (reason === 'immobilier')
-        state.rows[0].category = { ...categories[0], key: 'REAL_ESTATE' };
-      if (reason === 'missing-baseline') state.snapshots[0].totalEur = null;
-      expect(
-        buildPortfolioContext(state, reason === 'usd' ? 'USD' : 'EUR').portfolio.performance,
-      ).toBeUndefined();
-    },
-  );
+  it.each([
+    'revised',
+    'wallet',
+    'connected-wallet',
+    'unknown-cost',
+    'immobilier',
+    'usd',
+    'missing-baseline',
+  ])('suppresses unreliable performance: %s', (reason) => {
+    const state = portfolio([1100]);
+    state.snapshots = [snapshot('2026-09-06T12:00:00.000Z', '1000')];
+    if (reason === 'revised') state.historyRevised = true;
+    if (reason === 'connected-wallet') state.onchain.includedCount = 1;
+    if (reason === 'wallet') state.snapshots[0].kind = 'WALLET';
+    if (reason === 'unknown-cost') state.totals.incompleteCostBasis = true;
+    if (reason === 'immobilier') state.rows[0].category = { ...categories[0], key: 'REAL_ESTATE' };
+    if (reason === 'missing-baseline') state.snapshots[0].totalEur = null;
+    expect(
+      buildPortfolioContext(state, reason === 'usd' ? 'USD' : 'EUR').portfolio.performance,
+    ).toBeUndefined();
+  });
 });
 
 describe('analysis prompt', () => {
